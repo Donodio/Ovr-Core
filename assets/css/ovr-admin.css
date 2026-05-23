@@ -1,0 +1,575 @@
+/**
+ * OVR Core — Premium Admin Stylesheet
+ *
+ * Styles the property edit screen with the OVR design system: deep teal
+ * primary, fresh green accents, soft gold for premium markers, generous
+ * whitespace, rounded corners, subtle shadows. Scoped under .ovr-admin
+ * to avoid leaking into wp-admin globally.
+ *
+ * @package OVR
+ */
+
+:root {
+    --ovr-a-primary:       #006666;
+    --ovr-a-primary-dark:  #004c4c;
+    --ovr-a-primary-light: #93e1e0;
+    --ovr-a-accent:        #006c4a;
+    --ovr-a-accent-light:  #74f7be;
+    --ovr-a-gold:          #cca72f;
+    --ovr-a-gold-light:    #ffe088;
+    --ovr-a-bg:            #f7faf9;
+    --ovr-a-surface:       #ffffff;
+    --ovr-a-surface-low:   #f1f4f3;
+    --ovr-a-surface-mid:   #ebeeee;
+    --ovr-a-text:          #181c1c;
+    --ovr-a-text-soft:     #3f4948;
+    --ovr-a-outline:       #bec9c8;
+    --ovr-a-outline-strong:#6f7979;
+    --ovr-a-error:         #ba1a1a;
+    --ovr-a-error-bg:      #ffdad6;
+    --ovr-a-radius-sm:     6px;
+    --ovr-a-radius-md:     10px;
+    --ovr-a-radius-lg:     14px;
+    --ovr-a-shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.06);
+    --ovr-a-shadow-md:     0 4px 12px rgba(0, 0, 0, 0.08);
+    --ovr-a-trans:         200ms ease;
+}
+
+/* ==========================================================================
+   1. Meta box wrapper — replaces postbox chrome with a premium look
+   ========================================================================== */
+
+.post-type-ovr_property #ovr_property_details,
+.post-type-ovr_property #ovr_property_status {
+    border: 1px solid var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-lg);
+    box-shadow: var(--ovr-a-shadow-sm);
+    background: var(--ovr-a-surface);
+    overflow: hidden;
+}
+
+.post-type-ovr_property #ovr_property_details .postbox-header,
+.post-type-ovr_property #ovr_property_status .postbox-header {
+    background: linear-gradient(135deg, var(--ovr-a-primary), var(--ovr-a-primary-dark));
+    border-bottom: 0;
+    padding: 14px 20px;
+}
+
+.post-type-ovr_property #ovr_property_details .postbox-header h2,
+.post-type-ovr_property #ovr_property_status .postbox-header h2 {
+    color: #fff;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    padding: 0;
+    line-height: 1.4;
+}
+
+.post-type-ovr_property #ovr_property_details .handle-actions button,
+.post-type-ovr_property #ovr_property_status .handle-actions button {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.post-type-ovr_property #ovr_property_details .inside,
+.post-type-ovr_property #ovr_property_status .inside {
+    margin: 0;
+    padding: 0;
+    background: var(--ovr-a-surface);
+}
+
+/* ==========================================================================
+   2. Tabbed UI inside the meta box
+   ========================================================================== */
+
+.ovr-meta-tabs {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--ovr-a-text);
+}
+
+.ovr-meta-tabs__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 12px 16px 0;
+    background: var(--ovr-a-surface-low);
+    border-bottom: 1px solid var(--ovr-a-outline);
+}
+
+.ovr-meta-tabs__btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 12px 18px;
+    border-radius: var(--ovr-a-radius-md) var(--ovr-a-radius-md) 0 0;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ovr-a-text-soft);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all var(--ovr-a-trans);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.ovr-meta-tabs__btn:hover {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--ovr-a-primary);
+}
+
+.ovr-meta-tabs__btn.is-active {
+    background: var(--ovr-a-surface);
+    color: var(--ovr-a-primary);
+    font-weight: 600;
+    border-bottom-color: var(--ovr-a-primary);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.ovr-meta-tabs__btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.ovr-meta-tabs__panel {
+    padding: 28px 32px;
+    display: none;
+}
+
+.ovr-meta-tabs__panel.is-active {
+    display: block;
+    animation: ovr-fade-in 200ms ease both;
+}
+
+@keyframes ovr-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.ovr-meta-tabs__panel-intro {
+    color: var(--ovr-a-text-soft);
+    font-size: 14px;
+    margin: 0 0 24px;
+    line-height: 1.5;
+    max-width: 720px;
+}
+
+/* ==========================================================================
+   3. Form fields — premium inputs
+   ========================================================================== */
+
+.ovr-field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.ovr-field-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.ovr-field-grid--3 { grid-template-columns: repeat(3, 1fr); }
+
+.ovr-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ovr-field--full { grid-column: 1 / -1; }
+
+.ovr-field__label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ovr-a-text);
+}
+
+.ovr-field__hint {
+    font-size: 12px;
+    color: var(--ovr-a-text-soft);
+    margin: 0;
+}
+
+.ovr-field input[type="text"],
+.ovr-field input[type="number"],
+.ovr-field input[type="email"],
+.ovr-field input[type="tel"],
+.ovr-field input[type="url"],
+.ovr-field input[type="date"],
+.ovr-field select,
+.ovr-field textarea,
+.ovr-input {
+    width: 100%;
+    padding: 11px 14px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px;
+    color: var(--ovr-a-text);
+    background: var(--ovr-a-surface);
+    border: 1px solid var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-md);
+    box-shadow: none;
+    transition: border-color var(--ovr-a-trans), box-shadow var(--ovr-a-trans);
+    line-height: 1.4;
+}
+
+.ovr-field input:focus,
+.ovr-field select:focus,
+.ovr-field textarea:focus,
+.ovr-input:focus {
+    border-color: var(--ovr-a-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 102, 0.15);
+    outline: none;
+}
+
+.ovr-field textarea { min-height: 90px; resize: vertical; }
+
+.ovr-field__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ovr-field__suffix {
+    color: var(--ovr-a-text-soft);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.ovr-field input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--ovr-a-outline);
+    accent-color: var(--ovr-a-primary);
+    cursor: pointer;
+    margin: 0;
+}
+
+.ovr-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--ovr-a-surface-low);
+    border: 1px solid var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-md);
+    cursor: pointer;
+}
+
+.ovr-checkbox-row input { flex-shrink: 0; }
+.ovr-checkbox-row__text {
+    font-size: 14px;
+    color: var(--ovr-a-text);
+    line-height: 1.4;
+}
+.ovr-checkbox-row__text strong { display: block; margin-bottom: 2px; }
+.ovr-checkbox-row__text small { color: var(--ovr-a-text-soft); font-size: 12px; }
+
+/* ==========================================================================
+   4. Section headers inside a tab
+   ========================================================================== */
+
+.ovr-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 32px 0 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ovr-a-outline);
+}
+.ovr-section-head:first-child { margin-top: 0; }
+
+.ovr-section-head h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--ovr-a-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ovr-section-head h3 .material-symbols-outlined {
+    font-size: 20px;
+    color: var(--ovr-a-primary);
+}
+
+/* ==========================================================================
+   5. Buttons inside the meta box
+   ========================================================================== */
+
+.ovr-btn-admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    background: var(--ovr-a-primary);
+    color: #fff !important;
+    border: none;
+    border-radius: var(--ovr-a-radius-md);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background var(--ovr-a-trans), transform var(--ovr-a-trans);
+    box-shadow: var(--ovr-a-shadow-sm);
+}
+
+.ovr-btn-admin:hover {
+    background: var(--ovr-a-primary-dark);
+    color: #fff !important;
+    transform: translateY(-1px);
+}
+
+.ovr-btn-admin .material-symbols-outlined { font-size: 18px; }
+
+.ovr-btn-admin--ghost {
+    background: transparent;
+    color: var(--ovr-a-primary) !important;
+    border: 1px solid var(--ovr-a-primary);
+    box-shadow: none;
+}
+
+.ovr-btn-admin--ghost:hover {
+    background: rgba(0, 102, 102, 0.06);
+    color: var(--ovr-a-primary-dark) !important;
+}
+
+.ovr-btn-admin--danger {
+    background: transparent;
+    color: var(--ovr-a-error) !important;
+    border: 1px solid var(--ovr-a-error);
+    box-shadow: none;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.ovr-btn-admin--danger:hover {
+    background: var(--ovr-a-error-bg);
+    color: var(--ovr-a-error) !important;
+}
+
+/* ==========================================================================
+   6. Gallery picker
+   ========================================================================== */
+
+.ovr-gallery-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ovr-gallery-picker__strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    min-height: 100px;
+    padding: 12px;
+    background: var(--ovr-a-surface-low);
+    border: 1.5px dashed var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-md);
+}
+
+.ovr-gallery-picker__strip:empty::before {
+    content: attr(data-empty-text);
+    color: var(--ovr-a-text-soft);
+    font-size: 13px;
+    font-style: italic;
+    grid-column: 1 / -1;
+    align-self: center;
+    text-align: center;
+    padding: 24px 12px;
+}
+
+.ovr-gallery-tile {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--ovr-a-radius-md);
+    overflow: hidden;
+    background: var(--ovr-a-surface-mid);
+    cursor: grab;
+    box-shadow: var(--ovr-a-shadow-sm);
+}
+
+.ovr-gallery-tile.is-primary {
+    box-shadow: 0 0 0 3px var(--ovr-a-gold), var(--ovr-a-shadow-md);
+}
+
+.ovr-gallery-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+}
+
+.ovr-gallery-tile__primary-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 3px 8px;
+    background: var(--ovr-a-gold);
+    color: #241a00;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+.ovr-gallery-tile__actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--ovr-a-trans);
+}
+
+.ovr-gallery-tile:hover .ovr-gallery-tile__actions { opacity: 1; }
+
+.ovr-gallery-tile__btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background var(--ovr-a-trans);
+}
+
+.ovr-gallery-tile__btn:hover { background: rgba(0, 0, 0, 0.85); }
+.ovr-gallery-tile__btn .material-symbols-outlined { font-size: 16px; }
+
+/* ==========================================================================
+   7. Repeater rows (seasonal pricing, availability blocks)
+   ========================================================================== */
+
+.ovr-repeater {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ovr-repeater__row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr auto;
+    gap: 12px;
+    align-items: end;
+    padding: 14px;
+    background: var(--ovr-a-surface-low);
+    border: 1px solid var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-md);
+    transition: border-color var(--ovr-a-trans);
+}
+
+.ovr-repeater__row:hover {
+    border-color: var(--ovr-a-primary-light);
+}
+
+.ovr-repeater__row .ovr-field { gap: 4px; }
+.ovr-repeater__row .ovr-field__label { font-size: 10px; }
+
+.ovr-repeater--avail .ovr-repeater__row {
+    grid-template-columns: 1fr 1fr 1fr 2fr auto auto;
+}
+
+.ovr-repeater__remove {
+    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ovr-repeater__add {
+    margin-top: 8px;
+    align-self: flex-start;
+}
+
+.ovr-repeater__empty {
+    padding: 24px;
+    text-align: center;
+    background: var(--ovr-a-surface-low);
+    border: 1.5px dashed var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-md);
+    color: var(--ovr-a-text-soft);
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ==========================================================================
+   8. Sidebar promotion box
+   ========================================================================== */
+
+.ovr-promo-card {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.ovr-promo-card .ovr-field {
+    background: var(--ovr-a-surface-low);
+    border: 1px solid var(--ovr-a-outline);
+    border-radius: var(--ovr-a-radius-md);
+    padding: 12px 14px;
+}
+
+.ovr-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.ovr-status-pill--active   { background: var(--ovr-a-accent-light); color: #00714e; }
+.ovr-status-pill--inactive { background: var(--ovr-a-error-bg);     color: #93000a; }
+.ovr-status-pill--featured { background: var(--ovr-a-gold-light);   color: #241a00; }
+.ovr-status-pill--bumped   { background: var(--ovr-a-primary-light); color: var(--ovr-a-primary-dark); }
+
+/* ==========================================================================
+   9. Property list table polish
+   ========================================================================== */
+
+.post-type-ovr_property .wp-list-table .column-thumbnail {
+    width: 80px;
+}
+
+.post-type-ovr_property .wp-list-table .column-thumbnail img {
+    width: 64px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: var(--ovr-a-radius-sm);
+    box-shadow: var(--ovr-a-shadow-sm);
+}
+
+/* ==========================================================================
+   10. Responsive
+   ========================================================================== */
+
+@media (max-width: 960px) {
+    .ovr-meta-tabs__nav { padding: 8px 8px 0; gap: 2px; }
+    .ovr-meta-tabs__btn { padding: 10px 12px; font-size: 13px; }
+    .ovr-meta-tabs__btn span:not(.material-symbols-outlined) { display: none; }
+    .ovr-meta-tabs__panel { padding: 20px; }
+    .ovr-field-grid--2,
+    .ovr-field-grid--3 { grid-template-columns: 1fr; }
+    .ovr-repeater__row,
+    .ovr-repeater--avail .ovr-repeater__row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .ovr-repeater__remove { grid-column: 1 / -1; }
+}

@@ -1,0 +1,113 @@
+<?php
+/**
+ * Property Card — Search Results "Stitch" redesign.
+ *
+ * Fixed-height card used by both the results grid and the featured rail so
+ * the two columns line up row-for-row (see PropertyCard::render_search()).
+ *
+ * @package OVR
+ *
+ * @var int    $post_id
+ * @var string $title
+ * @var string $permalink
+ * @var string $thumbnail
+ * @var string $village
+ * @var string $property_type
+ * @var string $rental_type
+ * @var int    $bedrooms
+ * @var float  $bathrooms
+ * @var float  $base_price
+ * @var float  $rating_avg
+ * @var int    $rating_count
+ * @var string $excerpt
+ * @var string $symbol            Currency symbol.
+ * @var bool   $featured_variant  Render the gold "featured" treatment.
+ */
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+$post_id          = (int) ( $post_id ?? 0 );
+$title            = (string) ( $title ?? '' );
+$permalink        = (string) ( $permalink ?? '' );
+$thumbnail        = (string) ( $thumbnail ?? '' );
+$village          = (string) ( $village ?? '' );
+$property_type    = (string) ( $property_type ?? '' );
+$rental_type      = (string) ( $rental_type ?? '' );
+$bedrooms         = (int) ( $bedrooms ?? 0 );
+$bathrooms        = (float) ( $bathrooms ?? 0 );
+$base_price       = (float) ( $base_price ?? 0 );
+$rating_avg       = (float) ( $rating_avg ?? 0 );
+$rating_count     = (int) ( $rating_count ?? 0 );
+$excerpt          = (string) ( $excerpt ?? '' );
+$symbol           = (string) ( $symbol ?? '$' );
+$featured_variant = ! empty( $featured_variant );
+
+$bath_display = rtrim( rtrim( number_format( $bathrooms, 1 ), '0' ), '.' );
+$type_label   = $property_type ?: ( $village ? $village : __( 'Rental Home', 'ovr-core' ) );
+
+// Price line: nightly base rate when set (data model is per-night), else a
+// "Seasonal Rates" hint that matches the mockup's variable-pricing cards.
+$has_price = $base_price > 0;
+?>
+<article class="ovr-ss-card<?php echo $featured_variant ? ' ovr-ss-card--featured' : ''; ?>" id="ovr-ss-<?php echo esc_attr( (string) $post_id ); ?>">
+
+    <a class="ovr-ss-card-media" href="<?php echo esc_url( $permalink ); ?>" aria-label="<?php echo esc_attr( $title ); ?>">
+        <img src="<?php echo esc_url( $thumbnail ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy" width="400" height="300">
+        <?php if ( $featured_variant ) : ?>
+            <span class="ovr-ss-card-flag">
+                <span class="material-symbols-outlined">star</span><?php esc_html_e( 'Featured', 'ovr-core' ); ?>
+            </span>
+        <?php endif; ?>
+        <span class="ovr-ss-card-id">
+            <?php
+            /* translators: %s: property listing ID */
+            printf( esc_html__( 'ID: %s', 'ovr-core' ), esc_html( (string) $post_id ) );
+            ?>
+        </span>
+    </a>
+
+    <div class="ovr-ss-card-body">
+
+        <div class="ovr-ss-card-toprow">
+            <span class="ovr-ss-card-type"><?php echo esc_html( $type_label ); ?></span>
+            <?php if ( $featured_variant && $rating_count > 0 ) : ?>
+                <span class="ovr-ss-card-stars" aria-label="<?php
+                    /* translators: %s: average rating */
+                    echo esc_attr( sprintf( __( 'Rated %s out of 5', 'ovr-core' ), number_format( $rating_avg, 1 ) ) ); ?>">
+                    <?php
+                    $filled = (int) round( min( 5, max( 0, $rating_avg ) ) );
+                    for ( $s = 1; $s <= 5; $s++ ) :
+                        ?><span class="material-symbols-outlined<?php echo $s <= $filled ? ' is-on' : ''; ?>">star</span><?php
+                    endfor;
+                    ?>
+                </span>
+            <?php endif; ?>
+        </div>
+
+        <h3 class="ovr-ss-card-title">
+            <a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $title ); ?></a>
+        </h3>
+
+        <p class="ovr-ss-card-desc"><?php echo esc_html( $excerpt ); ?></p>
+
+        <div class="ovr-ss-card-foot">
+            <div class="ovr-ss-card-specs">
+                <span><span class="material-symbols-outlined">bed</span><?php echo esc_html( (string) $bedrooms ); ?></span>
+                <span><span class="material-symbols-outlined">shower</span><?php echo esc_html( $bath_display ); ?></span>
+            </div>
+            <div class="ovr-ss-card-price">
+                <?php if ( $has_price ) : ?>
+                    <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?><span>/ <?php esc_html_e( 'night', 'ovr-core' ); ?></span>
+                <?php else : ?>
+                    <?php esc_html_e( 'Seasonal Rates', 'ovr-core' ); ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="ovr-ss-card-actions">
+            <a class="ovr-ss-btn ovr-ss-btn-navy" href="<?php echo esc_url( $permalink ); ?>"><?php esc_html_e( 'Details', 'ovr-core' ); ?></a>
+            <?php if ( $featured_variant ) : ?>
+                <a class="ovr-ss-btn ovr-ss-btn-gold" href="<?php echo esc_url( $permalink ); ?>#ovr-inquiry"><?php esc_html_e( 'Inquire', 'ovr-core' ); ?></a>
+            <?php endif; ?>
+        </div>
+    </div>
+</article>
