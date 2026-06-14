@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class WalletGateway implements PaymentGateway {
 
+    use GatewayPayload;
+
     public function get_id(): string {
         return 'wallet';
     }
@@ -25,11 +27,10 @@ class WalletGateway implements PaymentGateway {
     }
 
     public function start_checkout( array $args ): array {
-        $user_id   = (int) ( $args['user_id']   ?? 0 );
-        $plan_slug = (string) ( $args['plan_slug'] ?? '' );
-        $amount    = (float) ( $args['amount']  ?? 0 );
+        $user_id = (int) ( $args['user_id'] ?? 0 );
+        $amount  = (float) ( $args['amount'] ?? 0 );
 
-        if ( ! $user_id || ! $plan_slug || $amount <= 0 ) {
+        if ( ! $this->payload_valid( $args ) ) {
             return [ 'success' => false, 'message' => __( 'Invalid checkout request.', 'ovr-core' ) ];
         }
 
@@ -38,26 +39,30 @@ class WalletGateway implements PaymentGateway {
             return [
                 'success' => false,
                 'message' => sprintf(
-                    /* translators: 1: required amount, 2: current balance */
-                    __( 'Not enough balance. Plan costs %1$s but your balance is %2$s. Add funds or pick another payment method.', 'ovr-core' ),
+                    /* translators: 1: required amount, 2: available credit */
+                    __( 'Your available credit (%2$s) does not cover the %1$s total. Please choose another payment method.', 'ovr-core' ),
                     number_format( $amount, 2 ),
                     number_format( $balance, 2 )
                 ),
             ];
         }
 
-        // Record the payment.
+        $payment_type = $this->payload_type( $args );
+        $meta         = $this->payload_meta( $args );
+        $item_name    = $this->payload_item_name( $args );
+
+        // Record the (already-paid) payment.
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_payments';
         $inserted = $wpdb->insert( $table, [
             'user_id'        => $user_id,
-            'payment_type'   => 'subscription',
+            'payment_type'   => $payment_type,
             'amount'         => $amount,
             'currency'       => strtoupper( substr( (string) ( $args['currency'] ?? 'USD' ), 0, 3 ) ),
             'gateway'        => $this->get_id(),
             'transaction_id' => 'wallet_' . wp_generate_uuid4(),
             'status'         => 'completed',
-            'meta_data'      => wp_json_encode( [ 'plan_slug' => $plan_slug ] ),
+            'meta_data'      => wp_json_encode( $meta ),
         ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
 
         if ( false === $inserted ) {
@@ -67,19 +72,15 @@ class WalletGateway implements PaymentGateway {
         $payment_id = (int) $wpdb->insert_id;
 
         // Debit balance.
-        Wallet::debit(
-            $user_id,
-            $amount,
-            sprintf( __( 'Subscription: %s', 'ovr-core' ), $plan_slug ),
-            $payment_id
-        );
+        Wallet::debit( $user_id, $amount, $item_name, $payment_id );
 
-        // Fire downstream hooks (Lifecycle listens to this).
+        // Fire downstream hooks (Lifecycle + UpgradeActivator listen to this).
         do_action( 'ovr_payment_completed', $user_id, [
-            'payment_id' => $payment_id,
-            'plan_slug'  => $plan_slug,
-            'amount'     => $amount,
-            'gateway'    => $this->get_id(),
+            'payment_id'   => $payment_id,
+            'plan_slug'    => (string) ( $meta['plan_slug'] ?? '' ),
+            'amount'       => $amount,
+            'gateway'      => $this->get_id(),
+            'payment_type' => $payment_type,
         ] );
 
         return [
@@ -89,7 +90,7 @@ class WalletGateway implements PaymentGateway {
                 'ovr_checkout' => 'completed',
                 'payment_id'   => $payment_id,
             ], $args['return_url'] ?? home_url( '/' ) ),
-            'message'      => __( 'Subscription activated from wallet.', 'ovr-core' ),
+            'message'      => __( 'Payment completed from your balance.', 'ovr-core' ),
         ];
     }
 

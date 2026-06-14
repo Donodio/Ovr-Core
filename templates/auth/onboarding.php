@@ -3,12 +3,33 @@
  * Onboarding / Welcome Template.
  *
  * @var WP_User $user
- * @var int     $profile_complete
- * @var string  $pricing_url
+ * @var bool    $is_first_login   True only for the very first time a new
+ *                                landlord sees this page. False on every
+ *                                subsequent visit (i.e. a returning user
+ *                                who navigated here manually).
+ * @var int     $profile_complete 0-100
  * @var string  $dashboard_url
+ * @var string  $profile_url      Dashboard ?tab=profile
+ * @var string  $add_listing_url  Dashboard ?tab=add-listing
+ * @var string  $search_url       OVR search page
+ * @var string  $pricing_url      OVR pricing page
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+use OVR\Core\Pages;
+
 $first_name = esc_html( $user->first_name ?: $user->display_name );
+
+// Pick a greeting that doesn't lie. "Welcome aboard!" is only correct for
+// a brand-new account. Anyone who arrives here with is_first_login=false
+// is just a returning landlord — greet them neutrally.
+if ( $is_first_login ) {
+    $greeting      = __( 'Welcome aboard, %s!', 'ovr-core' );
+    $greeting_tail = __( "Let's get you set up.", 'ovr-core' );
+} else {
+    $greeting      = __( 'Welcome back, %s.', 'ovr-core' );
+    $greeting_tail = __( 'Your account is ready when you are.', 'ovr-core' );
+}
 ?>
 <div class="ovr-wrap">
     <div class="ovr-container ovr-section">
@@ -16,7 +37,12 @@ $first_name = esc_html( $user->first_name ?: $user->display_name );
         <!-- Welcome Toast -->
         <div class="ovr-onboarding-toast">
             <span class="material-symbols-outlined">waving_hand</span>
-            <span><?php printf( esc_html__( 'Welcome aboard, %s! Let\'s get you set up.', 'ovr-core' ), '<strong>' . $first_name . '</strong>' ); ?></span>
+            <span>
+                <?php
+                printf( esc_html( $greeting ), '<strong>' . $first_name . '</strong>' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+                echo ' ' . esc_html( $greeting_tail );
+                ?>
+            </span>
         </div>
 
         <!-- Hero Card -->
@@ -32,9 +58,8 @@ $first_name = esc_html( $user->first_name ?: $user->display_name );
                     <?php esc_html_e( 'Go to Dashboard', 'ovr-core' ); ?>
                 </a>
             </div>
-            <div class="ovr-onboarding-hero-image">
-                <img src="<?php echo esc_url( OVR_PLUGIN_URL . 'assets/images/ovr-placeholder.jpg' ); ?>"
-                     alt="<?php esc_attr_e( 'Beautiful rental property', 'ovr-core' ); ?>">
+            <div class="ovr-onboarding-hero-image<?php echo file_exists( OVR_PLUGIN_DIR . 'assets/images/ovr-onboarding-hero.jpg' ) ? ' has-hero-photo' : ''; ?>" role="img" aria-label="<?php esc_attr_e( 'Beautiful rental property', 'ovr-core' ); ?>">
+                <?php // Full-bleed treatment: the image is set as a CSS background so it always covers the container. The .has-hero-photo class is added above when assets/images/ovr-onboarding-hero.jpg is present; otherwise the CSS gradient/pattern fallback fills the container. ?>
             </div>
         </div>
 
@@ -43,8 +68,8 @@ $first_name = esc_html( $user->first_name ?: $user->display_name );
 
         <div class="ovr-quick-start-grid">
 
-            <!-- Profile Card -->
-            <div class="ovr-qs-card ovr-qs-card-profile">
+            <!-- Profile Card (now a link) -->
+            <a href="<?php echo esc_url( $profile_url ); ?>" class="ovr-qs-card ovr-qs-card-profile" style="text-decoration:none;color:inherit">
                 <div>
                     <div class="ovr-qs-icon" style="background:var(--ovr-surface-container)">
                         <span class="material-symbols-outlined" style="color:var(--ovr-primary)">person</span>
@@ -63,10 +88,10 @@ $first_name = esc_html( $user->first_name ?: $user->display_name );
                         <div class="ovr-progress-fill" style="width:<?php echo esc_attr( $profile_complete ); ?>%"></div>
                     </div>
                 </div>
-            </div>
+            </a>
 
             <!-- Add First Listing Card (Primary) -->
-            <a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=ovr_property' ) ); ?>" class="ovr-qs-card ovr-qs-card-listing" style="text-decoration:none">
+            <a href="<?php echo esc_url( $add_listing_url ); ?>" class="ovr-qs-card ovr-qs-card-listing" style="text-decoration:none">
                 <div>
                     <div class="ovr-qs-icon" style="background:rgba(255,255,255,0.2)">
                         <span class="material-symbols-outlined" style="color:#fff">add_home</span>
@@ -94,7 +119,7 @@ $first_name = esc_html( $user->first_name ?: $user->display_name );
             </a>
 
             <!-- Explore Properties -->
-            <a href="<?php echo esc_url( home_url( '/properties/' ) ); ?>" class="ovr-qs-card ovr-qs-card-explore" style="text-decoration:none;color:inherit">
+            <a href="<?php echo esc_url( $search_url ); ?>" class="ovr-qs-card ovr-qs-card-explore" style="text-decoration:none;color:inherit">
                 <div>
                     <div class="ovr-qs-icon" style="background:var(--ovr-secondary-container)">
                         <span class="material-symbols-outlined" style="color:var(--ovr-secondary)">explore</span>

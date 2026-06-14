@@ -74,6 +74,24 @@
     margin-bottom: 32px;
 }
 
+.ovr-auth-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 5px 14px;
+    border-radius: 9999px;
+    background: var(--ovr-primary-fixed);
+    color: var(--ovr-primary);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.ovr-auth-eyebrow .material-symbols-outlined {
+    font-size: 16px;
+}
+
 .ovr-auth-brand {
     font-size: 24px;
     font-weight: 700;
@@ -319,6 +337,23 @@
     aspect-ratio: 4 / 3;
     border-radius: var(--ovr-radius-xl);
     overflow: hidden;
+    /* Full-bleed treatment. The .has-hero-photo class is added by the
+       onboarding template only when a custom photo has been supplied at
+       assets/images/ovr-onboarding-hero.jpg — otherwise the gradient +
+       pattern fallback fills the container. */
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18), transparent 60%),
+        linear-gradient(135deg, var(--ovr-primary-container), var(--ovr-secondary-container));
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+}
+
+.ovr-onboarding-hero-image.has-hero-photo {
+    background-image: url('../images/ovr-onboarding-hero.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 .ovr-onboarding-hero-image img {

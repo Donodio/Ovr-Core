@@ -13,6 +13,7 @@
 namespace OVR\REST;
 
 use OVR\Property\Reviews;
+use OVR\Property\ReviewRequest;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
@@ -46,6 +47,8 @@ class ReviewEndpoint {
                     'guest_email' => [ 'required' => true, 'sanitize_callback' => 'sanitize_email' ],
                     'title'       => [ 'sanitize_callback' => 'sanitize_text_field' ],
                     'body'        => [ 'required' => true, 'sanitize_callback' => 'sanitize_textarea_field' ],
+                    'stay_date'   => [ 'sanitize_callback' => 'sanitize_text_field' ],
+                    'token'       => [ 'sanitize_callback' => 'sanitize_text_field' ],
                 ],
             ],
         ] );
@@ -79,11 +82,18 @@ class ReviewEndpoint {
             'guest_email' => (string) $request->get_param( 'guest_email' ),
             'title'       => (string) $request->get_param( 'title' ),
             'body'        => (string) $request->get_param( 'body' ),
+            'stay_date'   => (string) $request->get_param( 'stay_date' ),
             'user_id'     => get_current_user_id(),
         ] );
 
         if ( is_wp_error( $result ) ) {
             return new \WP_REST_Response( [ 'message' => $result->get_error_message() ], 400 );
+        }
+
+        // If this came from a review-request link, close the request out.
+        $token = (string) $request->get_param( 'token' );
+        if ( '' !== $token && ReviewRequest::get_by_token( $token ) ) {
+            ReviewRequest::mark_completed( $token, (int) $result );
         }
 
         $settings = get_option( 'ovr_settings', [] );

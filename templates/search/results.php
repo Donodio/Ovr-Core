@@ -30,6 +30,14 @@ $bedroom_opts   = SearchFilters::get_bedroom_options();
 
 $base_search_url = Pages::get_page_url( 'ovr_page_search' );
 
+// When the visitor arrived via a landlord's "View Listings" button the results
+// are scoped to a single owner. In that mode we drop the cross-owner chrome
+// (Featured rail + Featured Cities strip) and label the page with the owner's
+// name, so it reads as "this landlord's listings" rather than the general search.
+$owner_id     = (int) ( $filters['owner_id'] ?? 0 );
+$owner_active = $owner_id > 0;
+$owner_name   = $owner_active ? get_the_author_meta( 'display_name', $owner_id ) : '';
+
 // Helper for view / pagination URL building (preserves active filters).
 $build_url = static function( array $overrides ) use ( $filters, $base_search_url ): string {
     $clean  = array_filter( $filters, static fn( $v ) => $v !== '' && $v !== 0 && $v !== [] && $v !== false );
@@ -37,29 +45,39 @@ $build_url = static function( array $overrides ) use ( $filters, $base_search_ur
     return $base_search_url . '?' . http_build_query( $merged );
 };
 
+// Exact current filtered + paginated results URL. Stamped onto every listing
+// link (?ovr_ref=) so a listing's "Back To Search Results" returns the visitor
+// to this precise view — same filters, same page — instead of the homepage.
+$results_ref = $build_url( [ 'paged' => $paged ] );
+
 // "Showing X–Y of Z" range.
 $range_start = $total > 0 ? ( ( $paged - 1 ) * $per_page ) + 1 : 0;
 $range_end   = min( $total, $paged * $per_page );
 
 // Featured listings for the right-hand rail. Same equal-width grid track as
 // the results, so featured cards line up row-for-row (grid view only).
-$featured = ( 'list' !== $view ) ? PropertyQuery::get_featured( 4 ) : null;
+$featured = ( 'list' !== $view && 'map' !== $view && ! $owner_active ) ? PropertyQuery::get_featured( 4 ) : null;
 
 // Featured Cities strip: admin-managed entries (Featured Cities portal) link to
 // a keyword search; if none are configured, fall back to the village list.
-$cities = FeaturedCities::get_items(); // [ ['name','image'], … ]
-if ( ! empty( $cities ) ) {
-    foreach ( $cities as &$city ) {
-        $city['url'] = $build_url( [ 'keyword' => $city['name'], 'village' => [], 'paged' => 1 ] );
-    }
-    unset( $city );
-} else {
-    foreach ( array_slice( $villages, 0, 6 ) as $v ) {
-        $cities[] = [
-            'name'  => $v->name,
-            'image' => SearchFilters::get_village_image( $v ),
-            'url'   => $build_url( [ 'village' => [ $v->slug ], 'paged' => 1 ] ),
-        ];
+// Skipped entirely when scoped to a single owner — it's cross-owner browsing
+// chrome that has no place on a "Listings by [owner]" view.
+$cities = [];
+if ( ! $owner_active ) {
+    $cities = FeaturedCities::get_items(); // [ ['name','image'], … ]
+    if ( ! empty( $cities ) ) {
+        foreach ( $cities as &$city ) {
+            $city['url'] = $build_url( [ 'keyword' => $city['name'], 'village' => [], 'paged' => 1 ] );
+        }
+        unset( $city );
+    } else {
+        foreach ( array_slice( $villages, 0, 6 ) as $v ) {
+            $cities[] = [
+                'name'  => $v->name,
+                'image' => SearchFilters::get_village_image( $v ),
+                'url'   => $build_url( [ 'village' => [ $v->slug ], 'paged' => 1 ] ),
+            ];
+        }
     }
 }
 ?>
@@ -81,7 +99,7 @@ if ( ! empty( $cities ) ) {
         </section>
     <?php endif; ?>
 
-    <div class="ovr-container ovr-section ovr-search-page">
+    <div class="ovr-container ovr-section ovr-search-page <?php echo 'map' === $view ? 'ovr-search-page--map' : ''; ?>">
         <div class="ovr-search-layout">
 
             <!-- Filters sidebar -->
@@ -102,7 +120,16 @@ if ( ! empty( $cities ) ) {
                 <?php ob_start(); ?>
                 <div class="ovr-results-header">
                     <div>
-                        <h2 class="ovr-results-title"><?php esc_html_e( 'Available Rentals', 'ovr-core' ); ?></h2>
+                        <h2 class="ovr-results-title">
+                            <?php
+                            if ( $owner_active && '' !== $owner_name ) {
+                                /* translators: %s: landlord / owner display name. */
+                                printf( esc_html__( 'Listings by %s', 'ovr-core' ), esc_html( $owner_name ) );
+                            } else {
+                                esc_html_e( 'Available Rentals', 'ovr-core' );
+                            }
+                            ?>
+                        </h2>
                         <p class="ovr-results-count">
                             <?php if ( $total > 0 ) : ?>
                                 <?php
@@ -121,13 +148,12 @@ if ( ! empty( $cities ) ) {
                     </div>
 
                     <div class="ovr-results-controls">
-                        <!-- View toggle -->
+                        <!-- View toggle (Grid / List are primary) -->
                         <div class="ovr-view-group" role="group" aria-label="<?php esc_attr_e( 'Results view', 'ovr-core' ); ?>">
                             <?php
                             $views = [
                                 'grid' => [ 'grid_view', __( 'Grid view', 'ovr-core' ) ],
                                 'list' => [ 'view_list', __( 'List view', 'ovr-core' ) ],
-                                'map'  => [ 'map', __( 'Map view', 'ovr-core' ) ],
                             ];
                             foreach ( $views as $key => $v ) :
                             ?>
@@ -139,6 +165,15 @@ if ( ! empty( $cities ) ) {
                                 </a>
                             <?php endforeach; ?>
                         </div>
+
+                        <!-- Map is a quiet, secondary option, tucked beside the main views. -->
+                        <a href="<?php echo esc_url( $build_url( [ 'view' => 'map' ] ) ); ?>"
+                           class="ovr-map-toggle <?php echo 'map' === $view ? 'is-active' : ''; ?>"
+                           aria-label="<?php esc_attr_e( 'Map view', 'ovr-core' ); ?>"
+                           <?php echo 'map' === $view ? 'aria-current="true"' : ''; ?>>
+                            <span class="material-symbols-outlined">place</span>
+                            <span class="ovr-map-toggle-label"><?php esc_html_e( 'Map', 'ovr-core' ); ?></span>
+                        </a>
 
                         <!-- Compact top pager -->
                         <?php if ( $max_pages > 1 ) : ?>
@@ -173,11 +208,61 @@ if ( ! empty( $cities ) ) {
                 <!-- Results -->
                 <?php if ( $query->have_posts() ) : ?>
 
-                    <?php if ( 'list' === $view ) : ?>
+                    <?php if ( 'map' === $view ) : ?>
+                        <?php
+                        // Plot EVERY matching listing (clustered), independent of
+                        // pagination. The card column on the left shows just this
+                        // page of results and scrolls on its own.
+                        $map_points   = PropertyQuery::get_map_points( $filters );
+                        $map_settings = get_option( 'ovr_settings', [] );
+                        $map_symbol   = $map_settings['currency_symbol'] ?? '$';
+                        ?>
+                        <div class="ovr-map-split" data-ovr-map-split>
+
+                            <!-- Left: scrollable result cards -->
+                            <div class="ovr-map-listcol">
+                                <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+                                <div class="ovr-map-cards">
+                                    <?php while ( $query->have_posts() ) : $query->the_post(); $cid = (int) get_the_ID(); ?>
+                                        <div class="ovr-map-cardwrap" data-ovr-card-id="<?php echo esc_attr( (string) $cid ); ?>">
+                                            <?php echo PropertyCard::render_search( $cid, false, $results_ref ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+                                        </div>
+                                    <?php endwhile; wp_reset_postdata(); ?>
+                                </div>
+                            </div>
+
+                            <!-- Right: clustered map -->
+                            <div class="ovr-map-canvas">
+                                <div class="ovr-map-view"
+                                     data-ovr-map="<?php echo esc_attr( wp_json_encode( $map_points ) ); ?>"
+                                     data-symbol="<?php echo esc_attr( $map_symbol ); ?>"
+                                     role="application"
+                                     aria-label="<?php esc_attr_e( 'Map of search results', 'ovr-core' ); ?>">
+                                    <?php if ( empty( $map_points ) ) : ?>
+                                        <p class="ovr-map-empty">
+                                            <span class="material-symbols-outlined">location_off</span>
+                                            <?php esc_html_e( 'None of these listings have map coordinates yet. Add a latitude & longitude to your properties to plot them here.', 'ovr-core' ); ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <!-- Floating Map / List switch (mobile) -->
+                            <div class="ovr-map-switch" role="group" aria-label="<?php esc_attr_e( 'Toggle map or list', 'ovr-core' ); ?>">
+                                <button type="button" class="ovr-map-switch-btn is-active" data-show="list">
+                                    <span class="material-symbols-outlined">view_list</span><?php esc_html_e( 'List', 'ovr-core' ); ?>
+                                </button>
+                                <button type="button" class="ovr-map-switch-btn" data-show="map">
+                                    <span class="material-symbols-outlined">map</span><?php esc_html_e( 'Map', 'ovr-core' ); ?>
+                                </button>
+                            </div>
+                        </div>
+
+                    <?php elseif ( 'list' === $view ) : ?>
                         <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                         <div class="ovr-search-results ovr-search-list">
                             <?php while ( $query->have_posts() ) : $query->the_post(); ?>
-                                <?php echo PropertyCard::render_list( get_the_ID() ); ?>
+                                <?php echo PropertyCard::render_list( get_the_ID(), $results_ref ); ?>
                             <?php endwhile; wp_reset_postdata(); ?>
                         </div>
                     <?php elseif ( $has_featured ) : ?>
@@ -188,8 +273,8 @@ if ( ! empty( $cities ) ) {
                             <div class="ovr-results-main">
                                 <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                                 <div class="ovr-search-results">
-                                    <?php while ( $query->have_posts() ) : $query->the_post(); ?>
-                                        <?php echo PropertyCard::render_search( get_the_ID(), false ); ?>
+                                    <?php while ( $query->have_posts() ) : $query->the_post(); $cid = (int) get_the_ID(); ?>
+                                        <?php echo PropertyCard::render_search( $cid, \OVR\Subscription\UpgradeActivator::is_active( $cid, 'featured' ), $results_ref ); ?>
                                     <?php endwhile; wp_reset_postdata(); ?>
                                 </div>
                             </div>
@@ -203,7 +288,7 @@ if ( ! empty( $cities ) ) {
                                 </div>
                                 <div class="ovr-featured-rail">
                                     <?php while ( $featured->have_posts() ) : $featured->the_post(); ?>
-                                        <?php echo PropertyCard::render_search( get_the_ID(), true ); ?>
+                                        <?php echo PropertyCard::render_search( get_the_ID(), true, $results_ref ); ?>
                                     <?php endwhile; wp_reset_postdata(); ?>
                                 </div>
                             </aside>
@@ -211,14 +296,14 @@ if ( ! empty( $cities ) ) {
                     <?php else : ?>
                         <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                         <div class="ovr-search-results ovr-results-fullgrid">
-                            <?php while ( $query->have_posts() ) : $query->the_post(); ?>
-                                <?php echo PropertyCard::render_search( get_the_ID(), false ); ?>
+                            <?php while ( $query->have_posts() ) : $query->the_post(); $cid = (int) get_the_ID(); ?>
+                                <?php echo PropertyCard::render_search( $cid, \OVR\Subscription\UpgradeActivator::is_active( $cid, 'featured' ), $results_ref ); ?>
                             <?php endwhile; wp_reset_postdata(); ?>
                         </div>
                     <?php endif; ?>
 
-                    <!-- Bottom pagination -->
-                    <?php if ( $max_pages > 1 ) : ?>
+                    <!-- Bottom pagination (not shown in map view) -->
+                    <?php if ( 'map' !== $view && $max_pages > 1 ) : ?>
                         <nav class="ovr-pagination" aria-label="<?php esc_attr_e( 'Search results pages', 'ovr-core' ); ?>">
 
                             <?php if ( $paged > 1 ) : ?>

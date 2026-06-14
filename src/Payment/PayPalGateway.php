@@ -1,10 +1,11 @@
 <?php
 /**
- * PayPal Gateway — Phase 1 stub.
+ * PayPal Gateway — Orders API (sandbox + live).
  *
- * Records a 'pending' payment row and returns a placeholder redirect.
- * Phase 2 swaps `start_checkout()` for a real PayPal Smart Buttons /
- * Orders API call. Webhook handler signature is reserved.
+ * start_checkout() creates a PayPal Order (intent CAPTURE) and redirects to the
+ * approve link; finalize() (on return) captures the approved order. Credentials
+ * resolve from the active environment (paypal_env = sandbox|live) with a
+ * fallback to the legacy flat keys.
  *
  * @package OVR\Payment
  * @since   1.0.0
@@ -16,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class PayPalGateway implements PaymentGateway {
 
+    use GatewayPayload;
+
     public function get_id(): string {
         return 'paypal';
     }
@@ -24,132 +27,181 @@ class PayPalGateway implements PaymentGateway {
         return __( 'PayPal', 'ovr-core' );
     }
 
-    public function is_configured(): bool {
+    private function env(): string {
         $s = get_option( 'ovr_settings', [] );
-        return ! empty( $s['paypal_client_id'] ) && ! empty( $s['paypal_secret'] );
+        return 'live' === ( $s['paypal_env'] ?? 'sandbox' ) ? 'live' : 'sandbox';
+    }
+
+    private function client_id(): string {
+        $s = get_option( 'ovr_settings', [] );
+        $e = $this->env();
+        return (string) ( $s[ "paypal_{$e}_client_id" ] ?? '' ) ?: (string) ( $s['paypal_client_id'] ?? '' );
+    }
+
+    private function secret(): string {
+        $s = get_option( 'ovr_settings', [] );
+        $e = $this->env();
+        return (string) ( $s[ "paypal_{$e}_secret" ] ?? '' ) ?: (string) ( $s['paypal_secret'] ?? '' );
+    }
+
+    private function api_base(): string {
+        return 'live' === $this->env() ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+    }
+
+    public function is_configured(): bool {
+        return '' !== $this->client_id() && '' !== $this->secret();
+    }
+
+    /**
+     * Fetch an OAuth2 access token, or '' on failure.
+     */
+    private function access_token(): string {
+        $resp = wp_remote_post( $this->api_base() . '/v1/oauth2/token', [
+            'headers' => [
+                'Accept'        => 'application/json',
+                'Authorization' => 'Basic ' . base64_encode( $this->client_id() . ':' . $this->secret() ),
+            ],
+            'body'    => [ 'grant_type' => 'client_credentials' ],
+            'timeout' => 20,
+        ] );
+
+        if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
+            return '';
+        }
+        $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        return (string) ( $body['access_token'] ?? '' );
     }
 
     public function start_checkout( array $args ): array {
         $user_id   = (int) ( $args['user_id']   ?? 0 );
-        $plan_slug = (string) ( $args['plan_slug'] ?? '' );
         $amount    = (float) ( $args['amount']  ?? 0 );
+        $currency  = strtoupper( substr( (string) ( $args['currency'] ?? 'USD' ), 0, 3 ) );
 
-        if ( ! $user_id || ! $plan_slug || $amount <= 0 ) {
+        if ( ! $this->payload_valid( $args ) ) {
             return [ 'success' => false, 'message' => __( 'Invalid checkout request.', 'ovr-core' ) ];
         }
-
-        $payment_type = $args['payment_type'] ?? 'subscription';
 
         global $wpdb;
         $table    = $wpdb->prefix . 'ovr_payments';
         $inserted = $wpdb->insert( $table, [
             'user_id'        => $user_id,
-            'payment_type'   => $payment_type,
+            'payment_type'   => $this->payload_type( $args ),
             'amount'         => $amount,
-            'currency'       => strtoupper( substr( (string) ( $args['currency'] ?? 'USD' ), 0, 3 ) ),
+            'currency'       => $currency,
             'gateway'        => $this->get_id(),
             'transaction_id' => '',
             'status'         => 'pending',
-            'meta_data'      => wp_json_encode( [ 'plan_slug' => $plan_slug ] ),
+            'meta_data'      => wp_json_encode( $this->payload_meta( $args ) ),
         ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
 
         if ( false === $inserted ) {
             return [ 'success' => false, 'message' => __( 'Could not record payment.', 'ovr-core' ) ];
         }
-
         $payment_id = (int) $wpdb->insert_id;
-
         do_action( 'ovr_checkout_started', $payment_id, $args, $this->get_id() );
 
-        $redirect_url = add_query_arg( [
-            'ovr_checkout' => 'pending',
-            'gateway'      => 'paypal',
-            'payment_id'   => $payment_id,
-        ], $args['return_url'] ?? home_url( '/' ) );
+        $pending_redirect = add_query_arg( [ 'ovr_checkout' => 'pending', 'payment_id' => $payment_id ], $args['return_url'] ?? home_url( '/' ) );
 
-        $message = __( 'PayPal is not configured yet — payment recorded as pending.', 'ovr-core' );
+        if ( ! $this->is_configured() ) {
+            return [
+                'success'      => true,
+                'payment_id'   => $payment_id,
+                'redirect_url' => $pending_redirect,
+                'message'      => __( 'PayPal is not configured — payment recorded as pending.', 'ovr-core' ),
+            ];
+        }
 
-        if ( $this->is_configured() ) {
-            $s = get_option( 'ovr_settings', [] );
-            $client_id = $s['paypal_client_id'];
-            $secret    = $s['paypal_secret'];
-            $mode      = $s['paypal_mode'] ?? 'sandbox';
+        $token = $this->access_token();
+        if ( ! $token ) {
+            return [ 'success' => true, 'payment_id' => $payment_id, 'redirect_url' => $pending_redirect, 'message' => __( 'PayPal authentication failed.', 'ovr-core' ) ];
+        }
 
-            $base_url = 'sandbox' === $mode ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
+        // PayPal appends ?token=<orderID>&PayerID=… to these on return.
+        $return = add_query_arg( [ 'ovr_gw' => 'paypal', 'payment_id' => $payment_id ], $args['return_url'] ?? home_url( '/' ) );
+        $cancel = add_query_arg( 'ovr_checkout', 'cancelled', $args['cancel_url'] ?? home_url( '/' ) );
 
-            // 1. Get Access Token
-            $auth_response = wp_remote_post( $base_url . '/v1/oauth2/token', [
-                'headers' => [
-                    'Accept'        => 'application/json',
-                    'Authorization' => 'Basic ' . base64_encode( $client_id . ':' . $secret ),
-                ],
-                'body' => [ 'grant_type' => 'client_credentials' ],
-            ] );
+        $order_resp = wp_remote_post( $this->api_base() . '/v2/checkout/orders', [
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $token,
+            ],
+            'timeout' => 20,
+            'body'    => wp_json_encode( [
+                'intent'         => 'CAPTURE',
+                'purchase_units' => [ [
+                    'reference_id' => 'payment_' . $payment_id,
+                    'description'  => mb_substr( $this->payload_item_name( $args ), 0, 127 ),
+                    'amount'       => [ 'currency_code' => $currency, 'value' => number_format( $amount, 2, '.', '' ) ],
+                ] ],
+                'application_context' => [ 'return_url' => $return, 'cancel_url' => $cancel ],
+            ] ),
+        ] );
 
-            if ( ! is_wp_error( $auth_response ) && 200 === wp_remote_retrieve_response_code( $auth_response ) ) {
-                $auth_body = json_decode( wp_remote_retrieve_body( $auth_response ), true );
-                $access_token = $auth_body['access_token'] ?? '';
+        if ( is_wp_error( $order_resp ) || 201 !== (int) wp_remote_retrieve_response_code( $order_resp ) ) {
+            return [ 'success' => true, 'payment_id' => $payment_id, 'redirect_url' => $pending_redirect, 'message' => __( 'PayPal could not create the order.', 'ovr-core' ) ];
+        }
 
-                if ( $access_token ) {
-                    // 2. Create Order
-                    $order_payload = [
-                        'intent' => 'CAPTURE',
-                        'purchase_units' => [
-                            [
-                                'reference_id' => 'payment_' . $payment_id,
-                                'amount' => [
-                                    'currency_code' => strtoupper( substr( (string) ( $args['currency'] ?? 'USD' ), 0, 3 ) ),
-                                    'value'         => number_format( $amount, 2, '.', '' ),
-                                ],
-                            ],
-                        ],
-                        'application_context' => [
-                            'return_url' => $args['return_url'] ?? home_url( '/' ),
-                            'cancel_url' => $args['cancel_url'] ?? home_url( '/' ),
-                        ],
-                    ];
+        $order = json_decode( wp_remote_retrieve_body( $order_resp ), true );
+        if ( ! empty( $order['id'] ) ) {
+            $wpdb->update( $table, [ 'transaction_id' => (string) $order['id'] ], [ 'id' => $payment_id ], [ '%s' ], [ '%d' ] );
+        }
 
-                    $order_response = wp_remote_post( $base_url . '/v2/checkout/orders', [
-                        'headers' => [
-                            'Content-Type'  => 'application/json',
-                            'Authorization' => 'Bearer ' . $access_token,
-                        ],
-                        'body' => wp_json_encode( $order_payload ),
-                    ] );
-
-                    if ( ! is_wp_error( $order_response ) && 201 === wp_remote_retrieve_response_code( $order_response ) ) {
-                        $order_body = json_decode( wp_remote_retrieve_body( $order_response ), true );
-
-                        // Save transaction ID
-                        if ( ! empty( $order_body['id'] ) ) {
-                            $wpdb->update( $table, [ 'transaction_id' => $order_body['id'] ], [ 'id' => $payment_id ], [ '%s' ], [ '%d' ] );
-                        }
-
-                        // Find approve link
-                        if ( ! empty( $order_body['links'] ) ) {
-                            foreach ( $order_body['links'] as $link ) {
-                                if ( 'approve' === $link['rel'] ) {
-                                    $redirect_url = $link['href'];
-                                    $message = __( 'Redirecting to PayPal…', 'ovr-core' );
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+        foreach ( (array) ( $order['links'] ?? [] ) as $link ) {
+            if ( 'approve' === ( $link['rel'] ?? '' ) && ! empty( $link['href'] ) ) {
+                return [ 'success' => true, 'payment_id' => $payment_id, 'redirect_url' => (string) $link['href'], 'message' => __( 'Redirecting to PayPal…', 'ovr-core' ) ];
             }
         }
 
-        return [
-            'success'      => true,
-            'payment_id'   => $payment_id,
-            'redirect_url' => $redirect_url,
-            'message'      => $message,
-        ];
+        return [ 'success' => true, 'payment_id' => $payment_id, 'redirect_url' => $pending_redirect, 'message' => __( 'PayPal did not return an approval link.', 'ovr-core' ) ];
+    }
+
+    /**
+     * Capture the approved order when PayPal redirects back.
+     *
+     * @param array $payment wp_ovr_payments row (assoc).
+     * @return array{success:bool, message?:string}
+     */
+    public function finalize( array $payment ): array {
+        $order_id = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
+        if ( ! $order_id ) {
+            $order_id = (string) ( $payment['transaction_id'] ?? '' );
+        }
+        if ( ! $order_id || ! $this->is_configured() ) {
+            return [ 'success' => false, 'message' => __( 'Payment could not be verified.', 'ovr-core' ) ];
+        }
+
+        $token = $this->access_token();
+        if ( ! $token ) {
+            return [ 'success' => false, 'message' => __( 'PayPal authentication failed.', 'ovr-core' ) ];
+        }
+
+        $resp = wp_remote_post( $this->api_base() . '/v2/checkout/orders/' . rawurlencode( $order_id ) . '/capture', [
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $token,
+            ],
+            'timeout' => 20,
+            'body'    => '',
+        ] );
+
+        if ( is_wp_error( $resp ) ) {
+            return [ 'success' => false, 'message' => $resp->get_error_message() ];
+        }
+
+        $code = (int) wp_remote_retrieve_response_code( $resp );
+        $data = json_decode( wp_remote_retrieve_body( $resp ), true );
+
+        // 201 Created on a fresh capture; 422 ORDER_ALREADY_CAPTURED is also "paid".
+        $completed = ( in_array( $code, [ 200, 201 ], true ) && 'COMPLETED' === ( $data['status'] ?? '' ) )
+            || ( 422 === $code && false !== strpos( wp_remote_retrieve_body( $resp ), 'ORDER_ALREADY_CAPTURED' ) );
+
+        return $completed
+            ? [ 'success' => true ]
+            : [ 'success' => false, 'message' => __( 'PayPal did not confirm this payment.', 'ovr-core' ) ];
     }
 
     public function handle_webhook( array $payload ): array {
         do_action( 'ovr_paypal_webhook', $payload );
-        return [ 'success' => true, 'message' => 'Stub — implemented in Phase 2.' ];
+        return [ 'success' => true ];
     }
 }

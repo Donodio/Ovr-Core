@@ -100,14 +100,13 @@ class RegistrationHandler {
         update_user_meta( $user_id, 'ovr_first_login', '1' );
         update_user_meta( $user_id, 'ovr_registered_at', current_time( 'mysql' ) );
 
-        // Assign role.
+        // Assign the Landlord role. Accounts on this site exist to advertise
+        // listings, so every registrant is a landlord — but with NO active paid
+        // subscription yet, so the gate keeps them out of landlord tools until
+        // they pay (Section 1).
         $user = new \WP_User( $user_id );
-        if ( $is_landlord ) {
-            $user->set_role( 'ovr_landlord' );
-            update_user_meta( $user_id, 'ovr_is_landlord', true );
-        } else {
-            $user->set_role( 'subscriber' );
-        }
+        $user->set_role( 'ovr_landlord' );
+        update_user_meta( $user_id, 'ovr_is_landlord', true );
 
         // Auto-login.
         wp_set_current_user( $user_id );
@@ -121,6 +120,11 @@ class RegistrationHandler {
          */
         do_action( 'ovr_user_registered', $user_id, $is_landlord );
 
+        // Brand-new landlord. Send them to /welcome/ — the onboarding
+        // screen explains what's next (complete profile, add first listing,
+        // pick a plan). LoginHandler also uses ovr_first_login to re-route
+        // the user to /welcome/ on their first sign-in, so this works for
+        // auto-logged-in registrants AND for users who log out and back in.
         wp_safe_redirect( Pages::get_page_url( 'ovr_page_onboarding' ) );
         exit;
     }

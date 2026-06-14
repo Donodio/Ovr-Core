@@ -33,6 +33,7 @@ class Deactivator {
             'ovr_purge_old_inquiries',
             'ovr_inactivity_check',
             'ovr_hard_delete_listings',
+            \OVR\Sync\WordPressSync::CRON_HOOK,
         ];
 
         foreach ( $cron_hooks as $hook ) {
@@ -42,8 +43,9 @@ class Deactivator {
             }
         }
 
-        // Unschedule iCal sync via its dedicated helper.
+        // Unschedule iCal sync + geocoding backfill via their helpers.
         IcalSync::unschedule_cron();
+        \OVR\Property\Geocoder::unschedule_cron();
 
         // Unschedule daily subscription check.
         Lifecycle::unschedule_cron();

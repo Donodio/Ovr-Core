@@ -27,8 +27,12 @@ $logged_out = isset( $_GET['logged_out'] ) && '1' === $_GET['logged_out'];
 
             <!-- Header -->
             <div class="ovr-auth-header">
-                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Villages Rentals', 'ovr-core' ); ?></div>
-                <p class="ovr-auth-subtitle"><?php esc_html_e( 'Sign in to your account', 'ovr-core' ); ?></p>
+                <span class="ovr-auth-eyebrow">
+                    <span class="material-symbols-outlined">apartment</span>
+                    <?php esc_html_e( 'Property Owner Login', 'ovr-core' ); ?>
+                </span>
+                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Village Rentals', 'ovr-core' ); ?></div>
+                <p class="ovr-auth-subtitle"><?php esc_html_e( 'Sign in to manage your listings and inquiries', 'ovr-core' ); ?></p>
             </div>
 
             <!-- Success message after logout -->

@@ -3,6 +3,7 @@
  * Homepage Template.
  *
  * @var WP_Query $featured_properties
+ * @var array    $slider_cards  Real boosted-listing cards (empty → static demo).
  * @var array    $villages WP_Term[]
  */
 if ( ! defined( 'ABSPATH' ) ) {
@@ -10,6 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use OVR\Core\Pages;
+
+$slider_cards = $slider_cards ?? [];
 
 $search_url    = Pages::get_page_url( 'ovr_page_search' );
 $register_url  = Pages::get_page_url( 'ovr_page_register' );
@@ -72,7 +75,24 @@ $featured_cards = [
     <header class="bg-surface border-b border-border-gray sticky top-0 z-50">
         <div class="flex justify-between items-center w-full px-margin-desktop h-tap-target-min max-w-container-max-width mx-auto">
             <div class="flex items-center gap-6">
-                <a class="text-card-title font-card-title font-bold text-primary" href="<?php echo esc_url( home_url( '/' ) ); ?>"><?php esc_html_e( 'Our Villages Rentals', 'ovr-core' ); ?></a>
+                <a class="ovr-brand flex items-center gap-2 text-card-title font-card-title font-bold text-primary" href="<?php echo esc_url( home_url( '/' ) ); ?>">
+                    <?php
+                    $ovr_logo_id = get_theme_mod( 'custom_logo' );
+                    if ( $ovr_logo_id ) {
+                        echo wp_get_attachment_image(
+                            $ovr_logo_id,
+                            'full',
+                            false,
+                            [
+                                'class' => 'ovr-brand-logo',
+                                'style' => 'height:36px;width:auto;display:block',
+                                'alt'   => esc_attr__( 'Our Village Rentals', 'ovr-core' ),
+                            ]
+                        );
+                    }
+                    ?>
+                    <span><?php esc_html_e( 'OVR Homepage', 'ovr-core' ); ?></span>
+                </a>
                 <nav class="hidden md:flex items-center gap-6" aria-label="<?php esc_attr_e( 'Primary navigation', 'ovr-core' ); ?>">
                     <a class="text-primary font-bold border-b-2 border-primary pb-1 text-label-md font-label-md" href="<?php echo esc_url( $search_url ); ?>"><?php esc_html_e( 'Search Rentals', 'ovr-core' ); ?></a>
                     <a class="text-on-surface-variant font-body-lg text-label-md font-label-md hover:text-secondary hover:bg-surface-container-low transition-colors rounded px-2 py-1" href="<?php echo esc_url( home_url( '/map/' ) ); ?>"><?php esc_html_e( 'Map', 'ovr-core' ); ?></a>
@@ -137,14 +157,23 @@ $featured_cards = [
                     <h2 class="text-headline-md-mobile md:text-headline-md font-headline-md-mobile md:font-headline-md text-on-surface"><?php esc_html_e( 'Featured Rentals', 'ovr-core' ); ?></h2>
                     <a class="text-label-md font-label-md text-secondary hover:underline flex items-center gap-1" href="<?php echo esc_url( $featured_url ); ?>"><?php esc_html_e( 'View All', 'ovr-core' ); ?> <span class="material-symbols-outlined text-sm">arrow_forward</span></a>
                 </div>
+                <?php
+                // Prefer real boosted listings (Homepage Slider upgrade); fall
+                // back to the static demo cards only when none are boosted yet.
+                $cards     = ! empty( $slider_cards ) ? $slider_cards : $featured_cards;
+                $is_linked = ! empty( $slider_cards );
+                ?>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <?php foreach ( $featured_cards as $card ) : ?>
-                        <div class="bg-surface rounded-lg border border-featured-gold overflow-hidden shadow-sm flex flex-col relative group">
+                    <?php foreach ( $cards as $card ) :
+                        $card_url = $is_linked && ! empty( $card['permalink'] ) ? $card['permalink'] : '';
+                        $tag      = $card_url ? 'a' : 'div';
+                    ?>
+                        <<?php echo $tag; ?> <?php if ( $card_url ) : ?>href="<?php echo esc_url( $card_url ); ?>"<?php endif; ?> class="bg-surface rounded-lg border border-featured-gold overflow-hidden shadow-sm flex flex-col relative group">
                             <div class="absolute top-4 left-4 bg-featured-gold text-ink-text px-3 py-1 rounded-sm text-metadata font-metadata font-bold z-10 shadow-sm flex items-center gap-1">
                                 <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span> <?php esc_html_e( 'Featured', 'ovr-core' ); ?>
                             </div>
                             <div class="h-48 relative overflow-hidden">
-                                <img alt="<?php esc_attr_e( 'Property Image', 'ovr-core' ); ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="<?php echo esc_url( $card['image'] ); ?>">
+                                <img alt="<?php echo esc_attr( $card['title'] ?? __( 'Property Image', 'ovr-core' ) ); ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="<?php echo esc_url( $card['image'] ); ?>">
                             </div>
                             <div class="p-5 flex-grow flex flex-col">
                                 <div class="flex justify-between items-start mb-2">
@@ -157,7 +186,7 @@ $featured_cards = [
                                     <p class="text-body-md font-body-md text-on-surface mt-1"><?php echo esc_html( $card['price'] ); ?></p>
                                 </div>
                             </div>
-                        </div>
+                        </<?php echo $tag; ?>>
                     <?php endforeach; ?>
                 </div>
             </div>
@@ -188,8 +217,8 @@ $featured_cards = [
     <footer class="bg-surface-container-high border-t border-border-gray mt-auto">
         <div class="flex flex-col md:flex-row justify-between items-start w-full p-margin-desktop gap-gutter max-w-container-max-width mx-auto">
             <div class="mb-6 md:mb-0 max-w-lg">
-                <h2 class="text-card-title font-card-title text-primary mb-2"><?php esc_html_e( 'Our Villages Rentals', 'ovr-core' ); ?></h2>
-                <p class="text-metadata font-metadata text-on-surface">© <?php echo esc_html( gmdate( 'Y' ) ); ?> <?php esc_html_e( 'Our Villages Rentals. Serving landlords and renters since 2013. Licensed and Bonded. Disclaimer: OVR is an independent listing service and not affiliated with any specific developer or municipality.', 'ovr-core' ); ?></p>
+                <h2 class="text-card-title font-card-title text-primary mb-2"><?php esc_html_e( 'Our Village Rentals', 'ovr-core' ); ?></h2>
+                <p class="text-metadata font-metadata text-on-surface">© <?php echo esc_html( gmdate( 'Y' ) ); ?> <?php esc_html_e( 'Our Village Rentals. Serving landlords and renters since 2013. Licensed and Bonded. Disclaimer: OVR is an independent listing service and not affiliated with any specific developer or municipality.', 'ovr-core' ); ?></p>
             </div>
             <nav class="flex flex-col md:flex-row gap-4 md:gap-8" aria-label="<?php esc_attr_e( 'Footer navigation', 'ovr-core' ); ?>">
                 <div class="flex flex-col gap-2">

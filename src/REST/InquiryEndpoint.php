@@ -18,8 +18,40 @@ class InquiryEndpoint {
 
     private const NAMESPACE = 'ovr/v1';
 
+    /** Monthly cleanup cron hook (cleared in Deactivator). */
+    public const PURGE_HOOK = 'ovr_purge_old_inquiries';
+
     public function init(): void {
         add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+
+        // Monthly retention cleanup. Self-heals the schedule so existing
+        // installs pick it up without re-activation.
+        add_action( self::PURGE_HOOK, [ $this, 'purge_old' ] );
+        if ( ! wp_next_scheduled( self::PURGE_HOOK ) ) {
+            wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', self::PURGE_HOOK );
+        }
+    }
+
+    /**
+     * Retention window in days (defaults to 365 / 12 months).
+     */
+    private function retention_days(): int {
+        $s = get_option( 'ovr_settings', [] );
+        return max( 30, (int) ( $s['inquiry_retention'] ?? 365 ) );
+    }
+
+    /**
+     * Delete inquiries older than the retention window. Runs daily; the
+     * effective cadence is "purge anything past 12 months".
+     */
+    public function purge_old(): void {
+        global $wpdb;
+        $table  = $wpdb->prefix . 'ovr_inquiries';
+        $cutoff = gmdate( 'Y-m-d H:i:s', strtotime( '-' . $this->retention_days() . ' days', (int) current_time( 'timestamp' ) ) );
+        $deleted = (int) $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE created_at < %s", $cutoff ) ); // phpcs:ignore WordPress.DB
+        if ( $deleted > 0 ) {
+            \OVR\Core\AuditLog::record( 'inquiry.purge', 'inquiry', null, [ 'deleted' => $deleted, 'cutoff' => $cutoff ] );
+        }
     }
 
     public function register_routes(): void {
@@ -60,6 +92,59 @@ class InquiryEndpoint {
                 'status' => [ 'required' => true, 'sanitize_callback' => 'sanitize_key' ],
             ],
         ] );
+
+        register_rest_route( self::NAMESPACE, '/inquiries/(?P<id>[\d]+)/reply', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'reply' ],
+            'permission_callback' => [ $this, 'auth_required' ],
+            'args'                => [
+                'id'      => [ 'sanitize_callback' => 'absint' ],
+                'message' => [ 'required' => true, 'sanitize_callback' => 'sanitize_textarea_field' ],
+            ],
+        ] );
+    }
+
+    /**
+     * Append a reply to an inquiry's response history and mark it replied.
+     */
+    public function reply( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $id      = (int) $request->get_param( 'id' );
+        $message = trim( (string) $request->get_param( 'message' ) );
+        $table   = $wpdb->prefix . 'ovr_inquiries';
+
+        if ( '' === $message ) {
+            return new \WP_REST_Response( [ 'message' => __( 'Reply cannot be empty.', 'ovr-core' ) ], 400 );
+        }
+
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT landlord_id, responses FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+        if ( ! $row ) {
+            return new \WP_REST_Response( [ 'message' => __( 'Inquiry not found.', 'ovr-core' ) ], 404 );
+        }
+        if ( (int) $row['landlord_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) {
+            return new \WP_REST_Response( [ 'message' => __( 'Forbidden.', 'ovr-core' ) ], 403 );
+        }
+
+        $history   = $row['responses'] ? (array) json_decode( (string) $row['responses'], true ) : [];
+        $entry     = [
+            'at'      => current_time( 'mysql' ),
+            'by'      => get_current_user_id(),
+            'by_name' => wp_get_current_user()->display_name,
+            'message' => $message,
+        ];
+        $history[] = $entry;
+
+        $wpdb->update(
+            $table,
+            [ 'responses' => wp_json_encode( $history ), 'status' => 'replied', 'replied_at' => current_time( 'mysql' ) ],
+            [ 'id' => $id ],
+            [ '%s', '%s', '%s' ],
+            [ '%d' ]
+        );
+
+        do_action( 'ovr_inquiry_replied', $id, $message );
+
+        return new \WP_REST_Response( [ 'id' => $id, 'reply' => $entry, 'status' => 'replied' ], 201 );
     }
 
     public function auth_required() {
@@ -96,11 +181,19 @@ class InquiryEndpoint {
             return new \WP_REST_Response( [ 'message' => __( 'Checkout must be after check-in.', 'ovr-core' ) ], 400 );
         }
 
+        // Tie the inquiry to the CRM guest manifest under the listing's owner.
+        $guest_id = \OVR\Crm\GuestRepository::upsert( (int) $post->post_author, [
+            'name'  => $name,
+            'email' => $email,
+            'phone' => (string) $request->get_param( 'guest_phone' ),
+        ] );
+
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_inquiries';
         $inserted = $wpdb->insert( $table, [
             'property_id'   => $property_id,
             'landlord_id'   => (int) $post->post_author,
+            'guest_id'      => $guest_id ?: null,
             'guest_name'    => $name,
             'guest_email'   => $email,
             'guest_phone'   => (string) $request->get_param( 'guest_phone' ),
@@ -109,7 +202,7 @@ class InquiryEndpoint {
             'checkout_date' => $checkout ?: null,
             'guests'        => (int) $request->get_param( 'guests' ) ?: null,
             'status'        => 'new',
-        ], [ '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s' ] );
+        ], [ '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s' ] );
 
         if ( false === $inserted ) {
             return new \WP_REST_Response( [ 'message' => __( 'Failed to save inquiry.', 'ovr-core' ) ], 500 );
@@ -137,7 +230,10 @@ class InquiryEndpoint {
         $page     = max( 1, (int) $request->get_param( 'page' ) );
         $offset   = ( $page - 1 ) * $per_page;
 
-        $where    = $wpdb->prepare( 'WHERE landlord_id = %d', $user_id );
+        // Only surface the last 12 months (Feature 6); older inquiries are
+        // purged by cron but we also bound the query directly.
+        $cutoff = gmdate( 'Y-m-d H:i:s', strtotime( '-' . $this->retention_days() . ' days', (int) current_time( 'timestamp' ) ) );
+        $where  = $wpdb->prepare( 'WHERE landlord_id = %d AND created_at >= %s', $user_id, $cutoff );
         if ( $status ) {
             $where .= $wpdb->prepare( ' AND status = %s', $status );
         }

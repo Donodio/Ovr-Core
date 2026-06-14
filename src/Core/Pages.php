@@ -14,7 +14,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Pages {
 
-    public function init(): void {}
+    /**
+     * Version of the page set. Bump when adding a new plugin page so the
+     * one-time self-heal below creates it without requiring reactivation.
+     */
+    private const PAGES_VERSION = '7';
+
+    public function init(): void {
+        add_action( 'init', [ $this, 'maybe_sync_pages' ] );
+    }
+
+    /**
+     * Create any missing plugin pages once after a page-set version bump.
+     */
+    public function maybe_sync_pages(): void {
+        if ( self::PAGES_VERSION === get_option( 'ovr_pages_version' ) ) {
+            return;
+        }
+        self::create_pages();
+        update_option( 'ovr_pages_version', self::PAGES_VERSION );
+    }
 
     /**
      * Create all required plugin pages on activation.
@@ -25,10 +44,17 @@ class Pages {
             'ovr_page_register'        => [ 'Create Account', '[ovr_register]', 'register' ],
             'ovr_page_forgot_password' => [ 'Forgot Password', '[ovr_forgot_password]', 'forgot-password' ],
             'ovr_page_pricing'         => [ 'Pricing Plans', '[ovr_pricing_plans]', 'pricing' ],
+            'ovr_page_subscription_select' => [ 'Choose Your Subscription', '[ovr_subscription_select]', 'subscription-select' ],
+            'ovr_page_checkout'        => [ 'Checkout', '[ovr_checkout]', 'checkout' ],
+            'ovr_page_payment_success' => [ 'Payment Successful', '[ovr_payment_success]', 'payment-success' ],
             'ovr_page_search'          => [ 'Search Properties', '[ovr_search_results]', 'search' ],
+            'ovr_page_map'             => [ 'Map', '[ovr_map]', 'map' ],
             'ovr_page_featured'        => [ 'Featured Properties', '[ovr_featured_listings]', 'featured' ],
+            'ovr_page_villages'        => [ 'Villages', '[ovr_villages]', 'villages' ],
             'ovr_page_onboarding'      => [ 'Welcome', '[ovr_onboarding]', 'welcome' ],
             'ovr_page_dashboard'       => [ 'Dashboard', '[ovr_dashboard]', 'dashboard' ],
+            'ovr_page_about'           => [ 'About Us', self::default_about_content(), 'about' ],
+            'ovr_page_contact'         => [ 'Contact', self::default_contact_content(), 'contact' ],
         ];
 
         foreach ( $pages as $option_key => $data ) {
@@ -61,6 +87,26 @@ class Pages {
         if ( ! is_wp_error( $page_id ) ) {
             update_option( $key, $page_id );
         }
+    }
+
+    /**
+     * Default editable content for the auto-created About page.
+     */
+    private static function default_about_content(): string {
+        return "<!-- wp:paragraph --><p>Our Village Rentals connects guests directly with local property owners across The Villages. "
+            . "We make it simple to discover, compare and book vacation and long-term rentals — owner-direct, with no middleman.</p><!-- /wp:paragraph -->\n\n"
+            . "<!-- wp:paragraph --><p>This page is editable from the WordPress admin. Replace this text with your own story, mission and team.</p><!-- /wp:paragraph -->";
+    }
+
+    /**
+     * Default editable content for the auto-created Contact page.
+     */
+    private static function default_contact_content(): string {
+        $email = get_option( 'admin_email' );
+        return "<!-- wp:heading --><h2>Get in touch</h2><!-- /wp:heading -->\n\n"
+            . "<!-- wp:paragraph --><p>Questions about a listing or your account? We're happy to help.</p><!-- /wp:paragraph -->\n\n"
+            . '<!-- wp:paragraph --><p><strong>Email:</strong> <a href="mailto:' . esc_attr( $email ) . '">' . esc_html( $email ) . "</a></p><!-- /wp:paragraph -->\n\n"
+            . "<!-- wp:paragraph --><p>This page is editable from the WordPress admin — add a contact form or phone number as needed.</p><!-- /wp:paragraph -->";
     }
 
     /**

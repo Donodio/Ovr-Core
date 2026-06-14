@@ -84,6 +84,30 @@ class Assets {
                 OVR_VERSION
             );
         }
+
+        // Leaflet map styles — on the search "Map" view and the /map/ page.
+        if ( $this->needs_map() ) {
+            wp_enqueue_style(
+                'ovr-leaflet',
+                'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+                [],
+                '1.9.4'
+            );
+
+            // Marker clustering (numbered cluster bubbles).
+            wp_enqueue_style(
+                'ovr-leaflet-cluster',
+                'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
+                [ 'ovr-leaflet' ],
+                '1.5.3'
+            );
+            wp_enqueue_style(
+                'ovr-leaflet-cluster-default',
+                'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
+                [ 'ovr-leaflet-cluster' ],
+                '1.5.3'
+            );
+        }
     }
 
     /**
@@ -116,6 +140,16 @@ class Assets {
             ],
         ] );
 
+        // Testimonials carousel — registered (not enqueued) so the Elementor
+        // widget can pull it in on demand via get_script_depends().
+        wp_register_script(
+            'ovr-testimonials',
+            OVR_PLUGIN_URL . 'assets/js/ovr-testimonials.js',
+            [],
+            OVR_VERSION,
+            true
+        );
+
         // Auth form validation (conditional).
         if ( $this->is_auth_page() ) {
             wp_enqueue_script(
@@ -127,12 +161,36 @@ class Assets {
             );
         }
 
-        // Search & filter scripts (conditional).
-        if ( $this->is_search_page() || $this->is_property_page() ) {
+        // Search & filter scripts (conditional). Also loaded on the /map/ page,
+        // which reuses ovr-search.js (setupMap) to plot its clustered markers.
+        if ( $this->is_search_page() || $this->is_property_page() || $this->is_map_page() ) {
+            $search_deps = [ 'ovr-public' ];
+
+            // Load Leaflet ahead of ovr-search.js when a map is on the page so
+            // it can initialise. Leaflet is only pulled in on demand.
+            if ( $this->needs_map() ) {
+                wp_enqueue_script(
+                    'ovr-leaflet',
+                    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+                    [],
+                    '1.9.4',
+                    true
+                );
+                wp_enqueue_script(
+                    'ovr-leaflet-cluster',
+                    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+                    [ 'ovr-leaflet' ],
+                    '1.5.3',
+                    true
+                );
+                $search_deps[] = 'ovr-leaflet';
+                $search_deps[] = 'ovr-leaflet-cluster';
+            }
+
             wp_enqueue_script(
                 'ovr-search',
                 OVR_PLUGIN_URL . 'assets/js/ovr-search.js',
-                [ 'ovr-public' ],
+                $search_deps,
                 OVR_VERSION,
                 true
             );
@@ -196,6 +254,37 @@ class Assets {
     private function is_search_page(): bool {
         $search_page = absint( get_option( 'ovr_page_search' ) );
         return ( $search_page && is_page( $search_page ) ) || is_post_type_archive( 'ovr_property' );
+    }
+
+    /**
+     * Whether the search results are being viewed as a map (?view=map).
+     *
+     * @return bool
+     * @since  1.0.1
+     */
+    private function is_map_view(): bool {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only view switch.
+        return 'map' === sanitize_text_field( wp_unslash( $_GET['view'] ?? '' ) );
+    }
+
+    /**
+     * Whether the current request is the standalone /map/ page ([ovr_map]).
+     *
+     * @return bool
+     */
+    private function is_map_page(): bool {
+        $map_page = absint( get_option( 'ovr_page_map' ) );
+        return $map_page && is_page( $map_page );
+    }
+
+    /**
+     * Whether a Leaflet map needs to load on this request — either the search
+     * results in Map view, or the dedicated /map/ page.
+     *
+     * @return bool
+     */
+    private function needs_map(): bool {
+        return ( $this->is_search_page() && $this->is_map_view() ) || $this->is_map_page();
     }
 
     /**

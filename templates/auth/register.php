@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
         <div class="ovr-auth-card-body">
 
             <div class="ovr-auth-header">
-                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Villages Rentals', 'ovr-core' ); ?></div>
+                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Village Rentals', 'ovr-core' ); ?></div>
                 <p class="ovr-auth-subtitle"><?php esc_html_e( 'Create your account and start listing', 'ovr-core' ); ?></p>
             </div>
 

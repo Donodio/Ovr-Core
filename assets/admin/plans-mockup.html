@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subscription Plans Management — Village Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    darkMode: "class",
+    theme: {
+        extend: {
+            colors: {
+                "tertiary-fixed": "#ffe088",
+                "on-background": "#181c1c",
+                "surface": "#f7faf9",
+                "error-container": "#ffdad6",
+                "tertiary": "#735c00",
+                "surface-tint": "#096969",
+                "on-error": "#ffffff",
+                "on-secondary-container": "#00714e",
+                "tertiary-fixed-dim": "#e9c349",
+                "background": "#f7faf9",
+                "on-tertiary-container": "#4e3d00",
+                "surface-container": "#ebeeee",
+                "inverse-on-surface": "#eef1f0",
+                "on-primary-fixed-variant": "#004f4f",
+                "primary-container": "#006666",
+                "on-surface": "#181c1c",
+                "on-surface-variant": "#3f4948",
+                "surface-bright": "#f7faf9",
+                "on-secondary-fixed": "#002114",
+                "primary-fixed-dim": "#86d4d3",
+                "on-secondary-fixed-variant": "#005237",
+                "on-error-container": "#93000a",
+                "on-primary-fixed": "#002020",
+                "outline-variant": "#bec9c8",
+                "on-tertiary": "#ffffff",
+                "surface-variant": "#e0e3e2",
+                "on-tertiary-fixed-variant": "#574500",
+                "secondary": "#006c4a",
+                "secondary-container": "#74f7be",
+                "primary": "#004c4c",
+                "on-tertiary-fixed": "#241a00",
+                "inverse-surface": "#2d3131",
+                "tertiary-container": "#cca72f",
+                "on-primary": "#ffffff",
+                "on-secondary": "#ffffff",
+                "secondary-fixed-dim": "#58dda6",
+                "outline": "#6f7979",
+                "surface-container-low": "#f1f4f3",
+                "surface-container-high": "#e6e9e8",
+                "secondary-fixed": "#77fac1",
+                "on-primary-container": "#93e1e0",
+                "inverse-primary": "#86d4d3",
+                "surface-container-highest": "#e0e3e2",
+                "surface-dim": "#d7dbda",
+                "primary-fixed": "#a2f0ef",
+                "error": "#ba1a1a",
+                "surface-container-lowest": "#ffffff"
+            },
+            borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+            spacing: {
+                "section-padding": "80px", "margin-mobile": "16px", "margin-desktop": "48px",
+                unit: "4px", "container-max": "1280px", gutter: "24px"
+            },
+            fontFamily: {
+                h2: ["Inter"], h1: ["Inter"], h3: ["Inter"],
+                "label-caps": ["Inter"], "price-display": ["Inter"],
+                "body-md": ["Inter"], "body-lg": ["Inter"]
+            },
+            fontSize: {
+                h2: ["32px", { lineHeight: "1.3", letterSpacing: "-0.01em", fontWeight: "700" }],
+                h1: ["48px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "700" }],
+                h3: ["24px", { lineHeight: "1.4", fontWeight: "600" }],
+                "label-caps": ["12px", { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "600" }],
+                "price-display": ["20px", { lineHeight: "1", fontWeight: "700" }],
+                "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+                "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }]
+            }
+        }
+    }
+}
+</script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md flex min-h-screen">
+<aside class="fixed left-0 top-0 flex flex-col h-screen py-8 px-4 border-r border-outline-variant bg-surface-container dark:bg-inverse-surface shadow-sm h-screen w-64 rounded-r-xl z-40">
+<div class="mb-8 px-4 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-h3 text-h3 font-bold">V</div>
+<div>
+<h2 class="font-h3 text-h3 font-bold text-primary dark:text-primary-fixed-dim">Village Management</h2>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Curation Expert</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary font-h3 text-h3 py-3 rounded-lg mb-8 hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm">Add New Property</button>
+<nav class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-outline-variant px-4 py-3 hover:bg-surface-container-highest rounded-xl hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200" href="#"><span class="material-symbols-outlined">dashboard</span><span class="font-label-caps text-label-caps">Dashboard</span></a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-outline-variant px-4 py-3 hover:bg-surface-container-highest rounded-xl hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200" href="#"><span class="material-symbols-outlined">home_work</span><span class="font-label-caps text-label-caps">Listings</span></a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-outline-variant px-4 py-3 hover:bg-surface-container-highest rounded-xl hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200" href="#"><span class="material-symbols-outlined">group</span><span class="font-label-caps text-label-caps">Users</span></a>
+<a class="flex items-center gap-3 bg-primary-container text-on-primary-container font-semibold rounded-xl px-4 py-3 shadow-sm translate-x-1 transition-transform duration-200" href="#"><span class="material-symbols-outlined">payments</span><span class="font-label-caps text-label-caps">Payments</span></a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-outline-variant px-4 py-3 hover:bg-surface-container-highest rounded-xl hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200" href="#"><span class="material-symbols-outlined">settings</span><span class="font-label-caps text-label-caps">Settings</span></a>
+</nav>
+<div class="mt-auto flex flex-col gap-2 border-t border-outline-variant/30 pt-4">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-outline-variant px-4 py-3 hover:bg-surface-container-highest rounded-xl hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200" href="#"><span class="material-symbols-outlined">contact_support</span><span class="font-label-caps text-label-caps">Help Center</span></a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-outline-variant px-4 py-3 hover:bg-surface-container-highest rounded-xl hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all duration-200" href="#"><span class="material-symbols-outlined">logout</span><span class="font-label-caps text-label-caps">Log Out</span></a>
+</div>
+</aside>
+<main class="ml-64 flex-1 flex flex-col w-full max-w-[1280px] mx-auto min-h-screen relative">
+<header class="flex justify-between items-center px-margin-desktop h-20 w-full sticky top-0 z-30 shadow-sm bg-surface/80 backdrop-blur-md">
+<div class="flex items-center gap-4">
+<h1 class="font-h3 text-h3 font-bold text-primary dark:text-primary-fixed-dim">Admin Panel</h1>
+</div>
+<div class="flex items-center bg-surface-container rounded-full px-4 py-2 w-96 border border-outline/20 focus-within:border-primary transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 w-full font-body-md text-body-md text-on-surface placeholder-on-surface-variant/50 outline-none" placeholder="Search plans..." type="text">
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform"><span class="material-symbols-outlined">notifications</span></button>
+<button class="text-on-surface-variant hover:text-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform"><span class="material-symbols-outlined">help</span></button>
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-outline/20 cursor-pointer">
+<img alt="Administrator profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAv-MRk-I5z5_EnsN854f7kKnFUD3C1skZ5l8eoxAFHfKzB6zBY_x12Ek5sAvcPUrVRAROltTfKBR5Ojf5i5IbAzt_2PQ009CjIrDEUK8W1M_VpQ2H9cs1OwEiMkaFnKf0cpSrnySdomQM406PSFtlC4ih1gYUGxceVHTiEeywqHJOU0n5u9-q7Vyw9nMDQqCflBTF_xgId_zQYehoS6OQrwornUMHJRvLoOwCF9qCOkyGsNWegFA_WQjSHpgezqOtONRGIcA1JkPQ">
+</div>
+</div>
+</header>
+<div class="px-margin-desktop py-12 flex-1">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-h1 text-h1 text-on-background mb-2">Subscription Plans</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Manage billing tiers and feature access for your users.</p>
+</div>
+<button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-h3 text-h3 hover:bg-primary-container hover:text-on-primary-container transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center gap-2">
+<span class="material-symbols-outlined">add</span> Add New Plan
+</button>
+</div>
+<div class="bg-surface-bright rounded-xl border border-outline-variant shadow-[0_4px_24px_rgba(0,0,0,0.04)] overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Plan Name</th>
+<th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Price</th>
+<th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Duration</th>
+<th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider text-center">Max Listings</th>
+<th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider text-center">Status</th>
+<th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="py-5 px-6"><p class="font-h3 text-h3 text-on-surface">Base Subscriber</p><p class="font-body-md text-body-md text-on-surface-variant mt-1">Essential tools for single owners.</p></td>
+<td class="py-5 px-6 font-price-display text-price-display text-primary">$0<span class="font-body-md text-body-md text-on-surface-variant font-normal">/mo</span></td>
+<td class="py-5 px-6 text-on-surface">Monthly</td>
+<td class="py-5 px-6 text-center text-on-surface">1</td>
+<td class="py-5 px-6 text-center"><span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-caps text-label-caps">Active</span></td>
+<td class="py-5 px-6 text-right"><button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-lg hover:bg-surface-container opacity-0 group-hover:opacity-100 focus:opacity-100"><span class="material-symbols-outlined">edit</span></button></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="py-5 px-6"><p class="font-h3 text-h3 text-on-surface">Standard Homeowner 5</p><p class="font-body-md text-body-md text-on-surface-variant mt-1">For small portfolios.</p></td>
+<td class="py-5 px-6 font-price-display text-price-display text-primary">$49<span class="font-body-md text-body-md text-on-surface-variant font-normal">/mo</span></td>
+<td class="py-5 px-6 text-on-surface">Monthly</td>
+<td class="py-5 px-6 text-center text-on-surface">5</td>
+<td class="py-5 px-6 text-center"><span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-caps text-label-caps">Active</span></td>
+<td class="py-5 px-6 text-right"><button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-lg hover:bg-surface-container opacity-0 group-hover:opacity-100 focus:opacity-100"><span class="material-symbols-outlined">edit</span></button></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group cursor-pointer bg-surface-container-lowest shadow-[inset_4px_0_0_#004c4c]">
+<td class="py-5 px-6"><p class="font-h3 text-h3 text-on-surface">Property Manager 25</p><p class="font-body-md text-body-md text-on-surface-variant mt-1">Professional tools &amp; reporting.</p></td>
+<td class="py-5 px-6 font-price-display text-price-display text-primary">$199<span class="font-body-md text-body-md text-on-surface-variant font-normal">/mo</span></td>
+<td class="py-5 px-6 text-on-surface">Monthly</td>
+<td class="py-5 px-6 text-center text-on-surface">25</td>
+<td class="py-5 px-6 text-center"><span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-caps text-label-caps">Active</span></td>
+<td class="py-5 px-6 text-right"><button class="text-primary hover:text-primary-container transition-colors p-2 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">edit</span></button></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="py-5 px-6"><p class="font-h3 text-h3 text-on-surface text-on-surface-variant/70">Property Manager 40</p><p class="font-body-md text-body-md text-on-surface-variant/70 mt-1">Enterprise scale management.</p></td>
+<td class="py-5 px-6 font-price-display text-price-display text-on-surface-variant/70">$299<span class="font-body-md text-body-md text-on-surface-variant/50 font-normal">/mo</span></td>
+<td class="py-5 px-6 text-on-surface-variant/70">Monthly</td>
+<td class="py-5 px-6 text-center text-on-surface-variant/70">40</td>
+<td class="py-5 px-6 text-center"><span class="inline-flex items-center px-3 py-1 rounded-full bg-surface-variant text-on-surface-variant font-label-caps text-label-caps">Inactive</span></td>
+<td class="py-5 px-6 text-right"><button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-lg hover:bg-surface-container opacity-0 group-hover:opacity-100 focus:opacity-100"><span class="material-symbols-outlined">edit</span></button></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group cursor-pointer">
+<td class="py-5 px-6"><p class="font-h3 text-h3 text-on-surface">Long-Term Only</p><p class="font-body-md text-body-md text-on-surface-variant mt-1">Annual leases and tenant screening.</p></td>
+<td class="py-5 px-6 font-price-display text-price-display text-primary">$89<span class="font-body-md text-body-md text-on-surface-variant font-normal">/mo</span></td>
+<td class="py-5 px-6 text-on-surface">Annual Commitment</td>
+<td class="py-5 px-6 text-center text-on-surface">10</td>
+<td class="py-5 px-6 text-center"><span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-caps text-label-caps">Active</span></td>
+<td class="py-5 px-6 text-right"><button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-lg hover:bg-surface-container opacity-0 group-hover:opacity-100 focus:opacity-100"><span class="material-symbols-outlined">edit</span></button></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+<div class="fixed inset-0 bg-on-background/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+<div class="bg-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[921px] overflow-y-auto border border-outline-variant/50">
+<div class="sticky top-0 bg-surface/90 backdrop-blur-md px-8 py-6 border-b border-outline-variant flex justify-between items-center z-10">
+<h3 class="font-h2 text-h2 text-on-background">Edit Plan: Property Manager 25</h3>
+<button class="text-on-surface-variant hover:text-error transition-colors p-2 rounded-full hover:bg-error-container/20"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="p-8 space-y-8">
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Plan Name</label>
+<input class="w-full bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="text" value="Property Manager 25">
+</div>
+<div class="space-y-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Status</label>
+<label class="inline-flex items-center gap-3 cursor-pointer select-none group">
+<div class="relative">
+<input checked class="sr-only peer" type="checkbox">
+<div class="block w-14 h-7 rounded-full transition-all duration-200 bg-outline/30 peer-checked:bg-primary border border-outline/20 peer-checked:border-transparent"></div>
+<div class="absolute left-0.5 top-0.5 w-6 h-6 rounded-full transition-all duration-200 bg-white peer-checked:translate-x-7 shadow-md group-hover:shadow-lg"></div>
+</div>
+<span class="font-body-md text-body-md font-semibold text-on-surface-variant peer-checked:text-secondary transition-colors duration-200">
+<span class="peer-checked:hidden">Inactive</span>
+<span class="hidden peer-checked:inline">Active</span>
+</span>
+</label>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-6">
+<div class="space-y-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Monthly Price ($)</label>
+<input class="w-full bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-3 font-price-display text-price-display text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="number" value="199">
+</div>
+<div class="space-y-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Duration</label>
+<select class="w-full bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all appearance-none cursor-pointer">
+<option>Monthly</option>
+<option>Annual</option>
+<option>Quarterly</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Max Listings</label>
+<input class="w-full bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="number" value="25">
+</div>
+</div>
+<hr class="border-outline-variant">
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Included Features</label>
+<button class="text-primary font-label-caps text-label-caps hover:underline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">add</span> Add Feature</button>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3"><span class="material-symbols-outlined text-secondary">check_circle</span><input class="flex-1 bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none" type="text" value="Advanced Reporting Dashboard"><button class="text-on-surface-variant hover:text-error transition-colors p-2"><span class="material-symbols-outlined">delete</span></button></div>
+<div class="flex items-center gap-3"><span class="material-symbols-outlined text-secondary">check_circle</span><input class="flex-1 bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none" type="text" value="Priority Email &amp; Chat Support"><button class="text-on-surface-variant hover:text-error transition-colors p-2"><span class="material-symbols-outlined">delete</span></button></div>
+<div class="flex items-center gap-3"><span class="material-symbols-outlined text-secondary">check_circle</span><input class="flex-1 bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none" type="text" value="Custom Branding Options"><button class="text-on-surface-variant hover:text-error transition-colors p-2"><span class="material-symbols-outlined">delete</span></button></div>
+</div>
+</div>
+<hr class="border-outline-variant">
+<div class="space-y-4">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Marketing Configuration</label>
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-2">
+<div class="flex items-center gap-2">
+<input checked class="rounded border-outline/50 text-primary focus:ring-primary" id="promo-support" type="checkbox">
+<label class="font-body-md text-body-md text-on-surface cursor-pointer" for="promo-support">Support Promo Codes</label>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant ml-6">Allow users to apply discounts at checkout.</p>
+</div>
+<div class="space-y-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">Validity Message (Checkout)</label>
+<input class="w-full bg-surface-container-lowest border border-outline/30 rounded-lg px-4 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none" type="text" value="Billed monthly. Cancel anytime.">
+</div>
+</div>
+</div>
+</div>
+<div class="sticky bottom-0 bg-surface/90 backdrop-blur-md px-8 py-6 border-t border-outline-variant flex justify-end gap-4 z-10">
+<button class="px-6 py-2 rounded-lg font-h3 text-h3 text-primary border border-primary hover:bg-primary-container/20 transition-colors">Cancel</button>
+<button class="px-8 py-2 rounded-lg font-h3 text-h3 bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container shadow-sm transition-all active:scale-95">Save Changes</button>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -21,6 +21,124 @@ class PropertyQuery {
      * @return \WP_Query
      */
     public static function query( array $filters = [] ): \WP_Query {
+        $args = self::build_args( $filters );
+
+        // When bump-first ordering is requested, attach a LEFT JOIN clause
+        // (see boost_order_clauses) only for this query, then detach it so it
+        // never leaks into other queries on the page.
+        if ( ! empty( $args['_ovr_boost_first'] ) ) {
+            add_filter( 'posts_clauses', [ self::class, 'boost_order_clauses' ], 10, 2 );
+            $query = new \WP_Query( $args );
+            remove_filter( 'posts_clauses', [ self::class, 'boost_order_clauses' ], 10 );
+            return $query;
+        }
+
+        return new \WP_Query( $args );
+    }
+
+    /**
+     * meta_query clauses that exclude listings hidden from the public site:
+     * owner status = inactive, or admin status in (hidden/suspended/
+     * pending_review). Each clause keeps listings whose meta is absent.
+     *
+     * @return array<int, array>
+     */
+    public static function visibility_clauses(): array {
+        return [
+            [
+                'relation' => 'OR',
+                [ 'key' => '_ovr_listing_status', 'compare' => 'NOT EXISTS' ],
+                [ 'key' => '_ovr_listing_status', 'value' => 'inactive', 'compare' => '!=' ],
+            ],
+            [
+                'relation' => 'OR',
+                [ 'key' => '_ovr_admin_status', 'compare' => 'NOT EXISTS' ],
+                [ 'key' => '_ovr_admin_status', 'value' => [ 'hidden', 'suspended', 'pending_review' ], 'compare' => 'NOT IN' ],
+            ],
+        ];
+    }
+
+    /**
+     * Whether a single listing may be shown publicly (Phase 8B). The owner and
+     * admins can always view their own listing regardless of status.
+     */
+    public static function is_publicly_visible( int $post_id ): bool {
+        $owner = (string) get_post_meta( $post_id, '_ovr_listing_status', true );
+        if ( 'inactive' === $owner ) {
+            return false;
+        }
+        $admin = (string) get_post_meta( $post_id, '_ovr_admin_status', true );
+        if ( in_array( $admin, [ 'hidden', 'suspended', 'pending_review' ], true ) ) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Build a meta_query clause matching listings whose boost is live: the flag
+     * is set AND the expiry is unset/empty/in the future.
+     *
+     * @return array
+     */
+    private static function active_boost_clause( string $flag_key, string $expires_key ): array {
+        return [
+            'relation' => 'AND',
+            [ 'key' => $flag_key, 'value' => '1' ],
+            [
+                'relation' => 'OR',
+                [ 'key' => $expires_key, 'compare' => 'NOT EXISTS' ],
+                [ 'key' => $expires_key, 'value' => '', 'compare' => '=' ],
+                [ 'key' => $expires_key, 'value' => current_time( 'Y-m-d' ), 'compare' => '>=', 'type' => 'DATE' ],
+            ],
+        ];
+    }
+
+    /**
+     * posts_clauses filter: order listings by (1) an ACTIVE paid "Top of Page"
+     * promotion, then (2) recency — the greater of the publish date and the
+     * free-bump timestamp (Feature F), so a bump floats the listing back to the
+     * top. LEFT JOINs every signal so listings without the meta are kept (an
+     * INNER JOIN via meta_key orderby would drop them). Only runs when the query
+     * opted in via `_ovr_boost_first`.
+     *
+     * @param array     $clauses
+     * @param \WP_Query  $q
+     * @return array
+     */
+    public static function boost_order_clauses( array $clauses, \WP_Query $q ): array {
+        if ( ! $q->get( '_ovr_boost_first' ) ) {
+            return $clauses;
+        }
+        global $wpdb;
+        $today = current_time( 'Y-m-d' );
+
+        $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_bf ON ovr_bf.post_id = {$wpdb->posts}.ID AND ovr_bf.meta_key = '_ovr_is_bumped' ";
+        $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_be ON ovr_be.post_id = {$wpdb->posts}.ID AND ovr_be.meta_key = '_ovr_bump_expires' ";
+        $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_lb ON ovr_lb.post_id = {$wpdb->posts}.ID AND ovr_lb.meta_key = '" . Bump::META_LAST_BUMP . "' ";
+
+        $is_bumped = $wpdb->prepare(
+            "(CASE WHEN ovr_bf.meta_value = '1' AND ( ovr_be.meta_value IS NULL OR ovr_be.meta_value = '' OR ovr_be.meta_value >= %s ) THEN 1 ELSE 0 END)",
+            $today
+        );
+
+        // Effective recency = max(publish time, last-bump time). Free bumps
+        // store a Unix timestamp; un-bumped listings fall back to post_date.
+        $recency = "GREATEST( UNIX_TIMESTAMP({$wpdb->posts}.post_date_gmt), COALESCE(ovr_lb.meta_value + 0, 0) )";
+
+        $clauses['orderby']  = $is_bumped . ' DESC, ' . $recency . ' DESC, ' . $clauses['orderby'];
+        $clauses['groupby']  = "{$wpdb->posts}.ID"; // dedupe rows from the joins
+        return $clauses;
+    }
+
+    /**
+     * Build the WP_Query args for the current filter set. Shared by the
+     * paginated results query and the unpaginated map-points query so both
+     * always apply identical filtering.
+     *
+     * @param array $filters Search/filter parameters.
+     * @return array
+     */
+    private static function build_args( array $filters = [] ): array {
         $args = [
             'post_type'      => 'ovr_property',
             'post_status'    => 'publish',
@@ -29,6 +147,14 @@ class PropertyQuery {
             'meta_query'     => [ 'relation' => 'AND' ],
             'tax_query'      => [ 'relation' => 'AND' ],
         ];
+
+        // Public visibility gate (Phase 8B). Hide listings the owner set to
+        // Inactive, and listings an admin set to anything other than Approved.
+        // "NOT EXISTS OR != / NOT IN" so legacy listings without the meta (which
+        // predate these controls) stay visible by default.
+        foreach ( self::visibility_clauses() as $clause ) {
+            $args['meta_query'][] = $clause;
+        }
 
         // Search keyword. We pre-resolve to a post__in union of:
         //   (a) posts whose title/excerpt/content matches the keyword
@@ -60,13 +186,28 @@ class PropertyQuery {
             return array_values( array_filter( array_map( 'sanitize_key', (array) $raw ), 'strlen' ) );
         };
 
-        // Village taxonomy filter.
-        $village_terms = $clean_slugs( $filters['village'] ?? [] );
-        if ( $village_terms ) {
+        // Village filter — matches the free-text Village Name meta. Selected
+        // names are matched exactly.
+        $village_names = array_values( array_filter(
+            array_map( static fn( $v ) => sanitize_text_field( (string) $v ), (array) ( $filters['village'] ?? [] ) ),
+            'strlen'
+        ) );
+        if ( $village_names ) {
+            $args['meta_query'][] = [
+                'key'     => '_ovr_village_name',
+                'value'   => $village_names,
+                'compare' => 'IN',
+            ];
+        }
+
+        // Village Section filter — the curated ovr_village taxonomy (the
+        // required Section dropdown on each listing).
+        $section_terms = $clean_slugs( $filters['village_section'] ?? [] );
+        if ( $section_terms ) {
             $args['tax_query'][] = [
                 'taxonomy' => 'ovr_village',
                 'field'    => 'slug',
-                'terms'    => $village_terms,
+                'terms'    => $section_terms,
             ];
         }
 
@@ -87,6 +228,28 @@ class PropertyQuery {
                 'taxonomy' => 'ovr_amenity',
                 'field'    => 'slug',
                 'terms'    => $amenity_terms,
+                'operator' => 'AND',
+            ];
+        }
+
+        // Views filter — match listings with ANY of the selected views.
+        $view_terms = $clean_slugs( $filters['views'] ?? [] );
+        if ( $view_terms ) {
+            $args['tax_query'][] = [
+                'taxonomy' => 'ovr_view',
+                'field'    => 'slug',
+                'terms'    => $view_terms,
+                'operator' => 'IN',
+            ];
+        }
+
+        // Features filter — must have ALL selected features.
+        $feature_terms = $clean_slugs( $filters['features'] ?? [] );
+        if ( $feature_terms ) {
+            $args['tax_query'][] = [
+                'taxonomy' => 'ovr_feature',
+                'field'    => 'slug',
+                'terms'    => $feature_terms,
                 'operator' => 'AND',
             ];
         }
@@ -138,12 +301,33 @@ class PropertyQuery {
             ];
         }
 
-        // Featured only.
+        // Owner filter (Phase 22): restrict to a single landlord's listings.
+        if ( ! empty( $filters['owner_id'] ) ) {
+            $args['author'] = absint( $filters['owner_id'] );
+        }
+
+        // Availability search (Feature 2 + Feature 8): when a date range is
+        // supplied, drop listings with a HARD block overlapping the stay. Soft
+        // blocks / available overrides (show_as_available=1) stay searchable.
+        if ( ! empty( $filters['checkin'] ) && ! empty( $filters['checkout'] ) ) {
+            $busy = Availability::unavailable_property_ids(
+                (string) $filters['checkin'],
+                (string) $filters['checkout']
+            );
+            if ( $busy ) {
+                $existing             = isset( $args['post__not_in'] ) ? (array) $args['post__not_in'] : [];
+                $args['post__not_in'] = array_values( array_unique( array_merge( $existing, $busy ) ) );
+            }
+        }
+
+        // Featured only — flag set AND not expired.
         if ( ! empty( $filters['featured_only'] ) ) {
-            $args['meta_query'][] = [
-                'key'   => '_ovr_is_featured',
-                'value' => '1',
-            ];
+            $args['meta_query'][] = self::active_boost_clause( '_ovr_is_featured', '_ovr_featured_expires' );
+        }
+
+        // Homepage-slider only — flag set AND not expired.
+        if ( ! empty( $filters['slider_only'] ) ) {
+            $args['meta_query'][] = self::active_boost_clause( '_ovr_in_slider', '_ovr_slider_expires' );
         }
 
         // Sorting.
@@ -177,6 +361,15 @@ class PropertyQuery {
                 $args['order']   = 'DESC';
         }
 
+        // Top of Page Priority: for the default (newest) sort, float listings
+        // with an ACTIVE "bump" to the very top so they occupy the first rows
+        // of the results for their village. Applied via a LEFT JOIN in query()
+        // (a meta_key orderby would INNER-JOIN and drop un-bumped listings).
+        // Explicit price/rating sorts are left strictly ordered.
+        if ( 'newest' === $sort ) {
+            $args['_ovr_boost_first'] = true;
+        }
+
         // (Removed: bumped/featured priority orderby. The previous implementation
         // set meta_key='_ovr_is_bumped' alongside an orderby array, which causes
         // WP_Query to INNER-JOIN wp_postmeta and silently exclude any property
@@ -193,7 +386,58 @@ class PropertyQuery {
             unset( $args['tax_query'] );
         }
 
-        return new \WP_Query( $args );
+        return $args;
+    }
+
+    /**
+     * All matching properties' map coordinates for the current filters,
+     * unpaginated. Used by the split map view so every result is plotted and
+     * clustered, while the card list paginates separately.
+     *
+     * @param array $filters Search/filter parameters.
+     * @param int   $max     Hard cap to avoid pathological payloads.
+     * @return array<int, array>
+     */
+    public static function get_map_points( array $filters = [], int $max = 3000 ): array {
+        $args = self::build_args( $filters );
+        $args['posts_per_page']         = $max;
+        $args['paged']                  = 1;
+        $args['fields']                 = 'ids';
+        $args['no_found_rows']          = true;
+        $args['update_post_meta_cache'] = true;
+        $args['update_post_term_cache'] = false;
+        unset( $args['meta_key'], $args['orderby'], $args['order'] );
+
+        $ids    = ( new \WP_Query( $args ) )->posts;
+        $points = [];
+
+        foreach ( (array) $ids as $pid ) {
+            $pid = (int) $pid;
+            $lat = (float) get_post_meta( $pid, '_ovr_latitude', true );
+            $lng = (float) get_post_meta( $pid, '_ovr_longitude', true );
+            // Skip unset (0,0) coordinates AND anything outside the valid
+            // geographic range. A single corrupt value (e.g. a longitude that
+            // lost its decimal point) would otherwise blow up the map's
+            // fitBounds and zoom the whole view out to nothing.
+            if ( 0.0 === $lat || 0.0 === $lng
+                || $lat < -90.0 || $lat > 90.0
+                || $lng < -180.0 || $lng > 180.0
+            ) {
+                continue;
+            }
+            $points[] = [
+                'id'    => $pid,
+                'title' => get_the_title( $pid ),
+                'url'   => get_permalink( $pid ),
+                'thumb' => get_the_post_thumbnail_url( $pid, 'medium' ) ?: '',
+                'price' => (float) get_post_meta( $pid, '_ovr_base_price', true ),
+                'beds'  => (int) get_post_meta( $pid, '_ovr_bedrooms', true ),
+                'baths' => (float) get_post_meta( $pid, '_ovr_bathrooms', true ),
+                'lat'   => $lat,
+                'lng'   => $lng,
+            ];
+        }
+        return $points;
     }
 
     /**
@@ -248,7 +492,7 @@ class PropertyQuery {
     }
 
     /**
-     * Get featured properties.
+     * Get featured properties (active Featured boost only).
      */
     public static function get_featured( int $count = 6 ): \WP_Query {
         return self::query( [
@@ -256,6 +500,24 @@ class PropertyQuery {
             'per_page'      => $count,
             'sort'          => 'newest',
         ] );
+    }
+
+    /**
+     * Listings with an active Homepage Slider boost, for the homepage rail.
+     * Falls back to featured listings when nobody has bought the slider, so
+     * the homepage section is never empty.
+     */
+    public static function get_slider( int $count = 6 ): \WP_Query {
+        $slider = self::query( [
+            'slider_only' => true,
+            'per_page'    => $count,
+            'sort'        => 'newest',
+        ] );
+
+        if ( $slider->have_posts() ) {
+            return $slider;
+        }
+        return self::get_featured( $count );
     }
 
     /**

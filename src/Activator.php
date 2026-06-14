@@ -49,11 +49,23 @@ class Activator {
         $tax = new \OVR\PostTypes\Taxonomies();
         $tax->register_taxonomies();
 
+        // 5b. Seed the canonical Village Section terms (Phase 10).
+        \OVR\PostTypes\Taxonomies::seed_sections();
+        update_option( 'ovr_sections_seeded', 1 );
+
+        // 5b-ii. Seed the View / Feature facet terms (Feature 8 search filters).
+        \OVR\PostTypes\Taxonomies::seed_facets();
+        update_option( 'ovr_facets_seeded', 1 );
+
+        // 5c. Seed the Paid Services catalogue (Feature 1) from legacy products.
+        \OVR\Subscription\PaidService::maybe_seed();
+
         // 6. Flush rewrite rules to register new CPT permalinks.
         flush_rewrite_rules();
 
-        // 7. Schedule recurring iCal sync (hourly).
+        // 7. Schedule recurring iCal sync (hourly) + address geocoding backfill.
         IcalSync::schedule_cron();
+        \OVR\Property\Geocoder::schedule_cron();
 
         // 8. Schedule daily subscription expiry check.
         Lifecycle::schedule_cron();
@@ -87,8 +99,9 @@ class Activator {
                 'enable_inquiries'     => true,
                 'inquiry_retention'    => 365,
                 'enable_watermark'     => false,
-                'watermark_text'       => 'Our Villages Rentals',
-                'bump_daily_limit'     => 3,
+                'watermark_text'       => 'Our Village Rentals',
+                'bump_daily_limit'     => 12,
+                'listing_retention_days' => 90,
                 'grace_period_days'    => 7,
                 'inactivity_days'      => 180,
                 'google_maps_api_key'  => '',

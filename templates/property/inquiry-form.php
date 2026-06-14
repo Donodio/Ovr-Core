@@ -141,38 +141,36 @@ $inquiry_status = isset( $_GET['ovr_inquiry'] ) ? sanitize_key( wp_unslash( $_GE
                        autocomplete="email"
                        required>
             </div>
-            <div class="ovr-form-group" style="margin-bottom:12px">
-                <label class="ovr-form-label" for="ovr-guest-phone-<?php echo esc_attr( $post_id ); ?>">
-                    <?php esc_html_e( 'Phone (optional)', 'ovr-core' ); ?>
-                </label>
-                <input type="tel"
-                       id="ovr-guest-phone-<?php echo esc_attr( $post_id ); ?>"
-                       name="guest_phone"
-                       class="ovr-form-input"
-                       autocomplete="tel">
-            </div>
         <?php else : ?>
             <input type="hidden" name="guest_name"  value="<?php echo esc_attr( $current_user->display_name ); ?>">
             <input type="hidden" name="guest_email" value="<?php echo esc_attr( $current_user->user_email ); ?>">
         <?php endif; ?>
 
-        <!-- Message -->
+        <!-- Phone — required for every inquiry (Phase 23) -->
+        <div class="ovr-form-group" style="margin-bottom:12px">
+            <label class="ovr-form-label" for="ovr-guest-phone-<?php echo esc_attr( $post_id ); ?>">
+                <?php esc_html_e( 'Phone Number', 'ovr-core' ); ?>
+            </label>
+            <input type="tel"
+                   id="ovr-guest-phone-<?php echo esc_attr( $post_id ); ?>"
+                   name="guest_phone"
+                   class="ovr-form-input"
+                   autocomplete="tel"
+                   <?php if ( $is_logged_in && ! empty( $current_user ) ) : $u_phone = (string) get_user_meta( $current_user->ID, 'ovr_phone', true ); ?>value="<?php echo esc_attr( $u_phone ); ?>"<?php endif; ?>
+                   required>
+        </div>
+
+        <!-- Message — required for every inquiry (Phase 23) -->
         <div class="ovr-form-group" style="margin-bottom:16px">
             <label class="ovr-form-label" for="ovr-message-<?php echo esc_attr( $post_id ); ?>">
-                <?php
-                    if ( isset( $meta['booking_mode'] ) && 'direct' === $meta['booking_mode'] ) {
-                        esc_html_e( 'Message to Host (optional)', 'ovr-core' );
-                    } else {
-                        esc_html_e( 'Message to Host', 'ovr-core' );
-                    }
-                ?>
+                <?php esc_html_e( 'Message to Host', 'ovr-core' ); ?>
             </label>
             <textarea id="ovr-message-<?php echo esc_attr( $post_id ); ?>"
                       name="message"
                       class="ovr-form-textarea"
                       rows="3"
                       placeholder="<?php esc_attr_e( 'Tell us about your trip…', 'ovr-core' ); ?>"
-                      <?php echo ( isset( $meta['booking_mode'] ) && 'direct' === $meta['booking_mode'] ) ? '' : 'required'; ?>></textarea>
+                      required></textarea>
         </div>
 
         <!-- Submit -->

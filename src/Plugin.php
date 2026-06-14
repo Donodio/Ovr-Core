@@ -19,6 +19,7 @@ use OVR\Core\Pages;
 use OVR\Core\TemplateLoader;
 use OVR\PostTypes\PropertyPostType;
 use OVR\PostTypes\Taxonomies;
+use OVR\Testimonials\TestimonialPostType;
 use OVR\Auth\LoginHandler;
 use OVR\Auth\RegistrationHandler;
 use OVR\Auth\PasswordResetHandler;
@@ -27,6 +28,8 @@ use OVR\Subscription\Plans;
 use OVR\Subscription\UserSubscription;
 use OVR\Subscription\PricingDisplay;
 use OVR\Subscription\Lifecycle;
+use OVR\Subscription\SubscriptionGate;
+use OVR\Subscription\UpgradeActivator;
 use OVR\Property\PropertyQuery;
 use OVR\Property\PropertyMeta;
 use OVR\Property\PropertyCard;
@@ -43,6 +46,7 @@ use OVR\Frontend\VillagePage;
 use OVR\Frontend\Onboarding;
 use OVR\Frontend\Navigation;
 use OVR\Frontend\Dashboard;
+use OVR\Frontend\ListingForm;
 use OVR\Shortcodes\ShortcodeManager;
 use OVR\Ajax\AjaxHandler;
 use OVR\REST\PropertyEndpoint;
@@ -50,13 +54,23 @@ use OVR\REST\InquiryEndpoint;
 use OVR\REST\ReviewEndpoint;
 use OVR\Elementor\ElementorIntegration;
 use OVR\Admin\PropertyMetaBoxes;
+use OVR\Admin\PropertyEditorScreen;
+use OVR\Admin\TestimonialMetaBox;
 use OVR\Admin\AdminAssets;
 use OVR\Admin\Settings;
 use OVR\Admin\PlansAdmin;
 use OVR\Admin\FeaturedCities;
+use OVR\Admin\PlatformOverview;
+use OVR\Admin\ReviewsAdmin;
+use OVR\Admin\PaidServicesAdmin;
+use OVR\Admin\UsersAdmin;
+use OVR\Admin\PaymentsAdmin;
+use OVR\Admin\BookingsAdmin;
+use OVR\Admin\CrmAdmin;
 use OVR\Notifications\Notifications;
 use OVR\Payment\CheckoutHandler;
 use OVR\Payment\Wallet;
+use OVR\Sync\WordPressSync;
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -148,6 +162,15 @@ class Plugin {
         // Boot Elementor integration (conditional).
         $this->boot_elementor();
 
+        // Listing soft-delete cleanup cron (Feature G). Registered
+        // unconditionally — wp-cron runs outside the admin context.
+        \OVR\Admin\DeletedListingsAdmin::register_cron();
+
+        // Backblaze B2 offloading + URL rewriting (Feature E). Runs on front +
+        // admin so externally-stored media resolves to its B2 URL everywhere.
+        $this->modules['storage_offloader'] = new \OVR\Storage\StorageOffloader();
+        $this->modules['storage_offloader']->init();
+
         // Boot admin UI (only inside wp-admin / AJAX).
         if ( is_admin() ) {
             $this->boot_admin();
@@ -179,15 +202,42 @@ class Plugin {
 
     private function boot_admin(): void {
         $this->modules['admin_meta_boxes'] = new PropertyMetaBoxes();
+        $this->modules['admin_property_editor'] = new PropertyEditorScreen();
+        $this->modules['admin_testimonial_meta'] = new TestimonialMetaBox();
         $this->modules['admin_assets']     = new AdminAssets();
         $this->modules['admin_settings']   = new Settings();
         $this->modules['admin_plans']      = new PlansAdmin();
         $this->modules['admin_featured_cities'] = new FeaturedCities();
+        $this->modules['admin_overview']   = new PlatformOverview();
+        $this->modules['admin_reviews']         = new ReviewsAdmin();
+        $this->modules['admin_paid_services']   = new PaidServicesAdmin();
+        $this->modules['admin_users']           = new UsersAdmin();
+        $this->modules['admin_payments']        = new PaymentsAdmin();
+        $this->modules['admin_bookings']         = new BookingsAdmin();
+        $this->modules['admin_crm']              = new CrmAdmin();
+        $this->modules['admin_membership']       = new \OVR\Admin\MembershipAdmin();
+        $this->modules['admin_support']          = new \OVR\Admin\SupportAdmin();
+        $this->modules['admin_listing_filters'] = new \OVR\Admin\ListingFilters();
+        $this->modules['admin_deleted_listings'] = new \OVR\Admin\DeletedListingsAdmin();
 
         $this->modules['admin_meta_boxes']->init();
+        $this->modules['admin_property_editor']->init();
+        $this->modules['admin_testimonial_meta']->init();
         $this->modules['admin_assets']->init();
         $this->modules['admin_settings']->init();
+        $this->modules['admin_plans']->init();
         $this->modules['admin_featured_cities']->init();
+        $this->modules['admin_overview']->init();
+        $this->modules['admin_reviews']->init();
+        $this->modules['admin_paid_services']->init();
+        $this->modules['admin_users']->init();
+        $this->modules['admin_payments']->init();
+        $this->modules['admin_bookings']->init();
+        $this->modules['admin_crm']->init();
+        $this->modules['admin_membership']->init();
+        $this->modules['admin_support']->init();
+        $this->modules['admin_listing_filters']->init();
+        $this->modules['admin_deleted_listings']->init();
     }
 
     /**
@@ -226,11 +276,13 @@ class Plugin {
      * @since 1.0.0
      */
     private function boot_post_types(): void {
-        $this->modules['property_cpt'] = new PropertyPostType();
-        $this->modules['taxonomies']   = new Taxonomies();
+        $this->modules['property_cpt']   = new PropertyPostType();
+        $this->modules['taxonomies']     = new Taxonomies();
+        $this->modules['testimonial_cpt'] = new TestimonialPostType();
 
         $this->modules['property_cpt']->init();
         $this->modules['taxonomies']->init();
+        $this->modules['testimonial_cpt']->init();
     }
 
     /**
@@ -260,11 +312,17 @@ class Plugin {
         $this->modules['user_subscription'] = new UserSubscription();
         $this->modules['pricing_display']   = new PricingDisplay();
         $this->modules['lifecycle']         = new Lifecycle();
+        $this->modules['subscription_gate'] = new SubscriptionGate();
+        $this->modules['upgrade_activator'] = new UpgradeActivator();
+        $this->modules['loyalty']           = new \OVR\Subscription\Loyalty();
 
         $this->modules['plans']->init();
         $this->modules['user_subscription']->init();
         $this->modules['pricing_display']->init();
         $this->modules['lifecycle']->init();
+        $this->modules['subscription_gate']->init();
+        $this->modules['upgrade_activator']->init();
+        $this->modules['loyalty']->init();
     }
 
     /**
@@ -278,12 +336,18 @@ class Plugin {
         $this->modules['property_card']    = new PropertyCard();
         $this->modules['seasonal_pricing'] = new SeasonalPricing();
         $this->modules['ical_sync']        = new IcalSync();
+        $this->modules['geocoder']         = new \OVR\Property\Geocoder();
         $this->modules['reviews']          = new Reviews();
+        $this->modules['review_requests']  = new \OVR\Property\ReviewRequestPage();
+        $this->modules['wp_sync']          = new WordPressSync();
 
         $this->modules['property_meta']->init();
         $this->modules['seasonal_pricing']->init();
         $this->modules['ical_sync']->init();
+        $this->modules['geocoder']->init();
         $this->modules['reviews']->init();
+        $this->modules['review_requests']->init();
+        $this->modules['wp_sync']->init();
     }
 
     /**
@@ -313,11 +377,12 @@ class Plugin {
         $this->modules['onboarding']        = new Onboarding();
         $this->modules['navigation']        = new Navigation();
         $this->modules['dashboard']         = new Dashboard();
+        $this->modules['listing_form']      = new ListingForm();
 
         foreach ( [
             'homepage', 'search_results', 'single_property',
             'featured_listings', 'village_page', 'onboarding', 'navigation',
-            'dashboard',
+            'dashboard', 'listing_form',
         ] as $key ) {
             $this->modules[ $key ]->init();
         }

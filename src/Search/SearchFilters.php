@@ -19,7 +19,8 @@ class SearchFilters {
     public function init(): void {}
 
     /**
-     * Get all villages for filter dropdown.
+     * Get all village SECTIONS (taxonomy terms). Kept for the homepage/featured
+     * strips; the search facet now uses the free-text village names below.
      */
     public static function get_villages(): array {
         $terms = get_terms( [
@@ -28,6 +29,37 @@ class SearchFilters {
             'orderby'    => 'name',
         ] );
         return ! is_wp_error( $terms ) ? $terms : [];
+    }
+
+    /**
+     * Distinct Village Names actually entered on published listings — powers the
+     * search-sidebar dropdown. Free text, so the list grows itself (no taxonomy
+     * to maintain). Cached briefly.
+     *
+     * @return string[]
+     */
+    public static function get_village_names(): array {
+        global $wpdb;
+
+        $cached = wp_cache_get( 'ovr_village_names', 'ovr' );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
+        $rows = $wpdb->get_col(
+            "SELECT DISTINCT m.meta_value
+             FROM {$wpdb->postmeta} m
+             INNER JOIN {$wpdb->posts} p ON p.ID = m.post_id
+             WHERE m.meta_key = '_ovr_village_name'
+               AND m.meta_value <> ''
+               AND p.post_type = 'ovr_property'
+               AND p.post_status = 'publish'
+             ORDER BY m.meta_value ASC"
+        );
+        $names = array_values( array_filter( array_map( 'trim', (array) $rows ), 'strlen' ) );
+
+        wp_cache_set( 'ovr_village_names', $names, 'ovr', 5 * MINUTE_IN_SECONDS );
+        return $names;
     }
 
     /**
@@ -49,6 +81,31 @@ class SearchFilters {
         $terms = get_terms( [
             'taxonomy'   => 'ovr_amenity',
             'hide_empty' => true,
+            'orderby'    => 'count',
+            'order'      => 'DESC',
+        ] );
+        return ! is_wp_error( $terms ) ? $terms : [];
+    }
+
+    /**
+     * Get views for filter.
+     */
+    public static function get_views(): array {
+        $terms = get_terms( [
+            'taxonomy'   => 'ovr_view',
+            'hide_empty' => false,
+            'orderby'    => 'name',
+        ] );
+        return ! is_wp_error( $terms ) ? $terms : [];
+    }
+
+    /**
+     * Get features for filter.
+     */
+    public static function get_features(): array {
+        $terms = get_terms( [
+            'taxonomy'   => 'ovr_feature',
+            'hide_empty' => false,
             'orderby'    => 'count',
             'order'      => 'DESC',
         ] );

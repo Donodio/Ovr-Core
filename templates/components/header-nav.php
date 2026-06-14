@@ -11,14 +11,13 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 use OVR\Core\Pages;
+use OVR\Frontend\Header;
 
 $active = $active ?? '';
-$nav_items = [
-    'explore'  => [ 'label' => __( 'Explore', 'ovr-core' ), 'url' => Pages::get_page_url( 'ovr_page_search' ) ],
-    'villages' => [ 'label' => __( 'Villages', 'ovr-core' ), 'url' => home_url( '/villages/' ) ],
-    'pricing'  => [ 'label' => __( 'Pricing', 'ovr-core' ), 'url' => Pages::get_page_url( 'ovr_page_pricing' ) ],
-    'help'     => [ 'label' => __( 'Help', 'ovr-core' ), 'url' => home_url( '/help/' ) ],
-];
+// Role-aware nav comes from Header::nav_items(); fall back if rendered directly.
+$nav_items     = $nav_items     ?? Header::nav_items();
+$is_admin_user = $is_admin_user ?? current_user_can( 'manage_options' );
+$admin_home_url = $admin_home_url ?? admin_url();
 
 $current_user = wp_get_current_user();
 $is_logged_in = is_user_logged_in();
@@ -28,7 +27,7 @@ $is_logged_in = is_user_logged_in();
 
         <!-- Brand -->
         <a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="ovr-brand">
-            <?php echo esc_html( get_bloginfo( 'name' ) ?: __( 'Our Villages Rentals', 'ovr-core' ) ); ?>
+            <?php echo esc_html( get_bloginfo( 'name' ) ?: __( 'Our Village Rentals', 'ovr-core' ) ); ?>
         </a>
 
         <!-- Primary Navigation -->
@@ -48,6 +47,12 @@ $is_logged_in = is_user_logged_in();
             </button>
 
             <?php if ( $is_logged_in ) : ?>
+                <?php if ( $is_admin_user ) : ?>
+                    <a href="<?php echo esc_url( $admin_home_url ); ?>" class="ovr-nav-link-cta" title="<?php esc_attr_e( 'WordPress admin', 'ovr-core' ); ?>">
+                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:4px">admin_panel_settings</span>
+                        <?php esc_html_e( 'Site Admin', 'ovr-core' ); ?>
+                    </a>
+                <?php endif; ?>
                 <button type="button" class="ovr-nav-icon-btn" aria-label="<?php esc_attr_e( 'Favorites', 'ovr-core' ); ?>">
                     <span class="material-symbols-outlined">favorite</span>
                 </button>
@@ -64,7 +69,8 @@ $is_logged_in = is_user_logged_in();
             <?php else : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_login' ) ); ?>"
                    class="ovr-nav-link-cta">
-                    <?php esc_html_e( 'Sign In', 'ovr-core' ); ?>
+                    <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:4px">login</span>
+                    <?php esc_html_e( 'Owner Login', 'ovr-core' ); ?>
                 </a>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_register' ) ); ?>"
                    class="ovr-btn ovr-btn-primary ovr-btn-pill" style="padding:10px 20px;font-size:14px">
@@ -95,12 +101,17 @@ $is_logged_in = is_user_logged_in();
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_dashboard' ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Dashboard', 'ovr-core' ); ?>
                 </a>
+                <?php if ( $is_admin_user ) : ?>
+                    <a href="<?php echo esc_url( $admin_home_url ); ?>" class="ovr-mobile-link">
+                        <?php esc_html_e( 'Site Admin', 'ovr-core' ); ?>
+                    </a>
+                <?php endif; ?>
                 <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
                 </a>
             <?php else : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_login' ) ); ?>" class="ovr-mobile-link">
-                    <?php esc_html_e( 'Sign In', 'ovr-core' ); ?>
+                    <?php esc_html_e( 'Owner Login', 'ovr-core' ); ?>
                 </a>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_register' ) ); ?>" class="ovr-btn ovr-btn-primary ovr-btn-full" style="margin-top:12px">
                     <?php esc_html_e( 'List Your Property', 'ovr-core' ); ?>

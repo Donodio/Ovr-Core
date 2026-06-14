@@ -22,13 +22,59 @@ use OVR\Core\TemplateLoader;
 use OVR\Core\Pages;
 use OVR\Subscription\UserSubscription;
 use OVR\Subscription\Plans;
+use OVR\Subscription\ListingUpgrades;
+use OVR\Subscription\UpgradeActivator;
 use OVR\Payment\Wallet;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class Dashboard {
 
-    public function init(): void {}
+    public function init(): void {
+        add_action( 'admin_post_ovr_inquiry_reply', [ $this, 'handle_inquiry_reply' ] );
+    }
+
+    /**
+     * Record an in-app reply to an inquiry from the dashboard (server-rendered,
+     * no-JS). Appends to the inquiry's response history and marks it replied.
+     */
+    public function handle_inquiry_reply(): void {
+        if ( ! is_user_logged_in() ) {
+            wp_die( '403' );
+        }
+        $id = (int) ( $_POST['inquiry_id'] ?? 0 );
+        check_admin_referer( 'ovr_inquiry_reply_' . $id );
+
+        global $wpdb;
+        $table   = $wpdb->prefix . 'ovr_inquiries';
+        $message = sanitize_textarea_field( wp_unslash( $_POST['reply_message'] ?? '' ) );
+        $row     = $wpdb->get_row( $wpdb->prepare( "SELECT landlord_id, responses FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+
+        $back = add_query_arg( [ 'tab' => 'inquiries' ], Pages::get_page_url( 'ovr_page_dashboard' ) );
+
+        if ( ! $row || ( (int) $row['landlord_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) || '' === $message ) {
+            wp_safe_redirect( add_query_arg( 'ovr_reply', 'error', $back ) );
+            exit;
+        }
+
+        $history   = $row['responses'] ? (array) json_decode( (string) $row['responses'], true ) : [];
+        $history[] = [
+            'at'      => current_time( 'mysql' ),
+            'by'      => get_current_user_id(),
+            'by_name' => wp_get_current_user()->display_name,
+            'message' => $message,
+        ];
+
+        $wpdb->update(
+            $table,
+            [ 'responses' => wp_json_encode( $history ), 'status' => 'replied', 'replied_at' => current_time( 'mysql' ) ],
+            [ 'id' => $id ]
+        );
+        \OVR\Core\AuditLog::record( 'inquiry.reply', 'inquiry', $id );
+
+        wp_safe_redirect( add_query_arg( 'ovr_reply', 'sent', $back ) );
+        exit;
+    }
 
     /**
      * Render the dashboard. Called by ShortcodeManager.
@@ -42,15 +88,29 @@ class Dashboard {
         }
 
         $user = wp_get_current_user();
+
+        // Gate (defense-in-depth; the SubscriptionGate also redirects the page):
+        // landlord tools require an active paid subscription.
+        if ( ! current_user_can( 'manage_options' ) && ! UserSubscription::has_listing_access( $user->ID ) ) {
+            $select = Pages::get_page_url( 'ovr_page_subscription_select' );
+            return '<div style="max-width:560px;margin:48px auto;padding:36px 28px;text-align:center;font-family:Inter,system-ui,sans-serif;background:#fff;border:1px solid #bec9c8;border-radius:16px">'
+                . '<h2 style="color:#004c4c;margin:0 0 10px;font-size:24px">' . esc_html__( 'Subscription required', 'ovr-core' ) . '</h2>'
+                . '<p style="color:#3f4948;margin:0 0 22px;font-size:16px;line-height:1.6">' . esc_html__( 'You need an active subscription to access your landlord dashboard and listings.', 'ovr-core' ) . '</p>'
+                . '<a href="' . esc_url( $select ) . '" style="display:inline-block;background:#004c4c;color:#fff;padding:14px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px">' . esc_html__( 'Choose a Plan', 'ovr-core' ) . '</a>'
+                . '</div>';
+        }
+
         $tab  = sanitize_key( $_GET['tab'] ?? 'overview' );
 
         $tabs = [
             'overview'     => [ 'label' => __( 'Overview',      'ovr-core' ), 'icon' => 'dashboard' ],
             'properties'   => [ 'label' => __( 'My Properties', 'ovr-core' ), 'icon' => 'home_work' ],
+            'add-listing'  => [ 'label' => __( 'Add Listing',   'ovr-core' ), 'icon' => 'add_home' ],
+            'upgrades'     => [ 'label' => __( 'Listing Upgrades', 'ovr-core' ), 'icon' => 'trending_up' ],
             'inquiries'    => [ 'label' => __( 'Inquiries',     'ovr-core' ), 'icon' => 'inbox' ],
+            'reviews'      => [ 'label' => __( 'Review Requests', 'ovr-core' ), 'icon' => 'reviews' ],
             'subscription' => [ 'label' => __( 'Subscription',  'ovr-core' ), 'icon' => 'workspace_premium' ],
             'payments'     => [ 'label' => __( 'My Payments',   'ovr-core' ), 'icon' => 'receipt_long' ],
-            'balance'      => [ 'label' => __( 'My Balance',    'ovr-core' ), 'icon' => 'account_balance_wallet' ],
             'profile'      => [ 'label' => __( 'My Information', 'ovr-core' ), 'icon' => 'person' ],
             'password'     => [ 'label' => __( 'Change Password', 'ovr-core' ), 'icon' => 'key' ],
         ];
@@ -94,14 +154,51 @@ class Dashboard {
 
         switch ( $tab ) {
             case 'overview':
-                $data['stats']           = self::compute_stats( $user );
+                $data['stats']            = self::compute_stats( $user );
                 $data['recent_inquiries'] = self::get_inquiries( $user, 5 );
-                $data['properties']      = self::get_properties( $user, 4 );
+                $data['properties']       = self::get_properties( $user, 4 );
+                $data['balance']          = Wallet::get_balance( $user->ID );
+                $data['subscription']     = self::get_subscription_info( $user );
+                $data['add_url']          = add_query_arg( 'tab', 'add-listing', Pages::get_page_url( 'ovr_page_dashboard' ) );
+                $data['pricing_url']      = Pages::get_page_url( 'ovr_page_pricing' );
                 break;
 
             case 'properties':
                 $data['properties'] = self::get_properties( $user, -1 );
-                $data['add_url']    = admin_url( 'post-new.php?post_type=ovr_property' );
+                $data['add_url']    = add_query_arg( 'tab', 'add-listing', Pages::get_page_url( 'ovr_page_dashboard' ) );
+                break;
+
+            case 'add-listing':
+                $pid  = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
+                $post = $pid ? get_post( $pid ) : null;
+                // Only the owner may edit, and only an OVR property.
+                if ( $post && ( 'ovr_property' !== $post->post_type || (int) $post->post_author !== $user->ID ) ) {
+                    $post = null;
+                }
+                $data['post']          = $post;
+                $data['can_create']    = $post ? true : UserSubscription::can_create_listing( $user->ID );
+                $data['block_reason']  = $post ? '' : UserSubscription::listing_block_reason( $user->ID );
+                $data['save_action']   = admin_url( 'admin-post.php' );
+                $data['ajax_url']      = admin_url( 'admin-ajax.php' );
+                $data['listing_nonce'] = wp_create_nonce( 'ovr_listing_action' );
+                $data['props_url']     = add_query_arg( 'tab', 'properties', Pages::get_page_url( 'ovr_page_dashboard' ) );
+                $data['subscription_url'] = add_query_arg( 'tab', 'subscription', Pages::get_page_url( 'ovr_page_dashboard' ) );
+                break;
+
+            case 'upgrades':
+                // A specific listing arrives via its "Bump" button (?post=ID).
+                $bid   = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
+                $bpost = $bid ? get_post( $bid ) : null;
+                if ( $bpost && ( 'ovr_property' !== $bpost->post_type || (int) $bpost->post_author !== $user->ID ) ) {
+                    $bpost = null;
+                }
+                $data['boost_post']   = $bpost;
+                $data['boosted']      = self::get_boosted_properties( $user );
+                $data['properties']   = self::get_properties( $user, -1 );
+                $data['upgrades']     = ListingUpgrades::get_products();
+                $data['checkout_url'] = Pages::get_page_url( 'ovr_page_checkout' );
+                $data['props_url']    = add_query_arg( 'tab', 'properties', Pages::get_page_url( 'ovr_page_dashboard' ) );
+                $data['pricing_url']  = Pages::get_page_url( 'ovr_page_pricing' );
                 break;
 
             case 'inquiries':
@@ -109,24 +206,31 @@ class Dashboard {
                 $data['filter_status'] = sanitize_key( $_GET['status'] ?? 'all' );
                 break;
 
+            case 'reviews':
+                $data['properties']      = self::get_properties( $user, -1 );
+                $data['review_requests'] = \OVR\Property\ReviewRequest::for_owner( $user->ID, 50 );
+                $data['rr_bookings']     = \OVR\Booking\BookingRepository::for_owner( $user->ID, 100 );
+                $data['rr_action']       = admin_url( 'admin-post.php' );
+                $data['rr_state']        = isset( $_GET['ovr_rr'] ) ? sanitize_key( wp_unslash( $_GET['ovr_rr'] ) ) : '';
+                break;
+
             case 'subscription':
                 $data['subscription']  = self::get_subscription_info( $user );
+                $data['plans']         = Plans::get_plans();
                 $data['pricing_url']   = Pages::get_page_url( 'ovr_page_pricing' );
+                $data['checkout_url']  = Pages::get_page_url( 'ovr_page_checkout' );
                 break;
 
             case 'profile':
-                $data['phone']  = (string) get_user_meta( $user->ID, 'ovr_phone', true );
-                $data['saved']  = ! empty( $_GET['profile_saved'] );
+                $data['phone']   = (string) get_user_meta( $user->ID, 'ovr_phone', true );
+                $data['address'] = (string) get_user_meta( $user->ID, 'ovr_address', true );
+                $data['saved']   = ! empty( $_GET['profile_saved'] );
                 break;
 
             case 'payments':
-                $data['payments'] = self::get_payments( $user );
-                break;
-
-            case 'balance':
-                $data['balance']      = Wallet::get_balance( $user->ID );
-                $data['transactions'] = Wallet::get_transactions( $user->ID, 25 );
-                $data['topup_saved']  = ! empty( $_GET['topup_started'] );
+                $data['payments']     = self::get_payments( $user );
+                $data['receipt_url']  = Pages::get_page_url( 'ovr_page_payment_success' );
+                $data['checkout_url'] = Pages::get_page_url( 'ovr_page_checkout' );
                 break;
 
             case 'password':
@@ -183,11 +287,29 @@ class Dashboard {
             $user->ID
         ) );
 
+        // Inquiries received in the trailing 12 months. (Client preference: a
+        // 30-day window too often shows "0" and reads as a broken site.)
+        $inq_12mo = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$inquiries_table} WHERE landlord_id = %d AND created_at >= ( NOW() - INTERVAL 12 MONTH )",
+            $user->ID
+        ) );
+
+        // Listings published this calendar month (powers the "+N this month" pill).
+        $new_this_month = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type = 'ovr_property' AND post_status = 'publish' AND post_author = %d
+               AND post_date >= %s",
+            $user->ID,
+            gmdate( 'Y-m-01 00:00:00' )
+        ) );
+
         return [
             'total_properties'  => $total_props,
             'active_properties' => $active_props,
             'total_inquiries'   => $total_inq,
             'new_inquiries'     => $new_inq,
+            'inquiries_12mo'    => $inq_12mo,
+            'new_this_month'    => $new_this_month,
         ];
     }
 
@@ -211,6 +333,35 @@ class Dashboard {
     }
 
     /**
+     * Properties owned by the user that currently carry ANY active boost
+     * (Top of Page, Homepage Slider, or Featured) — the real "active upgrades".
+     *
+     * @return \WP_Post[]
+     */
+    private static function get_boosted_properties( \WP_User $user ): array {
+        $q = new \WP_Query( [
+            'post_type'      => 'ovr_property',
+            'post_status'    => [ 'publish', 'draft', 'pending' ],
+            'author'         => $user->ID,
+            'posts_per_page' => -1,
+            'no_found_rows'  => true,
+            'meta_query'     => [
+                'relation' => 'OR',
+                [ 'key' => '_ovr_is_featured', 'value' => '1' ],
+                [ 'key' => '_ovr_is_bumped',   'value' => '1' ],
+                [ 'key' => '_ovr_in_slider',   'value' => '1' ],
+            ],
+        ] );
+
+        // Keep only those with a non-expired boost still live.
+        return array_values( array_filter(
+            $q->posts ?: [],
+            static fn( $p ) => ! empty( UpgradeActivator::active_products( $p->ID ) )
+        ) );
+    }
+
+
+    /**
      * Get inquiries for the user (as landlord).
      *
      * @param int $limit -1 for all.
@@ -218,7 +369,8 @@ class Dashboard {
     private static function get_inquiries( \WP_User $user, int $limit = -1 ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_inquiries';
-        $sql   = "SELECT * FROM {$table} WHERE landlord_id = %d ORDER BY created_at DESC";
+        // Only the last 12 months are shown (Feature 6).
+        $sql   = "SELECT * FROM {$table} WHERE landlord_id = %d AND created_at >= ( NOW() - INTERVAL 12 MONTH ) ORDER BY created_at DESC";
         if ( $limit > 0 ) {
             $sql .= $wpdb->prepare( ' LIMIT %d', $limit );
         }

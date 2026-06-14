@@ -13,6 +13,7 @@ namespace OVR\Auth;
 
 use OVR\Core\Pages;
 use OVR\Core\TemplateLoader;
+use OVR\Frontend\ProfileCompletion;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -26,6 +27,14 @@ class LoginHandler {
 
     /**
      * Process login form submission.
+     *
+     * Onboarding behaviour (per Group 1 of the OVR site-chrome fix):
+     *   • Freshly-registered user (ovr_first_login === '1' AND profile < 100%)
+     *     → redirect to /welcome/ once. The onboarding template clears the
+     *     flag on render, so subsequent visits go straight to dashboard.
+     *   • Returning user OR user whose profile is already complete
+     *     → redirect straight to the dashboard. Onboarding is NEVER shown
+     *     just because someone is logging in.
      */
     public function process_login(): void {
         if ( ! isset( $_POST['ovr_login_submit'] ) ) {
@@ -78,13 +87,23 @@ class LoginHandler {
             return;
         }
 
-        // Determine redirect.
-        $is_first_login = get_user_meta( $user->ID, 'ovr_first_login', true );
-        if ( ! $is_first_login || '1' === $is_first_login ) {
-            update_user_meta( $user->ID, 'ovr_first_login', '0' );
+        // Compute redirect. Onboarding only fires for a freshly-registered
+        // user whose profile is still incomplete — a returning landlord
+        // must never see the welcome screen just for logging in.
+        $profile_complete = (int) ProfileCompletion::percent( $user->ID );
+        $is_first_login   = (string) get_user_meta( $user->ID, 'ovr_first_login', true ) === '1';
+
+        if ( $is_first_login && $profile_complete < 100 ) {
+            // Brand-new user → show /welcome/ exactly once. The onboarding
+            // template clears ovr_first_login when it renders, so a refresh
+            // won't re-trigger the welcome screen.
             $redirect = Pages::get_page_url( 'ovr_page_onboarding' );
         } else {
-            $redirect = Pages::get_page_url( 'ovr_page_dashboard' );
+            // Returning user OR completed profile → straight to dashboard.
+            $redirect = add_query_arg(
+                [ 'tab' => isset( $_GET['view'] ) ? sanitize_key( $_GET['view'] ) : '' ],
+                Pages::get_page_url( 'ovr_page_dashboard', true )
+            );
         }
 
         /**

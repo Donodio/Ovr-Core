@@ -25,20 +25,30 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 $settings = get_option( 'ovr_settings', [] );
 $symbol   = $settings['currency_symbol'] ?? '$';
 $excerpt  = $excerpt ?? '';
+$thumb_w  = (int) ( $thumb_w ?? 0 ) ?: 1200;
+$thumb_h  = (int) ( $thumb_h ?? 0 ) ?: 900;
 ?>
 <article class="ovr-card ovr-property-card-list" id="ovr-property-list-<?php echo esc_attr( $post_id ); ?>"
-         style="display:grid;grid-template-columns:280px 1fr;gap:0;overflow:hidden">
+         style="display:grid;grid-template-columns:280px 1fr;gap:0;overflow:hidden;align-items:stretch">
 
-    <!-- Image -->
+    <!-- Image: narrower column (wider rows), shown at its NATURAL aspect ratio —
+         the whole photo, never cropped or truncated, no letterbox bars. The real
+         width/height attrs let the browser reserve the correct space before the
+         lazy image loads, so it can't collapse. Anchored to the card's top-left. -->
     <a href="<?php echo esc_url( $permalink ); ?>"
        class="ovr-card-image"
        aria-label="<?php echo esc_attr( $title ); ?>"
-       style="position:relative;aspect-ratio:auto;height:100%;display:block">
+       style="position:relative;align-self:start;display:block;width:100%">
         <img src="<?php echo esc_url( $thumbnail ); ?>"
              alt="<?php echo esc_attr( $title ); ?>"
+             width="<?php echo esc_attr( (string) $thumb_w ); ?>"
+             height="<?php echo esc_attr( (string) $thumb_h ); ?>"
              loading="lazy"
-             style="width:100%;height:100%;object-fit:cover;min-height:220px">
+             style="display:block;width:100%;height:auto">
 
+        <?php if ( ! empty( $has_video ) ) : ?>
+            <span class="ovr-card-video-flag" aria-hidden="true"><span class="material-symbols-outlined">play_circle</span></span>
+        <?php endif; ?>
         <?php if ( $is_featured ) : ?>
             <span class="ovr-card-badge ovr-badge-featured">
                 <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">star</span>
@@ -110,12 +120,18 @@ $excerpt  = $excerpt ?? '';
         <!-- Footer: Price + CTA -->
         <div style="display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid var(--ovr-outline-variant);padding-top:16px">
             <div>
-                <span class="ovr-price-display" style="font-size:24px;color:var(--ovr-on-surface)">
-                    <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?>
-                </span>
-                <span style="color:var(--ovr-on-surface-variant);font-size:14px">
-                    / <?php esc_html_e( 'night', 'ovr-core' ); ?>
-                </span>
+                <?php if ( $base_price > 0 ) : ?>
+                    <span class="ovr-price-display" style="font-size:24px;color:var(--ovr-on-surface)">
+                        <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?>
+                    </span>
+                    <span style="color:var(--ovr-on-surface-variant);font-size:14px">
+                        / <?php esc_html_e( 'night', 'ovr-core' ); ?>
+                    </span>
+                <?php elseif ( ! empty( $has_pricing ) ) : ?>
+                    <span class="ovr-price-display" style="font-size:18px;color:var(--ovr-on-surface)"><?php esc_html_e( 'Seasonal Rates', 'ovr-core' ); ?></span>
+                <?php else : ?>
+                    <span style="font-size:15px;color:var(--ovr-on-surface-variant);font-style:italic"><?php esc_html_e( 'See Description For Pricing', 'ovr-core' ); ?></span>
+                <?php endif; ?>
             </div>
             <a href="<?php echo esc_url( $permalink ); ?>" class="ovr-btn ovr-btn-secondary" style="padding:8px 20px;font-size:14px">
                 <?php esc_html_e( 'View Details', 'ovr-core' ); ?>

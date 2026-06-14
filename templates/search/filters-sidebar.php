@@ -2,14 +2,17 @@
 /**
  * Search Filters Sidebar.
  *
- * Matches the OVR search redesign: a single-column filter card with a
- * "Go to Property ID" jump, dates, village / property-type / bedroom
- * dropdowns, and a pets toggle. Posts back to the search page on submit.
+ * Phase 2.5: multi-select facets (Village Section, Village, Property Type,
+ * Amenities, Views, Features) rendered as compact checkbox groups so guests
+ * can combine several values — "search first, filter second", no dropdown
+ * clutter. Bedrooms stays a single "+N" select; dates + pets unchanged. The
+ * multi-select checkboxes are excluded from auto-submit (class
+ * `ovr-mf-check`); the "Apply Filters" button submits the combined set.
  *
  * @package OVR
  *
  * @var array  $filters         Current filter values from query string.
- * @var array  $villages        WP_Term[] of available villages.
+ * @var array  $villages        WP_Term[] of village sections.
  * @var array  $property_types  WP_Term[] of property types.
  * @var array  $bedroom_opts    int => label.
  * @var string $form_action     URL to post to (search page).
@@ -25,18 +28,82 @@ $property_types = $property_types ?? SearchFilters::get_property_types();
 $bedroom_opts   = $bedroom_opts   ?? SearchFilters::get_bedroom_options();
 $form_action    = $form_action    ?? Pages::get_page_url( 'ovr_page_search' );
 
-// Normalize selected values.
-$sel_villages = (array) ( $filters['village']       ?? [] );
-$sel_types    = (array) ( $filters['property_type'] ?? [] );
-$sel_bedrooms = (int) ( $filters['bedrooms']        ?? 0 );
-$sel_pets     = ! empty( $filters['pets'] );
-$checkin      = isset( $_GET['checkin'] )  ? sanitize_text_field( wp_unslash( $_GET['checkin'] ) )  : '';
-$checkout     = isset( $_GET['checkout'] ) ? sanitize_text_field( wp_unslash( $_GET['checkout'] ) ) : '';
+$village_names = SearchFilters::get_village_names();
+$amenities     = SearchFilters::get_amenities();
+$views         = SearchFilters::get_views();
+$features      = SearchFilters::get_features();
 
-// Base URL for the "Go to Property ID" jump (resolves a single ovr_property by ID).
+// Normalize selected values.
+$sel_villages  = array_map( 'strval', (array) ( $filters['village']         ?? [] ) );
+$sel_sections  = array_map( 'strval', (array) ( $filters['village_section'] ?? [] ) );
+$sel_types     = array_map( 'strval', (array) ( $filters['property_type']   ?? [] ) );
+$sel_amenities = array_map( 'strval', (array) ( $filters['amenities']       ?? [] ) );
+$sel_views     = array_map( 'strval', (array) ( $filters['views']           ?? [] ) );
+$sel_features  = array_map( 'strval', (array) ( $filters['features']        ?? [] ) );
+$sel_bedrooms  = (int) ( $filters['bedrooms'] ?? 0 );
+$sel_pets      = ! empty( $filters['pets'] );
+$checkin       = isset( $_GET['checkin'] )  ? sanitize_text_field( wp_unslash( $_GET['checkin'] ) )  : '';
+$checkout      = isset( $_GET['checkout'] ) ? sanitize_text_field( wp_unslash( $_GET['checkout'] ) ) : '';
+
 $property_base = esc_js( home_url( '/?post_type=ovr_property&p=' ) );
+
+/**
+ * Render one multi-select checkbox group.
+ *
+ * @param string                       $name     Field name (without []).
+ * @param string                       $label    Group label.
+ * @param array<string,string>         $options  value => label.
+ * @param string[]                     $selected Selected values.
+ */
+$render_group = static function ( string $name, string $label, array $options, array $selected ): void {
+    if ( ! $options ) {
+        return;
+    }
+    $count = count( array_intersect( array_keys( $options ), $selected ) );
+    ?>
+    <div class="ovr-filter-field">
+        <label class="ovr-mf-label">
+            <?php echo esc_html( $label ); ?>
+            <?php if ( $count ) : ?><span class="ovr-mf-count"><?php echo (int) $count; ?></span><?php endif; ?>
+        </label>
+        <div class="ovr-mf-group">
+            <?php foreach ( $options as $value => $text ) : ?>
+                <label class="ovr-mf-item">
+                    <input type="checkbox" class="ovr-mf-check" name="<?php echo esc_attr( $name ); ?>[]" value="<?php echo esc_attr( (string) $value ); ?>" <?php checked( in_array( (string) $value, $selected, true ) ); ?>>
+                    <span><?php echo esc_html( $text ); ?></span>
+                </label>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php
+};
+
+// Build value=>label maps for each facet.
+$section_opts  = [];
+foreach ( $villages as $s ) { $section_opts[ $s->slug ] = $s->name; }
+$village_opts  = [];
+foreach ( $village_names as $vname ) { $village_opts[ $vname ] = $vname; }
+$type_opts     = [];
+foreach ( $property_types as $pt ) { $type_opts[ $pt->slug ] = $pt->name; }
+$amenity_opts  = [];
+foreach ( $amenities as $a ) { $amenity_opts[ $a->slug ] = $a->name; }
+$view_opts     = [];
+foreach ( $views as $v ) { $view_opts[ $v->slug ] = $v->name; }
+$feature_opts  = [];
+foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
 ?>
 <aside class="ovr-card ovr-filters-sidebar">
+    <style>
+        .ovr-filters-sidebar .ovr-mf-label{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:8px}
+        .ovr-filters-sidebar .ovr-mf-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:9999px;background:var(--ovr-primary,#000961);color:#fff;font-size:11px;font-weight:700}
+        .ovr-filters-sidebar .ovr-mf-group{display:flex;flex-direction:column;gap:2px;max-height:180px;overflow-y:auto;border:1px solid var(--ovr-outline-variant,#e3e3e3);border-radius:8px;padding:6px}
+        .ovr-filters-sidebar .ovr-mf-item{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1.3}
+        .ovr-filters-sidebar .ovr-mf-item:hover{background:var(--ovr-surface-container-low,#f2f4f7)}
+        .ovr-filters-sidebar .ovr-mf-item input{flex-shrink:0;width:16px;height:16px;margin:0;accent-color:var(--ovr-primary,#000961)}
+        .ovr-filters-sidebar .ovr-mf-group::-webkit-scrollbar{width:8px}
+        .ovr-filters-sidebar .ovr-mf-group::-webkit-scrollbar-thumb{background:var(--ovr-outline-variant,#cfd6df);border-radius:8px}
+    </style>
+
     <h2 class="ovr-filters-title"><?php esc_html_e( 'Search Filters', 'ovr-core' ); ?></h2>
 
     <form method="get" action="<?php echo esc_url( $form_action ); ?>" id="ovr-filters-form">
@@ -66,37 +133,13 @@ $property_base = esc_js( home_url( '/?post_type=ovr_property&p=' ) );
             <input type="date" name="checkout" class="ovr-form-input" aria-label="<?php esc_attr_e( 'Check out', 'ovr-core' ); ?>" value="<?php echo esc_attr( $checkout ); ?>">
         </div>
 
-        <!-- Village -->
-        <?php if ( ! empty( $villages ) ) : ?>
-            <div class="ovr-filter-field">
-                <label for="ovr-village"><?php esc_html_e( 'Village Name', 'ovr-core' ); ?></label>
-                <select id="ovr-village" name="village[]" class="ovr-form-select">
-                    <option value=""><?php esc_html_e( 'Any Village', 'ovr-core' ); ?></option>
-                    <?php foreach ( $villages as $v ) : ?>
-                        <option value="<?php echo esc_attr( $v->slug ); ?>" <?php selected( in_array( $v->slug, $sel_villages, true ) ); ?>>
-                            <?php echo esc_html( $v->name ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php endif; ?>
+        <?php
+        $render_group( 'village_section', __( 'Village Section', 'ovr-core' ), $section_opts, $sel_sections );
+        $render_group( 'village', __( 'Village', 'ovr-core' ), $village_opts, $sel_villages );
+        $render_group( 'property_type', __( 'Property Type', 'ovr-core' ), $type_opts, $sel_types );
+        ?>
 
-        <!-- Property Type -->
-        <?php if ( ! empty( $property_types ) ) : ?>
-            <div class="ovr-filter-field">
-                <label for="ovr-type"><?php esc_html_e( 'Property Type', 'ovr-core' ); ?></label>
-                <select id="ovr-type" name="property_type[]" class="ovr-form-select">
-                    <option value=""><?php esc_html_e( 'Any Type', 'ovr-core' ); ?></option>
-                    <?php foreach ( $property_types as $pt ) : ?>
-                        <option value="<?php echo esc_attr( $pt->slug ); ?>" <?php selected( in_array( $pt->slug, $sel_types, true ) ); ?>>
-                            <?php echo esc_html( $pt->name ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php endif; ?>
-
-        <!-- Bedrooms -->
+        <!-- Bedrooms (single "+N") -->
         <div class="ovr-filter-field">
             <label for="ovr-beds"><?php esc_html_e( 'Bedrooms', 'ovr-core' ); ?></label>
             <select id="ovr-beds" name="bedrooms" class="ovr-form-select">
@@ -108,6 +151,12 @@ $property_base = esc_js( home_url( '/?post_type=ovr_property&p=' ) );
                 <?php endforeach; ?>
             </select>
         </div>
+
+        <?php
+        $render_group( 'amenities', __( 'Amenities', 'ovr-core' ), $amenity_opts, $sel_amenities );
+        $render_group( 'views', __( 'Views', 'ovr-core' ), $view_opts, $sel_views );
+        $render_group( 'features', __( 'Features', 'ovr-core' ), $feature_opts, $sel_features );
+        ?>
 
         <!-- Pets -->
         <label class="ovr-pets-row">
