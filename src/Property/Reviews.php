@@ -179,16 +179,19 @@ class Reviews {
         $wpdb->update( $table, [ 'status' => $status ], [ 'id' => $review_id ], [ '%s' ], [ '%d' ] );
         self::recompute_aggregates( (int) $row['property_id'] );
 
-        // Audit (Milestone 3 F2): record approve/reject with before/after.
-        if ( (string) $row['status'] !== $status && class_exists( '\OVR\Core\AuditLog' ) ) {
-            \OVR\Core\AuditLog::record(
-                'review.' . $status,
-                'review',
-                $review_id,
-                [ 'property_id' => (int) $row['property_id'] ],
-                null,
-                [ 'old' => (string) $row['status'], 'new' => $status ]
-            );
+        // Audit (Milestone 3 F2) + email trigger (F6): record/notify on change.
+        if ( (string) $row['status'] !== $status ) {
+            if ( class_exists( '\OVR\Core\AuditLog' ) ) {
+                \OVR\Core\AuditLog::record(
+                    'review.' . $status,
+                    'review',
+                    $review_id,
+                    [ 'property_id' => (int) $row['property_id'] ],
+                    null,
+                    [ 'old' => (string) $row['status'], 'new' => $status ]
+                );
+            }
+            do_action( 'ovr_review_status_changed', $review_id, $status, (string) $row['status'], (int) $row['property_id'] );
         }
 
         return true;

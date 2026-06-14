@@ -234,6 +234,11 @@ class Database {
 
         self::create_phase2_tables( $charset_collate );
 
+        // Seed the email-template catalogue once the table exists (M3 F6).
+        if ( class_exists( '\OVR\Email\EmailTemplates' ) ) {
+            \OVR\Email\EmailTemplates::maybe_seed();
+        }
+
         update_option( 'ovr_db_version', OVR_DB_VERSION );
     }
 
@@ -476,6 +481,26 @@ class Database {
             PRIMARY KEY  (id),
             KEY attachment_id (attachment_id),
             KEY size_name (size_name)
+        ) {$charset_collate};" );
+
+        // Email Templates — admin-editable transactional email content (M3 F6).
+        // One row per template_key; seeded from the EmailTemplates registry.
+        $table_emails = $wpdb->prefix . 'ovr_email_templates';
+        dbDelta( "CREATE TABLE {$table_emails} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            template_key varchar(60) NOT NULL DEFAULT '',
+            name varchar(150) NOT NULL DEFAULT '',
+            subject varchar(255) NOT NULL DEFAULT '',
+            body_html longtext DEFAULT NULL,
+            body_text longtext DEFAULT NULL,
+            recipient varchar(20) NOT NULL DEFAULT 'user',
+            custom_email varchar(200) NOT NULL DEFAULT '',
+            is_enabled tinyint(1) NOT NULL DEFAULT 1,
+            updated_by bigint(20) unsigned DEFAULT NULL,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            UNIQUE KEY template_key (template_key)
         ) {$charset_collate};" );
 
         // Bump Log — one row per "Bump Listing" action (Feature F). Powers the
