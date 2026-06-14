@@ -166,6 +166,12 @@ class Plugin {
         // unconditionally — wp-cron runs outside the admin context.
         \OVR\Admin\DeletedListingsAdmin::register_cron();
 
+        // Audit event listeners + retention cron (M3 F2). Front + admin: logins,
+        // registrations and payments happen outside wp-admin too.
+        $this->modules['audit_events'] = new \OVR\Core\AuditEvents();
+        $this->modules['audit_events']->init();
+        \OVR\Core\AuditLog::register_cron();
+
         // Backblaze B2 offloading + URL rewriting (Feature E). Runs on front +
         // admin so externally-stored media resolves to its B2 URL everywhere.
         $this->modules['storage_offloader'] = new \OVR\Storage\StorageOffloader();
@@ -219,6 +225,7 @@ class Plugin {
         $this->modules['admin_support']          = new \OVR\Admin\SupportAdmin();
         $this->modules['admin_listing_filters'] = new \OVR\Admin\ListingFilters();
         $this->modules['admin_deleted_listings'] = new \OVR\Admin\DeletedListingsAdmin();
+        $this->modules['admin_audit_log'] = new \OVR\Admin\AuditLogAdmin();
 
         $this->modules['admin_meta_boxes']->init();
         $this->modules['admin_property_editor']->init();
@@ -238,6 +245,7 @@ class Plugin {
         $this->modules['admin_support']->init();
         $this->modules['admin_listing_filters']->init();
         $this->modules['admin_deleted_listings']->init();
+        $this->modules['admin_audit_log']->init();
     }
 
     /**

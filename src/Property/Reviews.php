@@ -173,11 +173,23 @@ class Reviews {
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_reviews';
 
-        $row = $wpdb->get_row( $wpdb->prepare( "SELECT property_id FROM {$table} WHERE id = %d", $review_id ), ARRAY_A );
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT property_id, status FROM {$table} WHERE id = %d", $review_id ), ARRAY_A );
         if ( ! $row ) return false;
 
         $wpdb->update( $table, [ 'status' => $status ], [ 'id' => $review_id ], [ '%s' ], [ '%d' ] );
         self::recompute_aggregates( (int) $row['property_id'] );
+
+        // Audit (Milestone 3 F2): record approve/reject with before/after.
+        if ( (string) $row['status'] !== $status && class_exists( '\OVR\Core\AuditLog' ) ) {
+            \OVR\Core\AuditLog::record(
+                'review.' . $status,
+                'review',
+                $review_id,
+                [ 'property_id' => (int) $row['property_id'] ],
+                null,
+                [ 'old' => (string) $row['status'], 'new' => $status ]
+            );
+        }
 
         return true;
     }

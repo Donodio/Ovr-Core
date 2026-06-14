@@ -138,6 +138,10 @@ class ListTable {
             if ( 'LIKE' === $compare ) {
                 $clauses[] = "`{$column}` LIKE %s";
                 $params[]  = '%' . $wpdb->esc_like( (string) $value ) . '%';
+            } elseif ( in_array( $compare, [ '>=', '<=', '>', '<', '!=' ], true ) ) {
+                // Range / inequality filters (e.g. created_at date ranges).
+                $clauses[] = "`{$column}` {$compare} %s";
+                $params[]  = $value;
             } else {
                 $clauses[] = "`{$column}` = %s";
                 $params[]  = $value;
@@ -247,6 +251,117 @@ class ListTable {
 
         fclose( $out );
         exit;
+    }
+
+    /**
+     * Stream a real .xlsx (Office Open XML) download of all matching rows, then
+     * exit. Self-contained (ZipArchive, no library); strings are written inline
+     * so there's no shared-strings table to manage. Satisfies the universal
+     * "Export Excel" requirement alongside export_csv().
+     *
+     * @param string                                       $filename Base filename (no extension).
+     * @param array<string, string>                        $columns  header label => row key.
+     * @param callable(array<string,mixed>):array<string>  $mapper   Optional row->cells override.
+     */
+    public function export_xlsx( string $filename, array $columns, ?callable $mapper = null ): void {
+        $rows = $this->all_rows();
+
+        // Assemble the sheet rows (header + data) as arrays of scalar cells.
+        $matrix = [ array_keys( $columns ) ];
+        foreach ( $rows as $row ) {
+            if ( $mapper ) {
+                $matrix[] = array_values( $mapper( $row ) );
+                continue;
+            }
+            $line = [];
+            foreach ( $columns as $key ) {
+                $line[] = $row[ $key ] ?? '';
+            }
+            $matrix[] = $line;
+        }
+
+        // Fallback to CSV if ZipArchive is unavailable on the host.
+        if ( ! class_exists( '\ZipArchive' ) ) {
+            $this->export_csv( $filename, $columns, $mapper );
+            return;
+        }
+
+        $sheet_rows = '';
+        foreach ( $matrix as $r => $cells ) {
+            $rownum = $r + 1;
+            $sheet_rows .= '<row r="' . $rownum . '">';
+            $c = 0;
+            foreach ( $cells as $cell ) {
+                $ref = self::xlsx_col( $c ) . $rownum;
+                if ( is_numeric( $cell ) && '' !== (string) $cell ) {
+                    $sheet_rows .= '<c r="' . $ref . '"><v>' . htmlspecialchars( (string) $cell, ENT_QUOTES ) . '</v></c>';
+                } else {
+                    $sheet_rows .= '<c r="' . $ref . '" t="inlineStr"><is><t xml:space="preserve">'
+                        . htmlspecialchars( (string) $cell, ENT_QUOTES ) . '</t></is></c>';
+                }
+                $c++;
+            }
+            $sheet_rows .= '</row>';
+        }
+
+        $sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            . '<sheetData>' . $sheet_rows . '</sheetData></worksheet>';
+
+        $content_types = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            . '<Default Extension="xml" ContentType="application/xml"/>'
+            . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            . '</Types>';
+
+        $root_rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            . '</Relationships>';
+
+        $workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            . 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<sheets><sheet name="Export" sheetId="1" r:id="rId1"/></sheets></workbook>';
+
+        $workbook_rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+            . '</Relationships>';
+
+        $tmp = wp_tempnam( 'ovr-xlsx' );
+        $zip = new \ZipArchive();
+        $zip->open( $tmp, \ZipArchive::OVERWRITE );
+        $zip->addFromString( '[Content_Types].xml', $content_types );
+        $zip->addFromString( '_rels/.rels', $root_rels );
+        $zip->addFromString( 'xl/workbook.xml', $workbook );
+        $zip->addFromString( 'xl/_rels/workbook.xml.rels', $workbook_rels );
+        $zip->addFromString( 'xl/worksheets/sheet1.xml', $sheet );
+        $zip->close();
+
+        nocache_headers();
+        header( 'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' );
+        header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( $filename ) . '-' . current_time( 'Y-m-d' ) . '.xlsx"' );
+        header( 'Content-Length: ' . filesize( $tmp ) );
+        readfile( $tmp );
+        @unlink( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+        exit;
+    }
+
+    /**
+     * Zero-based column index → spreadsheet column letters (0→A, 26→AA).
+     */
+    private static function xlsx_col( int $index ): string {
+        $letters = '';
+        $index++;
+        while ( $index > 0 ) {
+            $mod     = ( $index - 1 ) % 26;
+            $letters = chr( 65 + $mod ) . $letters;
+            $index   = (int) ( ( $index - $mod ) / 26 );
+        }
+        return $letters;
     }
 
     /**

@@ -33,7 +33,7 @@ define( 'OVR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'OVR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'OVR_PLUGIN_SLUG', 'ovr-core' );
 define( 'OVR_TEXT_DOMAIN', 'ovr-core' );
-define( 'OVR_DB_VERSION', '2.1.0' );
+define( 'OVR_DB_VERSION', '2.2.0' );
 
 /*
 |--------------------------------------------------------------------------
