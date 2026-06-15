@@ -127,6 +127,15 @@ class Settings {
             $clean['default_listing_status'] = in_array( $input['default_listing_status'], [ 'active', 'inactive' ], true ) ? $input['default_listing_status'] : 'active';
         }
 
+        // Homepage featured rail ordering (M3 F9).
+        if ( isset( $input['homepage_featured_mode'] ) ) {
+            $clean['homepage_featured_mode'] = in_array( $input['homepage_featured_mode'], [ 'auto', 'manual' ], true ) ? $input['homepage_featured_mode'] : 'auto';
+        }
+        if ( isset( $input['homepage_featured_ids'] ) ) {
+            $ids = array_values( array_filter( array_map( 'absint', preg_split( '/[\s,]+/', (string) $input['homepage_featured_ids'] ) ) ) );
+            $clean['homepage_featured_ids'] = implode( ',', $ids );
+        }
+
         // Subscription default (M3 F5).
         if ( isset( $input['default_membership'] ) ) $clean['default_membership'] = sanitize_text_field( $input['default_membership'] );
 
@@ -782,6 +791,20 @@ class Settings {
                     <option value="inactive" <?php selected( $ds, 'inactive' ); ?>><?php esc_html_e( 'Inactive', 'ovr-core' ); ?></option>
                 </select>
                 <p class="description"><?php esc_html_e( 'Owner-facing status applied to newly created listings.', 'ovr-core' ); ?></p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-feat-mode"><?php esc_html_e( 'Homepage Featured Order', 'ovr-core' ); ?></label></th>
+            <td>
+                <?php $fmode = (string) ( $s['homepage_featured_mode'] ?? 'auto' ); ?>
+                <select id="ovr-feat-mode" name="<?php echo $opt; ?>[homepage_featured_mode]">
+                    <option value="auto" <?php selected( $fmode, 'auto' ); ?>><?php esc_html_e( 'Automatic (paid placement + recency)', 'ovr-core' ); ?></option>
+                    <option value="manual" <?php selected( $fmode, 'manual' ); ?>><?php esc_html_e( 'Manual (use the order below)', 'ovr-core' ); ?></option>
+                </select>
+                <p style="margin:10px 0 4px"><label for="ovr-feat-ids"><?php esc_html_e( 'Manual Order — Property IDs', 'ovr-core' ); ?></label></p>
+                <input id="ovr-feat-ids" name="<?php echo $opt; ?>[homepage_featured_ids]" type="text" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( (string) ( $s['homepage_featured_ids'] ?? '' ) ); ?>" placeholder="e.g. 128, 64, 203">
+                <p class="description"><?php esc_html_e( 'Comma-separated listing IDs, shown in this order on the homepage when Manual is selected. Hidden/inactive listings are skipped automatically.', 'ovr-core' ); ?></p>
             </td>
         </tr>
         <?php

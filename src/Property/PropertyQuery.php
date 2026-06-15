@@ -508,6 +508,24 @@ class PropertyQuery {
      * the homepage section is never empty.
      */
     public static function get_slider( int $count = 6 ): \WP_Query {
+        // Manual ordering (M3 F9): when configured, show exactly these listings
+        // in the admin-defined order (visibility gate still applies).
+        $settings = (array) get_option( 'ovr_settings', [] );
+        if ( 'manual' === ( $settings['homepage_featured_mode'] ?? 'auto' ) && ! empty( $settings['homepage_featured_ids'] ) ) {
+            $ids = array_values( array_filter( array_map( 'absint', preg_split( '/[\s,]+/', (string) $settings['homepage_featured_ids'] ) ) ) );
+            if ( $ids ) {
+                $args = self::build_args( [ 'per_page' => $count, 'sort' => 'newest' ] );
+                unset( $args['_ovr_boost_first'], $args['meta_key'], $args['orderby'], $args['order'] );
+                $args['post__in']       = $ids;
+                $args['orderby']        = 'post__in';
+                $args['posts_per_page'] = $count;
+                $manual = new \WP_Query( $args );
+                if ( $manual->have_posts() ) {
+                    return $manual;
+                }
+            }
+        }
+
         $slider = self::query( [
             'slider_only' => true,
             'per_page'    => $count,
