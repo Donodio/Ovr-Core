@@ -179,6 +179,54 @@ if ( $lat && $lng ) {
     $schema['geo'] = [ '@type' => 'GeoCoordinates', 'latitude' => $lat, 'longitude' => $lng ];
 }
 
+// Image gallery (M3 F11): featured + gallery thumbnails for richer results.
+$schema_images = [];
+if ( has_post_thumbnail( $post_id ) ) {
+    $schema_images[] = get_the_post_thumbnail_url( $post_id, 'large' );
+}
+foreach ( \OVR\Admin\PropertyMetaBoxes::parse_id_string( (string) get_post_meta( $post_id, '_ovr_gallery_ids', true ) ) as $gid ) {
+    $url = wp_get_attachment_image_url( (int) $gid, 'large' );
+    if ( $url ) {
+        $schema_images[] = $url;
+    }
+    if ( count( $schema_images ) >= 12 ) {
+        break;
+    }
+}
+$schema_images = array_values( array_unique( array_filter( $schema_images ) ) );
+if ( $schema_images ) {
+    $schema['image'] = count( $schema_images ) === 1 ? $schema_images[0] : $schema_images;
+}
+
+// Individual reviews (M3 F11): up to 5 approved reviews as Review nodes.
+$schema_reviews = [];
+foreach ( \OVR\Property\Reviews::get_for_property( $post_id, 5 ) as $rv ) {
+    $schema_reviews[] = [
+        '@type'         => 'Review',
+        'reviewRating'  => [ '@type' => 'Rating', 'ratingValue' => (int) $rv['rating'], 'bestRating' => 5 ],
+        'author'        => [ '@type' => 'Person', 'name' => (string) ( $rv['guest_name'] ?: __( 'Guest', 'ovr-core' ) ) ],
+        'datePublished' => mysql2date( 'Y-m-d', (string) $rv['created_at'] ),
+        'name'          => (string) $rv['title'],
+        'reviewBody'    => wp_strip_all_tags( (string) $rv['body'] ),
+    ];
+}
+if ( $schema_reviews ) {
+    $schema['review'] = $schema_reviews;
+}
+
+// Video (M3 F11): native upload or external URL as a VideoObject.
+$schema_video_url = $video_src ?: $video_url;
+if ( '' !== $schema_video_url ) {
+    $schema['subjectOf'] = [
+        '@type'        => 'VideoObject',
+        'name'         => sprintf( __( '%s — video tour', 'ovr-core' ), $title ),
+        'description'  => $schema['description'],
+        'contentUrl'   => $schema_video_url,
+        'thumbnailUrl' => $schema_images[0] ?? '',
+        'uploadDate'   => get_the_date( 'Y-m-d', $post_id ),
+    ];
+}
+
 // Pre-render the embedded tab partials so empty ones get a graceful fallback.
 $amenities_html = TemplateLoader::get_rendered( 'property/amenities.php', [ 'post_id' => $post_id ] );
 $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', [ 'post_id' => $post_id ] );

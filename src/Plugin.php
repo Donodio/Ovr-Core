@@ -192,6 +192,10 @@ class Plugin {
         $this->modules['ad_banners'] = new \OVR\Frontend\AdBanners();
         $this->modules['ad_banners']->init();
 
+        // SEO head tags + structured data (M3 F11). Front-end only hooks.
+        $this->modules['seo'] = new \OVR\Frontend\Seo();
+        $this->modules['seo']->init();
+
         // Boot admin UI (only inside wp-admin / AJAX).
         if ( is_admin() ) {
             $this->boot_admin();
