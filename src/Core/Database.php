@@ -337,6 +337,8 @@ class Database {
             badge varchar(60) NOT NULL DEFAULT '',
             priority_weight int(11) NOT NULL DEFAULT 0,
             max_simultaneous int(11) NOT NULL DEFAULT 0,
+            is_renewable tinyint(1) NOT NULL DEFAULT 1,
+            auto_renew tinyint(1) NOT NULL DEFAULT 0,
             is_active tinyint(1) NOT NULL DEFAULT 1,
             sort_order int(11) NOT NULL DEFAULT 0,
             created_by bigint(20) unsigned DEFAULT NULL,
@@ -349,6 +351,13 @@ class Database {
             KEY is_active (is_active),
             KEY deleted_at (deleted_at)
         ) {$charset_collate};" );
+
+        // Guarantee the M3 renewal columns on upgrade (dbDelta column-adds vary).
+        foreach ( [ 'is_renewable' => 'tinyint(1) NOT NULL DEFAULT 1', 'auto_renew' => 'tinyint(1) NOT NULL DEFAULT 0' ] as $col => $def ) {
+            if ( ! $wpdb->get_var( "SHOW COLUMNS FROM {$table_services} LIKE '{$col}'" ) ) {
+                $wpdb->query( "ALTER TABLE {$table_services} ADD COLUMN {$col} {$def}" ); // phpcs:ignore WordPress.DB
+            }
+        }
 
         // Sync Log — one row per sync run (iCal / platform / WordPress import).
         $table_sync = $wpdb->prefix . 'ovr_sync_log';

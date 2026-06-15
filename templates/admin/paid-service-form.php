@@ -127,6 +127,21 @@ $is_active = $is_edit ? ! empty( $s['is_active'] ) : true;
                     </div>
                 </div>
 
+                <?php
+                $is_renewable = $is_edit ? ! empty( $s['is_renewable'] ) : true;
+                $auto_renew   = $is_edit ? ! empty( $s['auto_renew'] ) : false;
+                ?>
+                <div class="ovr-psf-field full">
+                    <label class="ovr-psf-check">
+                        <input type="checkbox" name="is_renewable" value="1" <?php checked( $is_renewable ); ?>>
+                        <span><?php esc_html_e( 'Renewable — owners can renew this service when it expires', 'ovr-core' ); ?></span>
+                    </label>
+                    <label class="ovr-psf-check">
+                        <input type="checkbox" name="auto_renew" value="1" <?php checked( $auto_renew ); ?>>
+                        <span><?php esc_html_e( 'Auto-Renew — renew automatically at the end of each term', 'ovr-core' ); ?></span>
+                    </label>
+                </div>
+
                 <div class="ovr-psf-field full">
                     <label class="ovr-psf-check">
                         <input type="checkbox" name="is_active" value="1" <?php checked( $is_active ); ?>>

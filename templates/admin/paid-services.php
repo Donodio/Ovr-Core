@@ -154,6 +154,18 @@ $type_label = static function ( string $t ) use ( $types ): string {
                 <div class="ovr-ps-stat-ic"><span class="material-symbols-outlined">trending_up</span></div>
                 <div><div class="ovr-ps-stat-v"><?php echo esc_html( $sym . number_format_i18n( (float) $stats['revenue'], 0 ) ); ?></div><div class="ovr-ps-stat-l"><?php esc_html_e( 'Upgrade Revenue', 'ovr-core' ); ?></div></div>
             </div>
+            <div class="ovr-ps-stat">
+                <div class="ovr-ps-stat-ic"><span class="material-symbols-outlined">shopping_bag</span></div>
+                <div><div class="ovr-ps-stat-v"><?php echo esc_html( number_format_i18n( (int) ( $stats['active_purchases'] ?? 0 ) ) ); ?></div><div class="ovr-ps-stat-l"><?php esc_html_e( 'Active Purchases', 'ovr-core' ); ?></div></div>
+            </div>
+            <div class="ovr-ps-stat">
+                <div class="ovr-ps-stat-ic"><span class="material-symbols-outlined">history</span></div>
+                <div><div class="ovr-ps-stat-v"><?php echo esc_html( number_format_i18n( (int) ( $stats['expired_purchases'] ?? 0 ) ) ); ?></div><div class="ovr-ps-stat-l"><?php esc_html_e( 'Expired Purchases', 'ovr-core' ); ?></div></div>
+            </div>
+            <div class="ovr-ps-stat">
+                <div class="ovr-ps-stat-ic"><span class="material-symbols-outlined">schedule</span></div>
+                <div><div class="ovr-ps-stat-v"><?php echo esc_html( number_format_i18n( (int) ( $stats['upcoming_expirations'] ?? 0 ) ) ); ?></div><div class="ovr-ps-stat-l"><?php esc_html_e( 'Expiring (7 days)', 'ovr-core' ); ?></div></div>
+            </div>
         </div>
 
         <div class="ovr-ps-tabs">

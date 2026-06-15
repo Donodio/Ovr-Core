@@ -165,6 +165,8 @@ class PaidServicesAdmin {
             'priority_weight'  => (int) ( $_POST['priority_weight'] ?? 0 ),
             'max_simultaneous' => (int) ( $_POST['max_simultaneous'] ?? 0 ),
             'sort_order'       => (int) ( $_POST['sort_order'] ?? 0 ),
+            'is_renewable'     => ! empty( $_POST['is_renewable'] ),
+            'auto_renew'       => ! empty( $_POST['auto_renew'] ),
             'is_active'        => ! empty( $_POST['is_active'] ),
         ];
 
@@ -250,6 +252,35 @@ class PaidServicesAdmin {
             'revenue'  => (float) $wpdb->get_var(
                 "SELECT COALESCE(SUM(amount),0) FROM {$wpdb->prefix}ovr_payments WHERE payment_type = 'listing_upgrade' AND status = 'completed'"
             ),
+        ] + $this->purchase_stats();
+    }
+
+    /**
+     * Live purchase counts derived from the per-listing boost-expiry meta
+     * (M3 F4 reporting): active, expired, and upcoming (next 7 days).
+     *
+     * @return array{active_purchases:int, expired_purchases:int, upcoming_expirations:int}
+     */
+    private function purchase_stats(): array {
+        global $wpdb;
+        $keys  = "('_ovr_bump_expires','_ovr_featured_expires','_ovr_slider_expires')";
+        $today = current_time( 'Y-m-d' );
+        $soon  = gmdate( 'Y-m-d', strtotime( $today . ' +7 days' ) );
+
+        $active = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key IN {$keys} AND meta_value <> '' AND meta_value >= %s", $today
+        ) );
+        $expired = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key IN {$keys} AND meta_value <> '' AND meta_value < %s", $today
+        ) );
+        $upcoming = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key IN {$keys} AND meta_value >= %s AND meta_value <= %s", $today, $soon
+        ) );
+
+        return [
+            'active_purchases'     => $active,
+            'expired_purchases'    => $expired,
+            'upcoming_expirations' => $upcoming,
         ];
     }
 

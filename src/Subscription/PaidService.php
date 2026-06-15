@@ -151,6 +151,8 @@ class PaidService {
             'badge'            => substr( (string) ( $input['badge'] ?? '' ), 0, 60 ),
             'priority_weight'  => (int) ( $input['priority_weight'] ?? 0 ),
             'max_simultaneous' => max( 0, (int) ( $input['max_simultaneous'] ?? 0 ) ),
+            'is_renewable'     => empty( $input['is_renewable'] ) ? 0 : 1,
+            'auto_renew'       => empty( $input['auto_renew'] ) ? 0 : 1,
             'is_active'        => empty( $input['is_active'] ) ? 0 : 1,
             'sort_order'       => (int) ( $input['sort_order'] ?? 0 ),
         ];
