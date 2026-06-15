@@ -39,6 +39,142 @@ class StorageOffloader {
         return $wpdb->prefix . 'ovr_file_storage';
     }
 
+    /* ─────────────────────── F13: monitoring + recovery ─────────────────────── */
+
+    /**
+     * Dashboard counters (M3 F13).
+     *
+     * @return array{rows:int,attachments:int,bytes:int,images_total:int,pending:int,local_missing:int}
+     */
+    public static function stats(): array {
+        global $wpdb;
+        $table = self::table();
+
+        $rows        = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+        $attachments = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT attachment_id) FROM {$table}" );
+        $bytes       = (int) $wpdb->get_var( "SELECT COALESCE(SUM(file_size),0) FROM {$table}" );
+
+        $images_total = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type='attachment' AND post_mime_type LIKE 'image/%'"
+        );
+
+        // Image attachments with no 'full' offload row yet.
+        $pending = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p
+             WHERE p.post_type='attachment' AND p.post_mime_type LIKE 'image/%'
+               AND NOT EXISTS ( SELECT 1 FROM {$table} f WHERE f.attachment_id = p.ID AND f.size_name = 'full' )"
+        );
+
+        // Offloaded originals whose local copy is gone (recovery candidates).
+        $local_missing = 0;
+        $full_rows     = (array) $wpdb->get_col( "SELECT attachment_id FROM {$table} WHERE size_name = 'full'" );
+        foreach ( $full_rows as $aid ) {
+            $path = get_attached_file( (int) $aid );
+            if ( $path && ! file_exists( $path ) ) {
+                $local_missing++;
+            }
+        }
+
+        return [
+            'rows'          => $rows,
+            'attachments'   => $attachments,
+            'bytes'         => $bytes,
+            'images_total'  => $images_total,
+            'pending'       => $pending,
+            'local_missing' => $local_missing,
+        ];
+    }
+
+    /** Recent offload rows for the dashboard table. @return array<int,array<string,mixed>> */
+    public static function recent( int $limit = 15 ): array {
+        global $wpdb;
+        return (array) $wpdb->get_results(
+            $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' ORDER BY id DESC LIMIT %d', $limit ),
+            ARRAY_A
+        );
+    }
+
+    /**
+     * Offload image attachments that haven't been offloaded yet (M3 F13 recovery
+     * / catch-up tool). Processes up to $limit attachments. Returns the count
+     * successfully offloaded.
+     */
+    public function offload_pending( int $limit = 20 ): int {
+        if ( ! BackblazeB2Client::is_configured() ) {
+            return 0;
+        }
+        global $wpdb;
+        $table = self::table();
+        $ids   = (array) $wpdb->get_col( $wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             WHERE p.post_type='attachment' AND p.post_mime_type LIKE 'image/%'
+               AND NOT EXISTS ( SELECT 1 FROM {$table} f WHERE f.attachment_id = p.ID AND f.size_name = 'full' )
+             ORDER BY p.ID DESC LIMIT %d",
+            $limit
+        ) );
+
+        $done = 0;
+        foreach ( $ids as $aid ) {
+            $aid  = (int) $aid;
+            $meta = wp_get_attachment_metadata( $aid );
+            $this->offload( is_array( $meta ) ? $meta : [], $aid );
+            if ( self::get_row( $aid, 'full' ) ) {
+                $done++;
+            }
+        }
+        return $done;
+    }
+
+    /**
+     * Restore originals from B2 whose local file is missing (M3 F13 recovery).
+     * Downloads the B2 copy back to the local path and regenerates sized
+     * derivatives. Processes up to $limit attachments; returns the restored count.
+     */
+    public function restore_missing( int $limit = 20 ): int {
+        global $wpdb;
+        $table = self::table();
+        $rows  = (array) $wpdb->get_results(
+            "SELECT attachment_id, file_url FROM {$table} WHERE size_name = 'full' ORDER BY id DESC",
+            ARRAY_A
+        );
+
+        $restored = 0;
+        foreach ( $rows as $row ) {
+            if ( $restored >= $limit ) {
+                break;
+            }
+            $aid  = (int) $row['attachment_id'];
+            $path = get_attached_file( $aid );
+            if ( ! $path || file_exists( $path ) ) {
+                continue; // local copy present — nothing to restore.
+            }
+            $url = (string) $row['file_url'];
+            if ( '' === $url ) {
+                continue;
+            }
+            $resp = wp_remote_get( $url, [ 'timeout' => 30 ] );
+            if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
+                continue;
+            }
+            $body = wp_remote_retrieve_body( $resp );
+            if ( '' === $body ) {
+                continue;
+            }
+            wp_mkdir_p( dirname( $path ) );
+            if ( false === file_put_contents( $path, $body ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions
+                continue;
+            }
+            // Rebuild sized derivatives from the restored original.
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+            $meta = wp_generate_attachment_metadata( $aid, $path );
+            if ( is_array( $meta ) ) {
+                wp_update_attachment_metadata( $aid, $meta );
+            }
+            $restored++;
+        }
+        return $restored;
+    }
+
     /**
      * Offload the original + each generated size to B2 after metadata is built.
      *
