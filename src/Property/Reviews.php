@@ -176,7 +176,13 @@ class Reviews {
         $row = $wpdb->get_row( $wpdb->prepare( "SELECT property_id, status FROM {$table} WHERE id = %d", $review_id ), ARRAY_A );
         if ( ! $row ) return false;
 
-        $wpdb->update( $table, [ 'status' => $status ], [ 'id' => $review_id ], [ '%s' ], [ '%d' ] );
+        $data = [ 'status' => $status ];
+        $fmt  = [ '%s' ];
+        if ( 'approved' === $status ) {
+            $data['approved_at'] = current_time( 'mysql' );
+            $fmt[]               = '%s';
+        }
+        $wpdb->update( $table, $data, [ 'id' => $review_id ], $fmt, [ '%d' ] );
         self::recompute_aggregates( (int) $row['property_id'] );
 
         // Audit (Milestone 3 F2) + email trigger (F6): record/notify on change.
@@ -290,6 +296,43 @@ class Reviews {
             $counts['all'] += (int) $r['cnt'];
         }
         return $counts;
+    }
+
+    /**
+     * Moderation analytics (Milestone 3 F3): average approved rating + the
+     * properties with the most approved reviews.
+     *
+     * @return array{avg_rating:float, total_approved:int, per_property:array<int,array{property_id:int,title:string,count:int,avg:float}>}
+     */
+    public static function analytics( int $top = 5 ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_reviews';
+
+        $avg   = (float) $wpdb->get_var( "SELECT AVG(rating) FROM {$table} WHERE status = 'approved'" );
+        $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE status = 'approved'" );
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT property_id, COUNT(*) AS cnt, AVG(rating) AS av
+             FROM {$table} WHERE status = 'approved'
+             GROUP BY property_id ORDER BY cnt DESC LIMIT %d",
+            $top
+        ), ARRAY_A );
+
+        $per = [];
+        foreach ( (array) $rows as $r ) {
+            $per[] = [
+                'property_id' => (int) $r['property_id'],
+                'title'       => get_the_title( (int) $r['property_id'] ) ?: ( '#' . (int) $r['property_id'] ),
+                'count'       => (int) $r['cnt'],
+                'avg'         => round( (float) $r['av'], 1 ),
+            ];
+        }
+
+        return [
+            'avg_rating'     => round( $avg, 2 ),
+            'total_approved' => $total,
+            'per_property'   => $per,
+        ];
     }
 
     /**

@@ -280,6 +280,7 @@ $initials = static function ( string $name ): string {
                     $meta     = $status_meta[ $st ] ?? $status_meta['pending'];
                     $prop     = $r['property_title'] ? $r['property_title'] : __( '(deleted property)', 'ovr-core' );
                     $when     = $r['created_at'] ? date_i18n( 'M j, Y', strtotime( $r['created_at'] . ' UTC' ) ) : '';
+                    $approved = ! empty( $r['approved_at'] ) ? date_i18n( 'M j, Y', strtotime( $r['approved_at'] . ' UTC' ) ) : '';
                     $stayed   = ! empty( $r['stay_date'] ) ? date_i18n( 'M Y', strtotime( (string) $r['stay_date'] ) ) : '';
                     $is_edit  = $editing && (int) $editing['id'] === $rid;
                 ?>
@@ -292,7 +293,7 @@ $initials = static function ( string $name ): string {
                                 <span class="ovr-rc-av"><?php echo esc_html( $initials( (string) $r['guest_name'] ) ); ?></span>
                                 <div>
                                     <h3 class="ovr-rc-name"><?php echo esc_html( $r['guest_name'] ?: __( 'Anonymous', 'ovr-core' ) ); ?></h3>
-                                    <p class="ovr-rc-meta"><?php echo esc_html( trim( $when . ' • ' . $prop, ' •' ) ); ?><?php if ( $stayed ) : ?> <span style="color:#8b95a5">• <?php printf( esc_html__( 'Stayed %s', 'ovr-core' ), esc_html( $stayed ) ); ?></span><?php endif; ?></p>
+                                    <p class="ovr-rc-meta"><?php echo esc_html( trim( $when . ' • ' . $prop, ' •' ) ); ?><?php if ( $stayed ) : ?> <span style="color:#8b95a5">• <?php printf( esc_html__( 'Stayed %s', 'ovr-core' ), esc_html( $stayed ) ); ?></span><?php endif; ?><?php if ( $approved ) : ?> <span style="color:var(--sec,#006c4a)">• <?php printf( esc_html__( 'Approved %s', 'ovr-core' ), esc_html( $approved ) ); ?></span><?php endif; ?></p>
                                 </div>
                             </div>
                             <span class="ovr-rc-chip" style="background:<?php echo esc_attr( $meta['chip_bg'] ); ?>;color:<?php echo esc_attr( $meta['chip_fg'] ); ?>">
@@ -468,10 +469,22 @@ $initials = static function ( string $name ): string {
                 </div>
                 <ul class="ovr-side-stats">
                     <li><span><?php esc_html_e( 'Total reviews', 'ovr-core' ); ?></span><b><?php echo esc_html( number_format_i18n( $counts['all'] ) ); ?></b></li>
+                    <li><span><?php esc_html_e( 'Average rating', 'ovr-core' ); ?></span><b style="color:var(--p,#004c4c)"><?php echo esc_html( number_format( (float) ( $analytics['avg_rating'] ?? 0 ), 2 ) ); ?> ★</b></li>
                     <li><span><?php esc_html_e( 'Pending approval', 'ovr-core' ); ?></span><b style="color:var(--ter)"><?php echo esc_html( number_format_i18n( $counts['pending'] ) ); ?></b></li>
                     <li><span><?php esc_html_e( 'Approved', 'ovr-core' ); ?></span><b style="color:var(--sec)"><?php echo esc_html( number_format_i18n( $counts['approved'] ) ); ?></b></li>
                     <li><span><?php esc_html_e( 'Rejected', 'ovr-core' ); ?></span><b style="color:var(--err)"><?php echo esc_html( number_format_i18n( $counts['rejected'] ) ); ?></b></li>
                 </ul>
+                <?php if ( ! empty( $analytics['per_property'] ) ) : ?>
+                    <div class="ovr-side-h" style="margin-top:18px"><h2 style="font-size:14px"><?php esc_html_e( 'Reviews Per Property', 'ovr-core' ); ?></h2></div>
+                    <ul class="ovr-side-stats">
+                        <?php foreach ( $analytics['per_property'] as $pp ) : ?>
+                            <li>
+                                <span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?php echo esc_html( $pp['title'] ); ?></span>
+                                <b><?php echo esc_html( number_format_i18n( $pp['count'] ) ); ?> · <?php echo esc_html( $pp['avg'] ); ?>★</b>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
                 <div class="ovr-side-hint">
                     <span class="material-symbols-outlined">lightbulb</span>
                     <span><?php esc_html_e( 'Select “Edit / View” on any review to adjust its rating, edit its content, or change its visibility here.', 'ovr-core' ); ?></span>

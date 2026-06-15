@@ -163,6 +163,7 @@ class ReviewsAdmin {
             'paged'       => $paged,
             'status'      => $status,
             'counts'      => $counts,
+            'analytics'   => Reviews::analytics(),
             'editing'     => $editing,
             'base_url'    => $base_url,
             'nonce_action' => self::NONCE_ACTION,

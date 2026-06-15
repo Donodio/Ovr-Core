@@ -224,6 +224,7 @@ class Database {
             body text NOT NULL,
             stay_date date DEFAULT NULL,
             status varchar(20) NOT NULL DEFAULT 'pending',
+            approved_at datetime DEFAULT NULL,
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
             KEY property_id (property_id),
@@ -231,6 +232,12 @@ class Database {
             KEY status (status),
             KEY created_at (created_at)
         ) {$charset_collate};" );
+
+        // dbDelta can be unreliable adding a column on upgrade — guarantee the
+        // M3 review approve-timestamp column explicitly (idempotent).
+        if ( ! $wpdb->get_var( "SHOW COLUMNS FROM {$table_reviews} LIKE 'approved_at'" ) ) {
+            $wpdb->query( "ALTER TABLE {$table_reviews} ADD COLUMN approved_at datetime DEFAULT NULL" ); // phpcs:ignore WordPress.DB
+        }
 
         self::create_phase2_tables( $charset_collate );
 
