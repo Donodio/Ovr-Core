@@ -255,6 +255,7 @@ class Plugin {
         $this->modules['admin_hero_slides'] = new \OVR\Admin\HeroSlidesAdmin();
         $this->modules['admin_ad_banners']  = new \OVR\Admin\AdBannersAdmin();
         $this->modules['admin_storage']     = new \OVR\Admin\StorageAdmin();
+        $this->modules['admin_import']      = new \OVR\Admin\MigrationImporter();
 
         $this->modules['admin_meta_boxes']->init();
         $this->modules['admin_property_editor']->init();
@@ -280,6 +281,7 @@ class Plugin {
         $this->modules['admin_hero_slides']->init();
         $this->modules['admin_ad_banners']->init();
         $this->modules['admin_storage']->init();
+        $this->modules['admin_import']->init();
     }
 
     /**
