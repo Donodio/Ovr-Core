@@ -237,6 +237,7 @@ class Plugin {
         $this->modules['admin_deleted_listings'] = new \OVR\Admin\DeletedListingsAdmin();
         $this->modules['admin_audit_log'] = new \OVR\Admin\AuditLogAdmin();
         $this->modules['admin_emails'] = new \OVR\Admin\EmailManagerAdmin();
+        $this->modules['admin_search'] = new \OVR\Admin\GlobalSearch();
 
         $this->modules['admin_meta_boxes']->init();
         $this->modules['admin_property_editor']->init();
@@ -258,6 +259,7 @@ class Plugin {
         $this->modules['admin_deleted_listings']->init();
         $this->modules['admin_audit_log']->init();
         $this->modules['admin_emails']->init();
+        $this->modules['admin_search']->init();
     }
 
     /**

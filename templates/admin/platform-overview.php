@@ -52,7 +52,16 @@ $tones = [
         .ovr-dh{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:6px 0 28px}
         .ovr-dh h1{font-size:34px;font-weight:700;letter-spacing:-.02em;margin:0;padding:0;color:var(--on);line-height:1.15}
         .ovr-dh p{margin:6px 0 0;color:var(--sv);font-size:15px}
-        .ovr-dh-actions{display:flex;gap:10px;flex-wrap:wrap}
+        .ovr-dh-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+        .ovr-dh-search{display:inline-flex;align-items:center;gap:6px;background:var(--surf);border:1px solid var(--ov);border-radius:9999px;padding:6px 14px}
+        .ovr-dh-search .material-symbols-outlined{font-size:18px;color:var(--sv)}
+        .ovr-dh-search input{border:none;outline:none;background:transparent;font-size:13px;width:170px;color:var(--on)}
+        .ovr-dash-cz{background:var(--surf);border:1px solid #e3e8e7;border-radius:16px;padding:18px 22px;margin-bottom:24px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+        .ovr-dash-cz-h{margin:0 0 12px;color:var(--sv);font-size:13px}
+        .ovr-dash-cz-items{display:flex;flex-wrap:wrap;gap:10px}
+        .ovr-dash-cz-item{display:flex;align-items:center;gap:8px;background:#f3f7f6;border:1px solid var(--ov);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--on)}
+        .ovr-tile.ovr-cz-on{outline:2px dashed var(--opc);outline-offset:3px;cursor:grab}
+        .ovr-tile.dragging{opacity:.45}
         .ovr-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:9999px;font-size:13px;font-weight:600;text-decoration:none;line-height:1;border:1px solid transparent;cursor:pointer}
         .ovr-btn .material-symbols-outlined{font-size:18px}
         .ovr-btn--primary{background:var(--p);color:#fff}
@@ -141,6 +150,15 @@ $tones = [
             <p><?php esc_html_e( 'Here is the latest snapshot of every property, member, and transaction across Our Village Rentals.', 'ovr-core' ); ?></p>
         </div>
         <div class="ovr-dh-actions">
+            <form method="get" action="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>" class="ovr-dh-search">
+                <input type="hidden" name="post_type" value="ovr_property">
+                <input type="hidden" name="page" value="ovr-core-search">
+                <span class="material-symbols-outlined">search</span>
+                <input type="search" name="s" placeholder="<?php esc_attr_e( 'Search everything…', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Global search', 'ovr-core' ); ?>">
+            </form>
+            <button type="button" class="ovr-btn ovr-btn--ghost" id="ovr-dash-customize">
+                <span class="material-symbols-outlined">tune</span><?php esc_html_e( 'Customize', 'ovr-core' ); ?>
+            </button>
             <a class="ovr-btn ovr-btn--ghost" href="<?php echo esc_url( $settings_url ); ?>">
                 <span class="material-symbols-outlined">settings</span><?php esc_html_e( 'Settings', 'ovr-core' ); ?>
             </a>
@@ -150,10 +168,26 @@ $tones = [
         </div>
     </div>
 
-    <div class="ovr-bento">
+    <div id="ovr-dash-customize-panel" class="ovr-dash-cz" hidden>
+        <p class="ovr-dash-cz-h"><?php esc_html_e( 'Show, hide and drag-reorder your dashboard widgets. Changes are saved automatically.', 'ovr-core' ); ?></p>
+        <div class="ovr-dash-cz-items" id="ovr-dash-cz-items"></div>
+    </div>
+
+    <?php
+    // Per-admin widget visibility + order (M3 F1). Tiles carry data-widget keys;
+    // JS applies the saved order/hidden set and the Customize panel persists it.
+    $hidden_widgets = (array) ( $widget_prefs['hidden'] ?? [] );
+    $is_hidden = static function ( string $key ) use ( $hidden_widgets ) {
+        return in_array( $key, $hidden_widgets, true ) ? ' style="display:none"' : '';
+    };
+    ?>
+    <div class="ovr-bento" id="ovr-bento"
+         data-nonce="<?php echo esc_attr( $widgets_nonce ); ?>"
+         data-order="<?php echo esc_attr( wp_json_encode( $widget_prefs['order'] ?? [] ) ); ?>"
+         data-hidden="<?php echo esc_attr( wp_json_encode( $widget_prefs['hidden'] ?? [] ) ); ?>">
 
         <!-- Revenue this month (hero) -->
-        <div class="ovr-tile ovr-hero">
+        <div class="ovr-tile ovr-hero" data-widget="revenue_month" data-widget-label="<?php esc_attr_e( 'Revenue This Month', 'ovr-core' ); ?>"<?php echo $is_hidden( 'revenue_month' ); ?>>
             <div class="ovr-tile-h">
                 <span class="material-symbols-outlined fill-icon">monitoring</span>
                 <p class="ovr-tile-lbl"><?php esc_html_e( 'Revenue This Month', 'ovr-core' ); ?></p>
@@ -171,8 +205,48 @@ $tones = [
             </div>
         </div>
 
+        <!-- Revenue this year -->
+        <div class="ovr-tile" data-widget="revenue_year" data-widget-label="<?php esc_attr_e( 'Revenue This Year', 'ovr-core' ); ?>"<?php echo $is_hidden( 'revenue_year' ); ?>>
+            <div class="ovr-tile-h">
+                <span class="material-symbols-outlined">calendar_month</span>
+                <p class="ovr-tile-lbl"><?php esc_html_e( 'Revenue This Year', 'ovr-core' ); ?></p>
+            </div>
+            <p class="ovr-tile-val"><?php echo esc_html( $sym . number_format( (float) ( $stats['revenue_year'] ?? 0 ), 0 ) ); ?></p>
+            <span class="ovr-tile-sub"><?php echo esc_html( gmdate( 'Y' ) ); ?> <?php esc_html_e( 'year to date', 'ovr-core' ); ?></span>
+        </div>
+
+        <!-- Featured listings -->
+        <a class="ovr-tile" href="<?php echo esc_url( $all_props_url ); ?>" data-widget="listings_featured" data-widget-label="<?php esc_attr_e( 'Featured Listings', 'ovr-core' ); ?>"<?php echo $is_hidden( 'listings_featured' ); ?>>
+            <div class="ovr-tile-h">
+                <span class="material-symbols-outlined">star</span>
+                <p class="ovr-tile-lbl"><?php esc_html_e( 'Featured Listings', 'ovr-core' ); ?></p>
+            </div>
+            <p class="ovr-tile-val"><?php echo esc_html( number_format( (int) $stats['properties_featured'] ) ); ?></p>
+            <span class="ovr-tile-sub"><?php esc_html_e( 'Active paid placement', 'ovr-core' ); ?></span>
+        </a>
+
+        <!-- Pending listings -->
+        <div class="ovr-tile ovr-tile--warn" data-widget="listings_pending" data-widget-label="<?php esc_attr_e( 'Pending Listings', 'ovr-core' ); ?>"<?php echo $is_hidden( 'listings_pending' ); ?>>
+            <div class="ovr-tile-h">
+                <span class="material-symbols-outlined">pending_actions</span>
+                <p class="ovr-tile-lbl"><?php esc_html_e( 'Pending Listings', 'ovr-core' ); ?></p>
+            </div>
+            <p class="ovr-tile-val"><?php echo esc_html( number_format( (int) ( $stats['properties_pending'] ?? 0 ) ) ); ?></p>
+            <span class="ovr-tile-sub"><?php esc_html_e( 'Awaiting admin review', 'ovr-core' ); ?></span>
+        </div>
+
+        <!-- Expired listings -->
+        <div class="ovr-tile ovr-tile--alert" data-widget="listings_expired" data-widget-label="<?php esc_attr_e( 'Expired Listings', 'ovr-core' ); ?>"<?php echo $is_hidden( 'listings_expired' ); ?>>
+            <div class="ovr-tile-h">
+                <span class="material-symbols-outlined">event_busy</span>
+                <p class="ovr-tile-lbl"><?php esc_html_e( 'Expired Listings', 'ovr-core' ); ?></p>
+            </div>
+            <p class="ovr-tile-val"><?php echo esc_html( number_format( (int) ( $stats['properties_expired'] ?? 0 ) ) ); ?></p>
+            <span class="ovr-tile-sub"><?php esc_html_e( 'Lapsed / pending renewal', 'ovr-core' ); ?></span>
+        </div>
+
         <!-- Total listings -->
-        <a class="ovr-tile" href="<?php echo esc_url( $all_props_url ); ?>">
+        <a class="ovr-tile" data-widget="listings_total" data-widget-label="<?php esc_attr_e( 'Total Listings', 'ovr-core' ); ?>"<?php echo $is_hidden( 'listings_total' ); ?> href="<?php echo esc_url( $all_props_url ); ?>">
             <div class="ovr-tile-h">
                 <span class="material-symbols-outlined">real_estate_agent</span>
                 <p class="ovr-tile-lbl"><?php esc_html_e( 'Total Listings', 'ovr-core' ); ?></p>
@@ -187,7 +261,7 @@ $tones = [
         </a>
 
         <!-- Total users -->
-        <a class="ovr-tile" href="<?php echo esc_url( $all_users_url ); ?>">
+        <a class="ovr-tile" data-widget="members_total" data-widget-label="<?php esc_attr_e( 'Total Members', 'ovr-core' ); ?>"<?php echo $is_hidden( 'members_total' ); ?> href="<?php echo esc_url( $all_users_url ); ?>">
             <div class="ovr-tile-h">
                 <span class="material-symbols-outlined">group</span>
                 <p class="ovr-tile-lbl"><?php esc_html_e( 'Total Members', 'ovr-core' ); ?></p>
@@ -205,7 +279,7 @@ $tones = [
         </a>
 
         <!-- Pending reviews -->
-        <div class="ovr-tile ovr-tile--alert">
+        <div class="ovr-tile ovr-tile--alert" data-widget="reviews_pending" data-widget-label="<?php esc_attr_e( 'Pending Reviews', 'ovr-core' ); ?>"<?php echo $is_hidden( 'reviews_pending' ); ?>>
             <div class="ovr-tile-h">
                 <span class="material-symbols-outlined">rate_review</span>
                 <p class="ovr-tile-lbl"><?php esc_html_e( 'Pending Reviews', 'ovr-core' ); ?></p>
@@ -215,7 +289,7 @@ $tones = [
         </div>
 
         <!-- Pending renewals -->
-        <a class="ovr-tile ovr-tile--warn" href="<?php echo esc_url( $all_props_url ); ?>">
+        <a class="ovr-tile ovr-tile--warn" data-widget="renewals_pending" data-widget-label="<?php esc_attr_e( 'Pending Renewals', 'ovr-core' ); ?>"<?php echo $is_hidden( 'renewals_pending' ); ?> href="<?php echo esc_url( $all_props_url ); ?>">
             <div class="ovr-tile-h">
                 <span class="material-symbols-outlined">autorenew</span>
                 <p class="ovr-tile-lbl"><?php esc_html_e( 'Pending Renewals', 'ovr-core' ); ?></p>
@@ -225,7 +299,7 @@ $tones = [
         </a>
 
         <!-- Inquiries today -->
-        <div class="ovr-tile">
+        <div class="ovr-tile" data-widget="inquiries_today" data-widget-label="<?php esc_attr_e( 'Inquiries Today', 'ovr-core' ); ?>"<?php echo $is_hidden( 'inquiries_today' ); ?>>
             <div class="ovr-tile-h">
                 <span class="material-symbols-outlined">forum</span>
                 <p class="ovr-tile-lbl"><?php esc_html_e( 'Inquiries Today', 'ovr-core' ); ?></p>
@@ -240,8 +314,26 @@ $tones = [
             </span>
         </div>
 
+        <!-- System health -->
+        <?php $health = is_array( $stats['system_health'] ?? null ) ? $stats['system_health'] : [ 'ok' => true, 'items' => [] ]; ?>
+        <div class="ovr-tile<?php echo $health['ok'] ? '' : ' ovr-tile--alert'; ?>" data-widget="system_health" data-widget-label="<?php esc_attr_e( 'System Health', 'ovr-core' ); ?>"<?php echo $is_hidden( 'system_health' ); ?>>
+            <div class="ovr-tile-h">
+                <span class="material-symbols-outlined"><?php echo $health['ok'] ? 'health_and_safety' : 'warning'; ?></span>
+                <p class="ovr-tile-lbl"><?php esc_html_e( 'System Health', 'ovr-core' ); ?></p>
+            </div>
+            <p class="ovr-tile-val" style="font-size:20px"><?php echo $health['ok'] ? esc_html__( 'All systems OK', 'ovr-core' ) : esc_html__( 'Attention needed', 'ovr-core' ); ?></p>
+            <div class="ovr-tile-sub" style="display:block">
+                <?php foreach ( (array) $health['items'] as $hc ) : ?>
+                    <span style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                        <span class="material-symbols-outlined" style="font-size:15px;color:<?php echo $hc['ok'] ? 'var(--sec)' : 'var(--err)'; ?>"><?php echo $hc['ok'] ? 'check_circle' : 'error'; ?></span>
+                        <?php echo esc_html( $hc['label'] . ' — ' . $hc['note'] ); ?>
+                    </span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
         <!-- Quick actions -->
-        <div class="ovr-tile ovr-tile--qa">
+        <div class="ovr-tile ovr-tile--qa" data-widget="quick_actions" data-widget-label="<?php esc_attr_e( 'Quick Actions', 'ovr-core' ); ?>"<?php echo $is_hidden( 'quick_actions' ); ?>>
             <p class="ovr-tile-lbl"><?php esc_html_e( 'Quick Actions', 'ovr-core' ); ?></p>
             <div class="ovr-qa-row">
                 <a class="ovr-qa-btn" href="<?php echo esc_url( $all_props_url ); ?>" title="<?php esc_attr_e( 'Manage Listings', 'ovr-core' ); ?>"><span class="material-symbols-outlined">home_work</span></a>
@@ -312,3 +404,81 @@ $tones = [
     </div>
 
 </div>
+
+<script>
+(function(){
+    var bento = document.getElementById('ovr-bento');
+    if (!bento) { return; }
+    var nonce = bento.getAttribute('data-nonce');
+    var savedOrder = [];
+    try { savedOrder = JSON.parse(bento.getAttribute('data-order') || '[]'); } catch (e) {}
+
+    var tiles = function(){ return Array.prototype.slice.call(bento.querySelectorAll('.ovr-tile')); };
+
+    // Apply the saved order (place known keys first, in saved sequence).
+    savedOrder.slice().reverse().forEach(function(key){
+        var el = bento.querySelector('.ovr-tile[data-widget="' + key + '"]');
+        if (el) { bento.insertBefore(el, bento.firstChild); }
+    });
+
+    function currentOrder(){ return tiles().map(function(t){ return t.getAttribute('data-widget'); }); }
+    function currentHidden(){ return tiles().filter(function(t){ return t.style.display === 'none'; }).map(function(t){ return t.getAttribute('data-widget'); }); }
+
+    var saveTimer = null;
+    function save(){
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function(){
+            var fd = new FormData();
+            fd.append('action', 'ovr_save_dash_widgets');
+            fd.append('nonce', nonce);
+            currentOrder().forEach(function(k){ fd.append('order[]', k); });
+            currentHidden().forEach(function(k){ fd.append('hidden[]', k); });
+            if (window.ajaxurl) { fetch(window.ajaxurl, { method:'POST', credentials:'same-origin', body:fd }); }
+        }, 250);
+    }
+
+    // Customize panel: per-widget show/hide checkboxes.
+    var panel  = document.getElementById('ovr-dash-customize-panel');
+    var items  = document.getElementById('ovr-dash-cz-items');
+    var btn    = document.getElementById('ovr-dash-customize');
+    function buildPanel(){
+        items.innerHTML = '';
+        tiles().forEach(function(t){
+            var key = t.getAttribute('data-widget');
+            var label = t.getAttribute('data-widget-label') || key;
+            var wrap = document.createElement('label'); wrap.className = 'ovr-dash-cz-item';
+            var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = (t.style.display !== 'none');
+            cb.addEventListener('change', function(){ t.style.display = cb.checked ? '' : 'none'; save(); });
+            wrap.appendChild(cb); wrap.appendChild(document.createTextNode(' ' + label));
+            items.appendChild(wrap);
+        });
+    }
+    function enableDrag(on){
+        tiles().forEach(function(t){ t.setAttribute('draggable', on ? 'true' : 'false'); t.classList.toggle('ovr-cz-on', on); });
+    }
+    if (btn) {
+        btn.addEventListener('click', function(){
+            if (panel.hasAttribute('hidden')) { panel.removeAttribute('hidden'); buildPanel(); enableDrag(true); }
+            else { panel.setAttribute('hidden', ''); enableDrag(false); }
+        });
+    }
+
+    // Drag-reorder (active only while the Customize panel is open).
+    var dragEl = null;
+    bento.addEventListener('dragstart', function(e){
+        var t = e.target.closest('.ovr-tile');
+        if (!t || t.getAttribute('draggable') !== 'true') { return; }
+        dragEl = t; setTimeout(function(){ t.classList.add('dragging'); }, 0);
+    });
+    bento.addEventListener('dragend', function(){ if (dragEl) { dragEl.classList.remove('dragging'); dragEl = null; save(); } });
+    bento.addEventListener('dragover', function(e){
+        if (!dragEl) { return; }
+        e.preventDefault();
+        var over = e.target.closest('.ovr-tile');
+        if (!over || over === dragEl) { return; }
+        var r = over.getBoundingClientRect();
+        if (e.clientX < r.left + r.width / 2) { bento.insertBefore(dragEl, over); }
+        else { bento.insertBefore(dragEl, over.nextSibling); }
+    });
+})();
+</script>

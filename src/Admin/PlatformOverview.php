@@ -20,8 +20,12 @@ class PlatformOverview {
 
     public const PAGE_SLUG = 'ovr-platform-overview';
 
+    /** User-meta key storing each admin's dashboard widget preferences. */
+    public const WIDGETS_META = 'ovr_dash_widgets';
+
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
+        add_action( 'wp_ajax_ovr_save_dash_widgets', [ $this, 'handle_save_widgets' ] );
     }
 
     public function register_page(): void {
@@ -45,6 +49,12 @@ class PlatformOverview {
             'stats'           => $this->collect_stats(),
             'recent_props'    => $this->recent_properties( 8 ),
             'activity'        => $this->recent_activity( 6 ),
+            'widget_prefs'    => $this->widget_prefs(),
+            'widgets_nonce'   => wp_create_nonce( 'ovr_dash_widgets' ),
+            'search_url'      => add_query_arg(
+                [ 'post_type' => 'ovr_property', 'page' => GlobalSearch::PAGE_SLUG ],
+                admin_url( 'edit.php' )
+            ),
             'settings_url'    => add_query_arg(
                 [ 'post_type' => 'ovr_property', 'page' => Settings::PAGE_SLUG ],
                 admin_url( 'edit.php' )
@@ -123,6 +133,22 @@ class PlatformOverview {
             ? round( ( ( $revenue_month - $revenue_prev_month ) / $revenue_prev_month ) * 100, 1 )
             : null;
 
+        // Revenue year-to-date (M3 F1).
+        $revenue_year = (float) $wpdb->get_var(
+            "SELECT COALESCE(SUM(amount),0) FROM {$payments_table}
+             WHERE status = 'completed' AND YEAR(created_at) = YEAR(CURDATE())"
+        );
+
+        // Listing status breakdown (M3 F1): pending review + expired/lapsed.
+        $properties_pending = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_ovr_admin_status' AND meta_value = 'pending_review'"
+        );
+        $properties_expired = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_ovr_listing_status' AND meta_value = 'pending_renewal'"
+        );
+
         // Six-month revenue series for the Growth Trends chart.
         $revenue_series = $this->revenue_series( 6 );
 
@@ -149,7 +175,11 @@ class PlatformOverview {
             'properties_total'    => $properties_total,
             'properties_active'   => $properties_active,
             'properties_featured' => $properties_featured,
+            'properties_pending'  => $properties_pending,
+            'properties_expired'  => $properties_expired,
             'properties_new_week' => $properties_new_week,
+            'revenue_year'        => $revenue_year,
+            'system_health'       => $this->system_health(),
             'landlords_total'     => $landlords_total,
             'users_total'         => $users_total,
             'users_new_week'      => $users_new_week,
@@ -166,6 +196,65 @@ class PlatformOverview {
             'renewals_pending'    => $renewals_pending,
             'currency_symbol'     => $settings['currency_symbol'] ?? '$',
         ];
+    }
+
+    /**
+     * Lightweight system-health checks for the dashboard (M3 F1).
+     *
+     * @return array{ok:bool, items:array<int, array{label:string, ok:bool, note:string}>}
+     */
+    private function system_health(): array {
+        $items = [];
+
+        // Schema up to date.
+        $db_ok   = version_compare( (string) get_option( 'ovr_db_version', '0' ), OVR_DB_VERSION, '>=' );
+        $items[] = [ 'label' => __( 'Database schema', 'ovr-core' ), 'ok' => $db_ok, 'note' => $db_ok ? __( 'Current', 'ovr-core' ) : __( 'Update pending', 'ovr-core' ) ];
+
+        // Key cron events scheduled.
+        $cron_ok = (bool) wp_next_scheduled( 'ovr_hard_delete_listings' ) && (bool) wp_next_scheduled( 'ovr_audit_purge' );
+        $items[] = [ 'label' => __( 'Scheduled tasks', 'ovr-core' ), 'ok' => $cron_ok, 'note' => $cron_ok ? __( 'Running', 'ovr-core' ) : __( 'Not scheduled', 'ovr-core' ) ];
+
+        // Uploads writable.
+        $uploads = wp_get_upload_dir();
+        $up_ok   = empty( $uploads['error'] ) && wp_is_writable( $uploads['basedir'] );
+        $items[] = [ 'label' => __( 'Media uploads', 'ovr-core' ), 'ok' => $up_ok, 'note' => $up_ok ? __( 'Writable', 'ovr-core' ) : __( 'Not writable', 'ovr-core' ) ];
+
+        // Cloud storage (informational — not a failure when off).
+        $b2 = class_exists( '\OVR\Storage\BackblazeB2Client' ) && \OVR\Storage\BackblazeB2Client::is_configured();
+        $items[] = [ 'label' => __( 'Cloud storage (B2)', 'ovr-core' ), 'ok' => true, 'note' => $b2 ? __( 'Connected', 'ovr-core' ) : __( 'Local (off)', 'ovr-core' ) ];
+
+        $all_ok = ! in_array( false, array_column( $items, 'ok' ), true );
+        return [ 'ok' => $all_ok, 'items' => $items ];
+    }
+
+    /**
+     * The current admin's saved widget preferences (hidden + order).
+     *
+     * @return array{hidden:string[], order:string[]}
+     */
+    private function widget_prefs(): array {
+        $raw = get_user_meta( get_current_user_id(), self::WIDGETS_META, true );
+        $raw = is_array( $raw ) ? $raw : [];
+        return [
+            'hidden' => array_values( array_filter( array_map( 'sanitize_key', (array) ( $raw['hidden'] ?? [] ) ) ) ),
+            'order'  => array_values( array_filter( array_map( 'sanitize_key', (array) ( $raw['order'] ?? [] ) ) ) ),
+        ];
+    }
+
+    /**
+     * AJAX: persist the current admin's widget show/hide + order preferences.
+     */
+    public function handle_save_widgets(): void {
+        if ( ! current_user_can( 'manage_options' ) || ! check_ajax_referer( 'ovr_dash_widgets', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied.', 'ovr-core' ) ], 403 );
+        }
+        $hidden = isset( $_POST['hidden'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['hidden'] ) ) : [];
+        $order  = isset( $_POST['order'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['order'] ) ) : [];
+        update_user_meta( get_current_user_id(), self::WIDGETS_META, [
+            'hidden' => array_values( $hidden ),
+            'order'  => array_values( $order ),
+        ] );
+        wp_send_json_success();
     }
 
     /**
