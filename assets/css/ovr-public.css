@@ -738,6 +738,38 @@
     margin-bottom: 32px;
 }
 
+/* ── Ad Banners (M3 F8) ── */
+.ovr-ad-banners {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 24px 0;
+}
+
+.ovr-ad-banner {
+    display: block;
+    border-radius: var(--ovr-radius-md, 12px);
+    overflow: hidden;
+    box-shadow: var(--ovr-shadow-sm, 0 1px 3px rgba(0,0,0,0.1));
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ovr-ad-banner:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ovr-shadow-md, 0 4px 12px rgba(0,0,0,0.15));
+}
+
+.ovr-ad-banner img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Sidebar placement stacks tighter. */
+.ovr-ad-banners--search_sidebar {
+    gap: 12px;
+}
+
 /* Slide-position dots. */
 .ovr-hero-dots {
     position: absolute;

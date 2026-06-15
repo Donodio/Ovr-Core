@@ -187,6 +187,11 @@ class Plugin {
         $this->modules['storage_offloader'] = new \OVR\Storage\StorageOffloader();
         $this->modules['storage_offloader']->init();
 
+        // Ad banner click tracking (M3 F8) — the tracked redirect runs on the
+        // front end; the [ovr_ad_banner] shortcode is registered separately.
+        $this->modules['ad_banners'] = new \OVR\Frontend\AdBanners();
+        $this->modules['ad_banners']->init();
+
         // Boot admin UI (only inside wp-admin / AJAX).
         if ( is_admin() ) {
             $this->boot_admin();
@@ -239,6 +244,7 @@ class Plugin {
         $this->modules['admin_emails'] = new \OVR\Admin\EmailManagerAdmin();
         $this->modules['admin_search'] = new \OVR\Admin\GlobalSearch();
         $this->modules['admin_hero_slides'] = new \OVR\Admin\HeroSlidesAdmin();
+        $this->modules['admin_ad_banners']  = new \OVR\Admin\AdBannersAdmin();
 
         $this->modules['admin_meta_boxes']->init();
         $this->modules['admin_property_editor']->init();
@@ -262,6 +268,7 @@ class Plugin {
         $this->modules['admin_emails']->init();
         $this->modules['admin_search']->init();
         $this->modules['admin_hero_slides']->init();
+        $this->modules['admin_ad_banners']->init();
     }
 
     /**

@@ -535,6 +535,30 @@ class Database {
             KEY created_at (created_at)
         ) {$charset_collate};" );
 
+        // Ad Banners (M3 F8) — admin-managed promotional banners shown via the
+        // [ovr_ad_banner] shortcode. Each banner: image, link, placement, optional
+        // schedule window, and impression/click counters for analytics.
+        $table_banners = $wpdb->prefix . 'ovr_ad_banners';
+        dbDelta( "CREATE TABLE {$table_banners} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            title varchar(150) NOT NULL DEFAULT '',
+            image_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            link_url varchar(500) NOT NULL DEFAULT '',
+            placement varchar(40) NOT NULL DEFAULT 'homepage',
+            starts_at date DEFAULT NULL,
+            ends_at date DEFAULT NULL,
+            is_enabled tinyint(1) NOT NULL DEFAULT 1,
+            impressions bigint(20) unsigned NOT NULL DEFAULT 0,
+            clicks bigint(20) unsigned NOT NULL DEFAULT 0,
+            sort_order int(11) NOT NULL DEFAULT 0,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY placement (placement),
+            KEY is_enabled (is_enabled),
+            KEY sort_order (sort_order)
+        ) {$charset_collate};" );
+
         // Homepage Hero Slides (M3 F7) — an admin-managed slideshow that feeds the
         // Elementor "OVR Hero Section" widget. Each slide: a background image plus
         // optional per-slide heading/subtitle/CTA. sort_order = display order.

@@ -57,6 +57,14 @@ class ShortcodeManager {
         add_shortcode( 'ovr_search_bar', [ $this, 'shortcode_search_bar' ] );
 
         add_shortcode( 'ovr_dashboard', [ $this, 'shortcode_dashboard' ] );
+
+        // Ad banner placement (M3 F8).
+        add_shortcode( 'ovr_ad_banner', [ $this, 'shortcode_ad_banner' ] );
+    }
+
+    public function shortcode_ad_banner( $atts = [] ): string {
+        $atts = shortcode_atts( [ 'placement' => 'homepage' ], (array) $atts, 'ovr_ad_banner' );
+        return \OVR\Frontend\AdBanners::render( (string) $atts['placement'] );
     }
 
     public function shortcode_login(): string {
