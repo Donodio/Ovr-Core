@@ -63,6 +63,9 @@ $rates_note   = '' !== $rental_type ? $rental_type : __( 'Monthly rates availabl
                  width="400" height="300">
         </a>
 
+        <?php if ( ! empty( $has_video ) ) : ?>
+            <span class="ovr-card-video-flag" aria-hidden="true"><span class="material-symbols-outlined">play_circle</span></span>
+        <?php endif; ?>
         <?php if ( $show_featured_badge && $is_featured ) : ?>
             <span class="ovr-card-badge ovr-badge-featured">
                 <span class="material-symbols-outlined" style="font-size:16px">star</span>

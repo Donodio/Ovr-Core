@@ -21,7 +21,6 @@ $last_sync_ok     = is_array( $last_sync_result ) ? ! empty( $last_sync_result['
 $block_types = [
     'blocked'     => __( 'Blocked', 'ovr-core' ),
     'booked'      => __( 'Booked', 'ovr-core' ),
-    'tentative'   => __( 'Tentative', 'ovr-core' ),
     'maintenance' => __( 'Maintenance', 'ovr-core' ),
 ];
 ?>

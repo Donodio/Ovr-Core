@@ -12,7 +12,9 @@
  * @var int    $post_id      Required. Property post ID.
  * @var array  $gallery      Optional. Array of attachment IDs.
  * @var string $title        Optional. Property title for alt text.
- * @var string $video_url    Optional. Video URL (shows play button overlay).
+ * @var string $video_url    Optional. External video URL (shows play overlay).
+ * @var string $video_src    Optional. Uploaded video file URL (native player).
+ * @var string $video_embed  Optional. YouTube/Vimeo embed URL (iframe player).
  * @var string $panorama_url Optional. 360 panorama URL.
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
@@ -21,7 +23,13 @@ $post_id      = $post_id ?? 0;
 $gallery      = $gallery ?? [];
 $title        = $title ?? get_the_title( $post_id );
 $video_url    = $video_url ?? '';
+$video_src    = $video_src ?? '';
+$video_embed  = $video_embed ?? '';
 $panorama_url = $panorama_url ?? '';
+$captions     = ( isset( $captions ) && is_array( $captions ) ) ? $captions : [];
+
+// Feature B: a video supersedes images as the primary (hero) media.
+$has_video = ( '' !== $video_src ) || ( '' !== $video_embed );
 
 // Ensure we have at minimum the featured image.
 if ( empty( $gallery ) && has_post_thumbnail( $post_id ) ) {
@@ -45,6 +53,12 @@ $get_img = function( $idx, $size = 'large' ) use ( $gallery, $placeholder ) {
     return $url ?: $placeholder;
 };
 
+// Helper: a photo's caption (empty string when none), keyed by attachment id.
+$get_cap = function( $idx ) use ( $gallery, $captions ) {
+    $id = isset( $gallery[ $idx ] ) ? (string) $gallery[ $idx ] : '';
+    return ( '' !== $id && isset( $captions[ $id ] ) ) ? (string) $captions[ $id ] : '';
+};
+
 // Up to three thumbnails sit beneath the main image (indices 1–3).
 $thumb_count   = min( 3, max( 0, $total - 1 ) );
 $has_more      = $total > 4;
@@ -53,29 +67,45 @@ $last_thumb_ix = $thumb_count; // index of the 3rd thumbnail (when present).
 <div class="ovr-gallery" data-ovr-gallery data-post-id="<?php echo esc_attr( $post_id ); ?>">
     <div class="ovr-gallery-grid">
 
-        <!-- Main / Hero Image -->
-        <button type="button"
-                class="ovr-gallery-tile ovr-gallery-main"
-                data-ovr-gallery-open="0"
-                aria-label="<?php esc_attr_e( 'Open photo 1 in gallery', 'ovr-core' ); ?>">
-            <img src="<?php echo esc_url( $get_img( 0, 'large' ) ); ?>"
-                 alt="<?php echo esc_attr( $title ); ?>"
-                 loading="eager"
-                 fetchpriority="high">
+        <!-- Main / Hero Media — video supersedes images when present (Feature B) -->
+        <?php if ( $has_video ) : ?>
+            <div class="ovr-gallery-tile ovr-gallery-main ovr-gallery-video">
+                <?php if ( '' !== $video_src ) : ?>
+                    <video controls preload="metadata" playsinline
+                           poster="<?php echo esc_url( $get_img( 0, 'large' ) ); ?>"
+                           title="<?php echo esc_attr( $title ); ?>">
+                        <source src="<?php echo esc_url( $video_src ); ?>">
+                    </video>
+                <?php else : ?>
+                    <iframe src="<?php echo esc_url( $video_embed ); ?>"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen loading="lazy"
+                            title="<?php esc_attr_e( 'Property video tour', 'ovr-core' ); ?>"></iframe>
+                <?php endif; ?>
+            </div>
+        <?php else : ?>
+            <button type="button"
+                    class="ovr-gallery-tile ovr-gallery-main"
+                    data-ovr-gallery-open="0"
+                    aria-label="<?php esc_attr_e( 'Open photo 1 in gallery', 'ovr-core' ); ?>">
+                <?php $main_cap = $get_cap( 0 ); ?>
+                <img src="<?php echo esc_url( $get_img( 0, 'large' ) ); ?>"
+                     alt="<?php echo esc_attr( '' !== $main_cap ? $main_cap : $title ); ?>"
+                     loading="eager"
+                     fetchpriority="high">
 
-            <?php if ( $video_url ) : ?>
-                <div class="ovr-gallery-overlay-icon" aria-hidden="true">
-                    <span class="material-symbols-outlined" style="font-size:56px;color:#fff">play_circle</span>
-                </div>
-            <?php endif; ?>
+                <?php if ( '' !== $main_cap ) : ?>
+                    <span class="ovr-gallery-caption"><?php echo esc_html( $main_cap ); ?></span>
+                <?php endif; ?>
 
-            <?php if ( $panorama_url ) : ?>
-                <div class="ovr-gallery-panorama-badge" aria-hidden="true">
-                    <span class="material-symbols-outlined" style="font-size:18px">360</span>
-                    <?php esc_html_e( '360°', 'ovr-core' ); ?>
-                </div>
-            <?php endif; ?>
-        </button>
+                <?php if ( $panorama_url ) : ?>
+                    <div class="ovr-gallery-panorama-badge" aria-hidden="true">
+                        <span class="material-symbols-outlined" style="font-size:18px">360</span>
+                        <?php esc_html_e( '360°', 'ovr-core' ); ?>
+                    </div>
+                <?php endif; ?>
+            </button>
+        <?php endif; ?>
 
         <!-- Three thumbnails -->
         <?php if ( $thumb_count > 0 ) : ?>
@@ -142,6 +172,15 @@ $last_thumb_ix = $thumb_count; // index of the 3rd thumbnail (when present).
     .ovr-gallery-main {
         width: 100%;
         height: 520px;
+    }
+    .ovr-gallery-video { background: #000; cursor: default; }
+    .ovr-gallery-video video,
+    .ovr-gallery-video iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+        object-fit: cover;
     }
     .ovr-gallery-thumbs {
         display: grid;

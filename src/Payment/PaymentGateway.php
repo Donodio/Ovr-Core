@@ -27,7 +27,14 @@ interface PaymentGateway {
     /**
      * Start a checkout. Returns a redirect URL or an error.
      *
-     * @param array $args { user_id, plan_slug, amount, currency, return_url, cancel_url }
+     * Generic purchase payload (see the GatewayPayload trait):
+     *   user_id, amount, currency, return_url, cancel_url  — always.
+     *   payment_type  string  'subscription' (default) or e.g. 'listing_upgrade'.
+     *   meta          array   stored verbatim as the payment row's meta_data.
+     *   item_name     string  human label for the line item / receipt.
+     *   plan_slug     string  legacy subscription shortcut (folded into meta).
+     *
+     * @param array $args
      * @return array{success:bool, redirect_url?:string, payment_id?:int, message?:string}
      */
     public function start_checkout( array $args ): array;

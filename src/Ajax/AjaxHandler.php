@@ -46,7 +46,179 @@ class AjaxHandler {
         // Frontend: dashboard profile update.
         add_action( 'admin_post_ovr_update_profile',  [ $this, 'update_profile' ] );
         add_action( 'admin_post_ovr_change_password', [ $this, 'change_password' ] );
-        add_action( 'admin_post_ovr_wallet_topup',    [ $this, 'wallet_topup' ] );
+
+        // Map interaction analytics (M3 F10) — beacon from ovr-search.js.
+        add_action( 'wp_ajax_ovr_map_track', [ $this, 'map_track' ] );
+        add_action( 'wp_ajax_nopriv_ovr_map_track', [ $this, 'map_track' ] );
+
+        // Frontend: direct profile-photo upload (simple, in-house — no Gravatar).
+        add_action( 'wp_ajax_ovr_upload_avatar', [ $this, 'upload_avatar' ] );
+        // Serve the uploaded photo wherever WordPress asks for the user's avatar.
+        add_filter( 'get_avatar_data', [ $this, 'filter_avatar_data' ], 10, 2 );
+    }
+
+    /**
+     * Record a map interaction event (M3 F10). Increments a per-event counter
+     * plus a per-day total in the `ovr_map_stats` option. Whitelisted events
+     * only; nonce-guarded but tolerant (analytics is non-critical).
+     */
+    public function map_track(): void {
+        if ( ! check_ajax_referer( 'ovr_public_nonce', 'nonce', false ) ) {
+            wp_send_json_error( [], 403 );
+        }
+        $event   = sanitize_key( wp_unslash( $_POST['event'] ?? '' ) );
+        $allowed = [ 'map_view', 'marker_click', 'popup_view', 'card_focus' ];
+        if ( ! in_array( $event, $allowed, true ) ) {
+            wp_send_json_error( [], 400 );
+        }
+
+        $stats = get_option( 'ovr_map_stats', [] );
+        if ( ! is_array( $stats ) ) {
+            $stats = [];
+        }
+        $stats['total']          = (int) ( $stats['total'] ?? 0 ) + 1;
+        $stats[ $event ]         = (int) ( $stats[ $event ] ?? 0 ) + 1;
+        $day                     = current_time( 'Y-m-d' );
+        $stats['by_day']         = isset( $stats['by_day'] ) && is_array( $stats['by_day'] ) ? $stats['by_day'] : [];
+        $stats['by_day'][ $day ] = (int) ( $stats['by_day'][ $day ] ?? 0 ) + 1;
+        // Keep only the last 60 days of the daily series so the option stays small.
+        if ( count( $stats['by_day'] ) > 60 ) {
+            ksort( $stats['by_day'] );
+            $stats['by_day'] = array_slice( $stats['by_day'], -60, null, true );
+        }
+
+        update_option( 'ovr_map_stats', $stats, false );
+        wp_send_json_success();
+    }
+
+    /**
+     * Resolve a custom uploaded avatar URL for a user, replacing Gravatar.
+     *
+     * @param array $args        Avatar args (includes 'url').
+     * @param mixed $id_or_email User ID, WP_User, WP_Post, WP_Comment, or email.
+     * @return array
+     */
+    public function filter_avatar_data( array $args, $id_or_email ): array {
+        $user_id = 0;
+        if ( is_numeric( $id_or_email ) ) {
+            $user_id = (int) $id_or_email;
+        } elseif ( $id_or_email instanceof \WP_User ) {
+            $user_id = (int) $id_or_email->ID;
+        } elseif ( $id_or_email instanceof \WP_Post ) {
+            $user_id = (int) $id_or_email->post_author;
+        } elseif ( $id_or_email instanceof \WP_Comment ) {
+            $user_id = (int) $id_or_email->user_id;
+        } elseif ( is_string( $id_or_email ) && is_email( $id_or_email ) ) {
+            $u = get_user_by( 'email', $id_or_email );
+            if ( $u ) {
+                $user_id = (int) $u->ID;
+            }
+        }
+
+        if ( $user_id ) {
+            $att = (int) get_user_meta( $user_id, 'ovr_avatar_id', true );
+            if ( $att ) {
+                $url = wp_get_attachment_image_url( $att, 'thumbnail' );
+                if ( $url ) {
+                    $args['url']          = $url;
+                    $args['found_avatar'] = true;
+                    return $args;
+                }
+            }
+        }
+
+        // No locally-uploaded photo → serve a locally-generated initials avatar.
+        // This deliberately replaces the Gravatar fallback so the site never
+        // calls an external photo provider (no third-party, no network request).
+        $args['url']          = self::local_default_avatar( $user_id, (int) ( $args['size'] ?? 96 ) );
+        $args['found_avatar'] = true;
+
+        return $args;
+    }
+
+    /**
+     * Build a self-contained (data-URI) initials avatar so we never fall back
+     * to Gravatar. Fully local — no external request is ever made.
+     */
+    private static function local_default_avatar( int $user_id, int $size = 96 ): string {
+        $size = $size > 0 ? $size : 96;
+
+        $name = '';
+        if ( $user_id ) {
+            $u = get_userdata( $user_id );
+            if ( $u ) {
+                $name = trim( (string) $u->display_name );
+            }
+        }
+
+        $initial = '?';
+        if ( '' !== $name ) {
+            $initial = function_exists( 'mb_substr' )
+                ? mb_strtoupper( mb_substr( $name, 0, 1 ) )
+                : strtoupper( substr( $name, 0, 1 ) );
+        }
+
+        // Deterministic brand-aligned background colour per user.
+        $palette = [ '#006666', '#00714e', '#1f4e79', '#7a4f9e', '#b4530a', '#0b6e75' ];
+        $bg      = $palette[ $user_id % count( $palette ) ];
+        $fs      = (int) round( $size * 0.46 );
+
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '" viewBox="0 0 ' . $size . ' ' . $size . '">'
+            . '<rect width="' . $size . '" height="' . $size . '" fill="' . $bg . '"/>'
+            . '<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="600" font-size="' . $fs . '" fill="#ffffff">'
+            . htmlspecialchars( $initial, ENT_QUOTES )
+            . '</text></svg>';
+
+        return 'data:image/svg+xml;base64,' . base64_encode( $svg );
+    }
+
+    /**
+     * Handle a direct profile-photo upload from the dashboard.
+     */
+    public function upload_avatar(): void {
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'message' => __( 'Please sign in.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! check_ajax_referer( 'ovr_avatar_action', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+        if ( empty( $_FILES['avatar']['name'] ) ) {
+            wp_send_json_error( [ 'message' => __( 'No file received.', 'ovr-core' ) ], 400 );
+        }
+
+        // Validate: image only, max 5MB.
+        $allowed = [ 'image/jpeg', 'image/png', 'image/webp', 'image/gif' ];
+        $type    = (string) ( wp_check_filetype( (string) $_FILES['avatar']['name'] )['type'] ?? '' );
+        if ( ! in_array( $type, $allowed, true ) ) {
+            wp_send_json_error( [ 'message' => __( 'Please upload a JPG, PNG, WebP, or GIF image.', 'ovr-core' ) ], 400 );
+        }
+        if ( (int) ( $_FILES['avatar']['size'] ?? 0 ) > 5 * 1024 * 1024 ) {
+            wp_send_json_error( [ 'message' => __( 'Image must be 5MB or smaller.', 'ovr-core' ) ], 400 );
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $att_id = media_handle_upload( 'avatar', 0 );
+        if ( is_wp_error( $att_id ) ) {
+            wp_send_json_error( [ 'message' => $att_id->get_error_message() ], 500 );
+        }
+
+        $user_id = get_current_user_id();
+
+        // Clean up a previously uploaded avatar to avoid orphaned media.
+        $previous = (int) get_user_meta( $user_id, 'ovr_avatar_id', true );
+        if ( $previous && $previous !== (int) $att_id ) {
+            wp_delete_attachment( $previous, true );
+        }
+
+        update_user_meta( $user_id, 'ovr_avatar_id', (int) $att_id );
+
+        wp_send_json_success( [
+            'url'     => wp_get_attachment_image_url( $att_id, 'thumbnail' ),
+            'message' => __( 'Profile photo updated.', 'ovr-core' ),
+        ] );
     }
 
     /**
@@ -95,51 +267,6 @@ class AjaxHandler {
     }
 
     /**
-     * Wallet topup — create a pending payment row + redirect to gateway.
-     */
-    public function wallet_topup(): void {
-        $referer = wp_get_referer() ?: home_url( '/' );
-
-        if ( ! is_user_logged_in() ) {
-            wp_safe_redirect( $referer );
-            exit;
-        }
-        if ( ! isset( $_POST['ovr_topup_nonce'] ) ||
-             ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ovr_topup_nonce'] ) ), 'ovr_topup_action' ) ) {
-            wp_safe_redirect( add_query_arg( 'tab', 'balance', $referer ) );
-            exit;
-        }
-
-        $amount  = (float) ( $_POST['amount'] ?? 0 );
-        $gateway = sanitize_key( $_POST['gateway'] ?? 'stripe' );
-
-        if ( $amount <= 0 ) {
-            wp_safe_redirect( add_query_arg( 'tab', 'balance', $referer ) );
-            exit;
-        }
-
-        // Record a pending topup row in wp_ovr_payments. The gateway webhook
-        // (Phase 2) will flip status to 'completed' and Wallet listens for
-        // ovr_payment_completed to credit the balance.
-        global $wpdb;
-        $table   = $wpdb->prefix . 'ovr_payments';
-        $user_id = get_current_user_id();
-        $wpdb->insert( $table, [
-            'user_id'        => $user_id,
-            'payment_type'   => 'topup',
-            'amount'         => $amount,
-            'currency'       => 'USD',
-            'gateway'        => $gateway,
-            'transaction_id' => '',
-            'status'         => 'pending',
-            'meta_data'      => wp_json_encode( [ 'kind' => 'wallet_topup' ] ),
-        ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
-
-        wp_safe_redirect( add_query_arg( [ 'tab' => 'balance', 'topup_started' => '1' ], $referer ) );
-        exit;
-    }
-
-    /**
      * Profile update from the dashboard Profile tab (non-AJAX).
      */
     public function update_profile(): void {
@@ -156,15 +283,33 @@ class AjaxHandler {
         }
 
         $user_id = get_current_user_id();
-        $first   = sanitize_text_field( wp_unslash( $_POST['first_name'] ?? '' ) );
-        $last    = sanitize_text_field( wp_unslash( $_POST['last_name']  ?? '' ) );
-        $email   = sanitize_email(     wp_unslash( $_POST['email']      ?? '' ) );
-        $phone   = sanitize_text_field( wp_unslash( $_POST['phone']      ?? '' ) );
+        $email   = sanitize_email(      wp_unslash( $_POST['email']   ?? '' ) );
+        $phone   = sanitize_text_field( wp_unslash( $_POST['phone']   ?? '' ) );
+        $address = sanitize_text_field( wp_unslash( $_POST['address'] ?? '' ) );
+        $bio     = sanitize_textarea_field( wp_unslash( $_POST['bio'] ?? '' ) );
 
         $update = [ 'ID' => $user_id ];
-        if ( $first ) $update['first_name'] = $first;
-        if ( $last )  $update['last_name']  = $last;
+
+        // The profile form uses a single "Full Name" field; split it into
+        // first/last for compatibility and keep display_name in sync. Fall back
+        // to the legacy first_name/last_name fields if a full name wasn't sent.
+        $full = sanitize_text_field( wp_unslash( $_POST['full_name'] ?? '' ) );
+        if ( '' !== $full ) {
+            $parts                 = preg_split( '/\s+/', $full, 2 );
+            $update['first_name']  = $parts[0] ?? '';
+            $update['last_name']   = $parts[1] ?? '';
+            $update['display_name']= $full;
+        } else {
+            $first = sanitize_text_field( wp_unslash( $_POST['first_name'] ?? '' ) );
+            $last  = sanitize_text_field( wp_unslash( $_POST['last_name']  ?? '' ) );
+            if ( $first ) $update['first_name'] = $first;
+            if ( $last )  $update['last_name']  = $last;
+        }
+
         if ( $email && is_email( $email ) ) $update['user_email'] = $email;
+
+        // WordPress stores the bio in the user's `description` field.
+        $update['description'] = $bio;
 
         wp_update_user( $update );
 
@@ -172,6 +317,12 @@ class AjaxHandler {
             update_user_meta( $user_id, 'ovr_phone', $phone );
         } else {
             delete_user_meta( $user_id, 'ovr_phone' );
+        }
+
+        if ( '' !== $address ) {
+            update_user_meta( $user_id, 'ovr_address', $address );
+        } else {
+            delete_user_meta( $user_id, 'ovr_address' );
         }
 
         wp_safe_redirect( add_query_arg( [ 'tab' => 'profile', 'profile_saved' => '1' ], $referer ) );
@@ -182,16 +333,22 @@ class AjaxHandler {
      * Manual iCal sync trigger from the property edit screen.
      */
     public function ical_sync(): void {
+        // Accept the admin meta-box nonce, the public nonce, or the landlord
+        // listing-editor nonce (the frontend editor now offers iCal sync too).
         if ( ! check_ajax_referer( 'ovr_admin_nonce', 'nonce', false ) &&
-             ! check_ajax_referer( 'ovr_public_nonce', 'nonce', false ) ) {
+             ! check_ajax_referer( 'ovr_public_nonce', 'nonce', false ) &&
+             ! check_ajax_referer( 'ovr_listing_action', 'nonce', false ) ) {
             wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
         }
 
         $post_id = absint( $_POST['post_id'] ?? 0 );
         if ( ! $post_id ) {
-            wp_send_json_error( [ 'message' => __( 'Missing property ID.', 'ovr-core' ) ], 400 );
+            wp_send_json_error( [ 'message' => __( 'Please save the listing first, then sync.', 'ovr-core' ) ], 400 );
         }
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        // Allow the listing's owner (landlord) as well as users with edit_post.
+        $post = get_post( $post_id );
+        $owns = $post && (int) $post->post_author === get_current_user_id();
+        if ( ! current_user_can( 'edit_post', $post_id ) && ! $owns ) {
             wp_send_json_error( [ 'message' => __( 'You cannot edit this property.', 'ovr-core' ) ], 403 );
         }
 
@@ -459,11 +616,10 @@ class AjaxHandler {
         if ( ! $property_id ) {
             return new \WP_Error( 'invalid_property', __( 'Property is required.', 'ovr-core' ), 400 );
         }
-        if ( empty( $name ) || empty( $email ) ) {
-            return new \WP_Error( 'missing_fields', __( 'Please fill in all required fields.', 'ovr-core' ), 400 );
-        }
-        if ( 'direct' !== $booking_mode && empty( $message ) ) {
-            return new \WP_Error( 'missing_fields', __( 'Message is required for inquiries.', 'ovr-core' ), 400 );
+        // Phase 23: Name, Email, Phone, and Message are all required for every
+        // inquiry so the owner always receives full contact details.
+        if ( empty( $name ) || empty( $email ) || empty( $phone ) || empty( $message ) ) {
+            return new \WP_Error( 'missing_fields', __( 'Please provide your name, email, phone, and a message.', 'ovr-core' ), 400 );
         }
         if ( ! is_email( $email ) ) {
             return new \WP_Error( 'bad_email', __( 'Please enter a valid email address.', 'ovr-core' ), 400 );

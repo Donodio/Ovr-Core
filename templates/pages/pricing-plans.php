@@ -74,35 +74,24 @@ if ( 'cards' === $layout && $columns >= 1 && $columns <= 5 ) {
                         <?php endforeach; ?>
                     </ul>
 
-                    <?php if ( is_user_logged_in() ) : ?>
+                    <?php
+                    $btn_class = 'ovr-btn ' . ( $is_popular ? 'ovr-btn-secondary' : 'ovr-btn-outline' ) . ' ovr-btn-full ovr-btn-pill';
+                    if ( ! is_user_logged_in() ) : ?>
+                        <a href="<?php echo esc_url( \OVR\Core\Pages::get_page_url( 'ovr_page_register' ) ); ?>" class="<?php echo esc_attr( $btn_class ); ?>">
+                            <?php esc_html_e( 'Get Started', 'ovr-core' ); ?>
+                        </a>
+                    <?php elseif ( $is_free ) : ?>
                         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0">
                             <input type="hidden" name="action" value="ovr_start_checkout">
                             <input type="hidden" name="plan" value="<?php echo esc_attr( $plan['slug'] ); ?>">
                             <?php wp_nonce_field( 'ovr_checkout_action', 'ovr_checkout_nonce' ); ?>
-
-                            <?php if ( ! $is_free ) : ?>
-                                <select name="gateway"
-                                        class="ovr-form-select"
-                                        style="width:100%;padding:8px 12px;font-size:13px;margin-bottom:8px;border-radius:var(--ovr-radius-md);border:1px solid var(--ovr-outline-variant)">
-                                    <option value="stripe"><?php esc_html_e( 'Pay with Stripe', 'ovr-core' ); ?></option>
-                                    <option value="paypal"><?php esc_html_e( 'Pay with PayPal', 'ovr-core' ); ?></option>
-                                    <option value="authorize_net"><?php esc_html_e( 'Pay with Authorize.net', 'ovr-core' ); ?></option>
-                                    <option value="wallet"><?php esc_html_e( 'Pay from Wallet', 'ovr-core' ); ?></option>
-                                </select>
-                            <?php endif; ?>
-
-                            <button type="submit"
-                                    class="ovr-btn <?php echo $is_popular ? 'ovr-btn-secondary' : 'ovr-btn-outline'; ?> ovr-btn-full ovr-btn-pill"
-                                    data-plan="<?php echo esc_attr( $plan['slug'] ); ?>">
-                                <?php echo $is_free
-                                    ? esc_html__( 'Activate Free Plan', 'ovr-core' )
-                                    : esc_html__( 'Select Plan', 'ovr-core' ); ?>
+                            <button type="submit" class="<?php echo esc_attr( $btn_class ); ?>" data-plan="<?php echo esc_attr( $plan['slug'] ); ?>">
+                                <?php esc_html_e( 'Activate Free Plan', 'ovr-core' ); ?>
                             </button>
                         </form>
                     <?php else : ?>
-                        <a href="<?php echo esc_url( \OVR\Core\Pages::get_page_url( 'ovr_page_register' ) ); ?>"
-                           class="ovr-btn <?php echo $is_popular ? 'ovr-btn-secondary' : 'ovr-btn-outline'; ?> ovr-btn-full ovr-btn-pill">
-                            <?php esc_html_e( 'Get Started', 'ovr-core' ); ?>
+                        <a href="<?php echo esc_url( add_query_arg( 'plan', $plan['slug'], \OVR\Core\Pages::get_page_url( 'ovr_page_checkout' ) ) ); ?>" class="<?php echo esc_attr( $btn_class ); ?>">
+                            <?php esc_html_e( 'Select Plan', 'ovr-core' ); ?>
                         </a>
                     <?php endif; ?>
                 </div>

@@ -32,8 +32,10 @@
             if (existing) existing.value = '1';
         }
 
-        // Submit immediately on checkbox/radio change (no debounce — instant feel).
-        form.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(function (input) {
+        // Submit immediately on checkbox/radio change (no debounce — instant feel),
+        // EXCEPT the multi-select facet checkboxes (.ovr-mf-check): those let the
+        // user tick several values and submit once via the "Apply Filters" button.
+        form.querySelectorAll('input[type="checkbox"]:not(.ovr-mf-check), input[type="radio"]').forEach(function (input) {
             input.addEventListener('change', function () {
                 resetPaged();
                 form.submit();
@@ -120,10 +122,296 @@
         }
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupMobileDrawer);
-    } else {
+    /* ====================================================================
+       SEARCH "APP-SHELL" SCROLL (desktop ≥1025px)
+       The CSS pins .ovr-search-page to fill the viewport once the navy
+       Featured-cities bar scrolls away, then each column scrolls on its own.
+       Here we just measure the height to leave at the top — the sticky site
+       header (and the WP admin bar, if present) — and expose it to the CSS as
+       --ss-shell-top so the pinned area sits flush beneath the header.
+       ==================================================================== */
+    function setupSearchShell() {
+        var root = document.querySelector('.ovr-search-stitch');
+        if (!root) return;
+        var mq = window.matchMedia('(min-width: 1025px)');
+
+        function update() {
+            if (!mq.matches) {
+                root.style.removeProperty('--ss-shell-top');
+                return;
+            }
+            var top = 0;
+            // Theme header is `position: sticky; top: 0` (Tailwind "sticky" class).
+            var header = document.querySelector('header.sticky');
+            if (header) top += header.offsetHeight;
+            // Logged-in admin bar is fixed at the top and overlays content.
+            var adminBar = document.getElementById('wpadminbar');
+            if (adminBar && window.getComputedStyle(adminBar).position === 'fixed') {
+                top += adminBar.offsetHeight;
+            }
+            root.style.setProperty('--ss-shell-top', top + 'px');
+        }
+
+        update();
+        window.addEventListener('resize', update);
+        window.addEventListener('load', update);
+        if (mq.addEventListener) {
+            mq.addEventListener('change', update);
+        } else if (mq.addListener) {
+            mq.addListener(update); // older Safari
+        }
+    }
+
+    /* ====================================================================
+       MAP VIEW (Leaflet / OpenStreetMap)
+       Reads listing coordinates from .ovr-map-view[data-ovr-map] and plots a
+       marker per listing, fitting the map to all of them. Leaflet is only on
+       the page when ?view=map is active (enqueued in Assets.php).
+       ==================================================================== */
+    function setupMap() {
+        var el = document.querySelector('.ovr-map-view');
+        if (!el || typeof window.L === 'undefined') return;
+
+        var points;
+        try {
+            points = JSON.parse(el.getAttribute('data-ovr-map') || '[]');
+        } catch (e) {
+            points = [];
+        }
+        // No mapped listings → leave the CSS empty-state message in place,
+        // but still wire the mobile Map/List switch.
+        if (!points.length) { setupMapSwitch(); return; }
+
+        var symbol = el.getAttribute('data-symbol') || '$';
+
+        var map = window.L.map(el, { scrollWheelZoom: true, zoomControl: true });
+
+        // Bright, playful basemap — standard OpenStreetMap raster tiles render
+        // vivid greens for parks, blue water and colored roads (far livelier
+        // than the muted CartoDB pastels).
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            subdomains: 'abc',
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Branded teardrop pin (CSS divIcon), styled per listing (M3 F10):
+        //  - a property-type class drives the pin colour
+        //  - .is-featured adds a gold ring
+        //  - .is-booked dims the pin for listings unavailable tonight
+        // Pins are cached by their class signature so identical listings reuse
+        // one icon instance.
+        var pinCache = {};
+        function pinFor(p) {
+            var type = (p.type || 'default').toString().replace(/[^a-z0-9_-]/gi, '');
+            var classes = 'ovr-map-pin ovr-map-pin--type-' + type;
+            if (p.featured) classes += ' is-featured';
+            if (p.avail === 'booked') classes += ' is-booked';
+            if (pinCache[classes]) return pinCache[classes];
+            var icon = window.L.divIcon({
+                className: classes,
+                html: '<span class="ovr-map-pin-pin"></span>',
+                iconSize: [30, 38],
+                iconAnchor: [15, 34],
+                popupAnchor: [0, -32]
+            });
+            pinCache[classes] = icon;
+            return icon;
+        }
+
+        // Cluster when the markercluster plugin is available; otherwise plain.
+        var useCluster = typeof window.L.markerClusterGroup === 'function';
+        var layer = useCluster
+            ? window.L.markerClusterGroup({
+                showCoverageOnHover: false,
+                maxClusterRadius: 50,
+                spiderfyOnMaxZoom: true,
+                chunkedLoading: true
+            })
+            : window.L.layerGroup();
+
+        var byId   = {};   // point id -> marker
+        var bounds = [];
+
+        var listcol = document.querySelector('.ovr-map-listcol');
+
+        function highlightCard(id) {
+            if (!listcol) return;
+            var cards = listcol.querySelectorAll('.ovr-map-cardwrap');
+            Array.prototype.forEach.call(cards, function (c) {
+                c.classList.toggle('is-active', c.getAttribute('data-ovr-card-id') === id);
+            });
+            var active = listcol.querySelector('.ovr-map-cardwrap[data-ovr-card-id="' + id + '"]');
+            if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        points.forEach(function (p) {
+            var lat = parseFloat(p.lat);
+            var lng = parseFloat(p.lng);
+            // Guard against missing or out-of-range coordinates. A single bad
+            // point (e.g. a longitude that lost its decimal) would otherwise
+            // stretch fitBounds across the whole globe and shrink the map.
+            if (isNaN(lat) || isNaN(lng)) return;
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+            var id = String(p.id);
+            var marker = window.L.marker([lat, lng], { icon: pinFor(p) });
+            marker.bindPopup(buildPopup(p, symbol));
+            marker.on('click', function () { highlightCard(id); trackMap('marker_click'); });
+            marker.on('popupopen', function () { trackMap('popup_view'); });
+            byId[id] = marker;
+            layer.addLayer(marker);
+            bounds.push([lat, lng]);
+        });
+
+        map.addLayer(layer);
+        trackMap('map_view');
+        addLegend(map);
+
+        if (bounds.length === 1) {
+            map.setView(bounds[0], 14);
+        } else if (bounds.length > 1) {
+            map.fitBounds(bounds, { padding: [40, 40] });
+        } else {
+            map.setView([0, 0], 2); // markers all had invalid coords (defensive)
+        }
+
+        // Tiles can render at the wrong size if the container was measured
+        // before layout settled; nudge Leaflet once things are stable.
+        setTimeout(function () { map.invalidateSize(); }, 200);
+
+        // Card → pin: hover highlights the pin, click focuses & opens it.
+        function focusMarker(id) {
+            var marker = byId[id];
+            if (!marker) return;
+            if (useCluster && typeof layer.zoomToShowLayer === 'function') {
+                layer.zoomToShowLayer(marker, function () { marker.openPopup(); });
+            } else {
+                map.panTo(marker.getLatLng());
+                marker.openPopup();
+            }
+        }
+
+        if (listcol) {
+            var wraps = listcol.querySelectorAll('.ovr-map-cardwrap');
+            Array.prototype.forEach.call(wraps, function (w) {
+                var id = w.getAttribute('data-ovr-card-id');
+                w.addEventListener('mouseenter', function () {
+                    var m = byId[id]; if (m && m._icon) m._icon.classList.add('is-hover');
+                });
+                w.addEventListener('mouseleave', function () {
+                    var m = byId[id]; if (m && m._icon) m._icon.classList.remove('is-hover');
+                });
+                w.addEventListener('click', function (e) {
+                    if (e.target.closest && e.target.closest('a')) return; // let card links work
+                    focusMarker(id);
+                });
+            });
+        }
+
+        setupMapSwitch(function () { map.invalidateSize(); });
+    }
+
+    /* Mobile-only Map/List toggle. On desktop both panes show and the switch
+       is hidden via CSS; on small screens it flips between them. */
+    function setupMapSwitch(onShowMap) {
+        var split = document.querySelector('[data-ovr-map-split]');
+        if (!split || split.getAttribute('data-switch-ready') === '1') return;
+        var btns = split.querySelectorAll('.ovr-map-switch-btn');
+        if (!btns.length) return;
+        split.setAttribute('data-switch-ready', '1');
+
+        Array.prototype.forEach.call(btns, function (btn) {
+            btn.addEventListener('click', function () {
+                var show = btn.getAttribute('data-show');
+                split.classList.toggle('show-map', show === 'map');
+                split.classList.toggle('show-list', show === 'list');
+                Array.prototype.forEach.call(btns, function (b) {
+                    b.classList.toggle('is-active', b === btn);
+                });
+                if (show === 'map' && typeof onShowMap === 'function') {
+                    setTimeout(onShowMap, 60);
+                }
+            });
+        });
+    }
+
+    function buildPopup(p, symbol) {
+        var price = p.price > 0
+            ? symbol + Number(p.price).toLocaleString() + ' / night'
+            : 'Seasonal Rates';
+        var specs = [];
+        if (p.beds)  specs.push(p.beds + ' bd');
+        if (p.baths) specs.push(p.baths + ' ba');
+
+        var html = '<div class="ovr-map-popup">';
+        if (p.thumb) {
+            html += '<img src="' + encodeURI(p.thumb) + '" alt="">';
+        }
+        html += '<div class="ovr-map-popup-body">';
+        html += '<div class="ovr-map-popup-title">' + escapeHtml(p.title) + '</div>';
+        if (specs.length) {
+            html += '<div class="ovr-map-popup-specs">' + escapeHtml(specs.join(' · ')) + '</div>';
+        }
+        html += '<div class="ovr-map-popup-price">' + escapeHtml(price) + '</div>';
+        html += '<a class="ovr-map-popup-link" href="' + encodeURI(p.url) + '">View listing →</a>';
+        html += '</div></div>';
+        return html;
+    }
+
+    function escapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    /* Map interaction analytics (M3 F10). Fires a fire-and-forget beacon to the
+       ovr_map_track AJAX endpoint, which increments per-action counters. Each
+       action is counted at most once per page view for views, but every marker
+       interaction is sent. Silently no-ops when ovrData is unavailable. */
+    var trackedOnce = {};
+    function trackMap(action) {
+        if (typeof window.ovrData === 'undefined' || !window.ovrData.ajaxUrl) return;
+        if (action === 'map_view') {
+            if (trackedOnce[action]) return;
+            trackedOnce[action] = true;
+        }
+        var body = 'action=ovr_map_track&event=' + encodeURIComponent(action) +
+            '&nonce=' + encodeURIComponent(window.ovrData.nonce || '');
+        try {
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(window.ovrData.ajaxUrl, new Blob([body], { type: 'application/x-www-form-urlencoded' }));
+            } else {
+                fetch(window.ovrData.ajaxUrl, { method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body, keepalive: true });
+            }
+        } catch (e) { /* analytics must never break the map */ }
+    }
+
+    /* A compact legend explaining the pin colours / states. */
+    function addLegend(map) {
+        if (!window.L || !window.L.control) return;
+        var legend = window.L.control({ position: 'bottomright' });
+        legend.onAdd = function () {
+            var div = window.L.DomUtil.create('div', 'ovr-map-legend');
+            div.innerHTML =
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-featured"></i>Featured</span>' +
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot"></i>Available</span>' +
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-booked"></i>Booked tonight</span>';
+            return div;
+        };
+        legend.addTo(map);
+    }
+
+    function initSearchUI() {
         setupMobileDrawer();
+        setupSearchShell();
+        setupMap();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSearchUI);
+    } else {
+        initSearchUI();
     }
 
     /* ====================================================================

@@ -277,6 +277,46 @@
     font-size: 18px;
 }
 
+/* Contrast hardening — guarantee legible button text regardless of the host
+   theme's link colors (themes often style `a` with higher specificity than a
+   single class, which made dark buttons render dark "camouflaged" text). */
+.ovr-btn-primary,
+.ovr-btn-primary:link,
+.ovr-btn-primary:visited,
+.ovr-btn-primary:hover,
+.ovr-btn-primary:focus,
+.ovr-btn-primary:active,
+.ovr-btn-primary * {
+    color: var(--ovr-on-primary) !important;
+}
+.ovr-btn-secondary,
+.ovr-btn-secondary:link,
+.ovr-btn-secondary:visited,
+.ovr-btn-secondary:hover,
+.ovr-btn-secondary:focus,
+.ovr-btn-secondary:active,
+.ovr-btn-secondary * {
+    color: var(--ovr-on-secondary) !important;
+}
+.ovr-btn-gold,
+.ovr-btn-gold:link,
+.ovr-btn-gold:visited,
+.ovr-btn-gold:hover,
+.ovr-btn-gold:focus,
+.ovr-btn-gold:active,
+.ovr-btn-gold * {
+    color: var(--ovr-ink-text) !important;
+}
+.ovr-btn-outline,
+.ovr-btn-outline:link,
+.ovr-btn-outline:visited,
+.ovr-btn-outline:hover,
+.ovr-btn-outline:focus,
+.ovr-btn-outline:active,
+.ovr-btn-outline * {
+    color: var(--ovr-primary) !important;
+}
+
 /* ==========================================================================
    6. Cards
    ========================================================================== */
@@ -647,6 +687,143 @@
     position: absolute;
     inset: 0;
     background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent, rgba(0,0,0,0.2));
+}
+
+/* ── Hero Slideshow (M3 F7) — admin-managed slides feeding the hero widget ── */
+.ovr-hero-slideshow .ovr-hero-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+}
+
+.ovr-hero-slideshow .ovr-hero-slide.is-active {
+    opacity: 1;
+}
+
+.ovr-hero-slideshow .ovr-hero-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Per-slide captions are stacked; only the active one shows. The wrapper holds
+   its height from the tallest caption so the hero doesn't jump between slides. */
+.ovr-hero-captions {
+    display: grid;
+}
+
+.ovr-hero-captions .ovr-hero-caption {
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.8s ease-in-out;
+}
+
+.ovr-hero-captions .ovr-hero-caption.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ovr-hero-captions .ovr-hero-caption h1 {
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    margin-bottom: 16px;
+}
+
+.ovr-hero-captions .ovr-hero-caption p {
+    color: #ffffff;
+    font-size: 18px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    margin-bottom: 32px;
+}
+
+/* ── Accessibility (M3) ── */
+/* Visible keyboard-focus ring for any OVR interactive element that doesn't
+   already define one. Mouse users are unaffected (:focus-visible). */
+.ovr-wrap a:focus-visible,
+.ovr-wrap button:focus-visible,
+.ovr-wrap input:focus-visible,
+.ovr-wrap select:focus-visible,
+.ovr-wrap textarea:focus-visible,
+.ovr-wrap [tabindex]:focus-visible,
+.ovr-ad-banner:focus-visible,
+.ovr-hero-dots button:focus-visible,
+.ovr-map-legend:focus-visible {
+    outline: 3px solid var(--ovr-secondary, #b8860b);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Screen-reader-only text utility. */
+.ovr-sr-only {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ── Ad Banners (M3 F8) ── */
+.ovr-ad-banners {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 24px 0;
+}
+
+.ovr-ad-banner {
+    display: block;
+    border-radius: var(--ovr-radius-md, 12px);
+    overflow: hidden;
+    box-shadow: var(--ovr-shadow-sm, 0 1px 3px rgba(0,0,0,0.1));
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ovr-ad-banner:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ovr-shadow-md, 0 4px 12px rgba(0,0,0,0.15));
+}
+
+.ovr-ad-banner img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Sidebar placement stacks tighter. */
+.ovr-ad-banners--search_sidebar {
+    gap: 12px;
+}
+
+/* Slide-position dots. */
+.ovr-hero-dots {
+    position: absolute;
+    bottom: 22px;
+    left: 0;
+    right: 0;
+    z-index: 12;
+    display: flex;
+    gap: 9px;
+    justify-content: center;
+}
+
+.ovr-hero-dots button {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+}
+
+.ovr-hero-dots button.is-active {
+    background: #ffffff;
+    transform: scale(1.25);
 }
 
 .ovr-hero-content {
@@ -2148,16 +2325,17 @@
 .ovr-detail-subbar-inner {
     max-width: var(--ovr-container-max);
     margin: 0 auto;
-    padding: 12px var(--ovr-gutter);
+    padding: 16px var(--ovr-gutter);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
 }
 .ovr-detail-subbar-main {
     display: flex;
-    align-items: center;
-    gap: 20px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
     min-width: 0;
 }
 .ovr-detail-back {
@@ -2174,24 +2352,40 @@
 .ovr-detail-back .material-symbols-outlined { font-size: 20px; }
 .ovr-detail-titlewrap {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 6px;
     min-width: 0;
+}
+.ovr-detail-idrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 .ovr-detail-id {
     flex-shrink: 0;
     background: var(--ovr-gold);
     color: var(--ovr-ink-text);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    padding: 4px 12px;
+    border-radius: var(--ovr-radius-sm);
+}
+.ovr-detail-sectionchip {
+    flex-shrink: 0;
     font-size: 13px;
     font-weight: 700;
-    letter-spacing: 0.03em;
-    padding: 3px 10px;
-    border-radius: var(--ovr-radius-sm);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff;
+    opacity: 0.92;
 }
 .ovr-detail-title {
     margin: 0;
-    font-size: 18px;
-    font-weight: 700;
+    font-size: 26px;
+    line-height: 1.2;
+    font-weight: 800;
     color: #fff;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2242,6 +2436,21 @@
     transition: box-shadow var(--ovr-transition), transform var(--ovr-transition);
 }
 .ovr-single-property .ovr-gallery-tile:hover { box-shadow: 0 12px 28px rgba(0, 9, 97, 0.16); }
+.ovr-gallery-main { position: relative; }
+.ovr-gallery-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 28px 16px 12px;
+    background: linear-gradient(to top, rgba(0, 9, 97, 0.78), rgba(0, 9, 97, 0));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    line-height: 1.4;
+    pointer-events: none;
+}
 @media (max-width: 1024px) {
     .ovr-single-property .ovr-gallery-main { height: 420px; }
     .ovr-single-property .ovr-gallery-thumb { height: 150px; }
@@ -2586,6 +2795,7 @@
 .ovr-rates-table tbody tr:last-child td { border-bottom: none; }
 .ovr-rates-season { color: var(--ovr-on-surface); font-weight: 600; }
 .ovr-rates-amount { color: var(--ovr-primary); font-weight: 700; }
+.ovr-rates-empty { margin: 0; padding: 18px 4px; color: var(--ovr-on-surface-variant); font-size: 16px; font-style: italic; }
 
 /* ── Tabs ── */
 .ovr-tabs-nav {
@@ -2776,8 +2986,8 @@
     .ovr-detail-subbar-inner { padding: 10px var(--ovr-gutter); gap: 10px; }
     .ovr-detail-subbar-main { gap: 10px; flex-wrap: wrap; }
     .ovr-detail-back { font-size: 14px; }
-    .ovr-detail-title { font-size: 16px; }
-    .ovr-detail-id { font-size: 12px; }
+    .ovr-detail-title { font-size: 20px; white-space: normal; }
+    .ovr-detail-id { font-size: 13px; }
     .ovr-detail-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
     .ovr-detail-spec { justify-content: flex-start; }
     .ovr-detail-spec + .ovr-detail-spec { border-left: none; }
@@ -2795,7 +3005,7 @@
 @media (max-width: 400px) {
     .ovr-detail-specs { grid-template-columns: 1fr; }
     .ovr-detail-tools .ovr-detail-tool { width: 36px; height: 36px; }
-    .ovr-detail-title { font-size: 15px; }
+    .ovr-detail-title { font-size: 18px; }
 }
 
 /* ==========================================================================
@@ -2877,8 +3087,8 @@
     border-radius: var(--ovr-radius-lg);
     color: #fff;
     box-sizing: border-box;
-    height: 56px;            /* fixed → deterministic alignment with the featured panel */
-    padding: 0 16px;
+    height: 66px;            /* fixed → deterministic alignment with the featured panel */
+    padding: 5px 16px;       /* slightly roomier top/bottom */
     box-shadow: var(--ovr-shadow-sm);
 }
 .ovr-search-stitch .ovr-results-title {
@@ -2886,8 +3096,9 @@
     text-transform: uppercase;
     letter-spacing: 0.02em;
     font-size: 19px;
+    line-height: 1.1;        /* tighter so the count sits closer beneath */
 }
-.ovr-search-stitch .ovr-results-count { color: rgba(255, 255, 255, 0.8); margin-top: 1px; }
+.ovr-search-stitch .ovr-results-count { color: rgba(255, 255, 255, 0.8); margin-top: 0; }
 
 .ovr-search-stitch .ovr-view-group {
     background: rgba(255, 255, 255, 0.12);
@@ -2907,6 +3118,11 @@
 .ovr-search-stitch .ovr-view-toggle:hover { background: rgba(255, 255, 255, 0.2); }
 .ovr-search-stitch .ovr-view-toggle.is-active { background: #fff; color: var(--ss-navy); }
 .ovr-search-stitch .ovr-toppager-btn { border-color: rgba(255, 255, 255, 0.4); color: #fff; }
+
+/* Map toggle on the navy results bar — quiet, muted white. */
+.ovr-search-stitch .ovr-map-toggle { color: rgba(255, 255, 255, 0.6); opacity: 1; }
+.ovr-search-stitch .ovr-map-toggle:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
+.ovr-search-stitch .ovr-map-toggle.is-active { color: #fff; background: rgba(255, 255, 255, 0.18); }
 .ovr-search-stitch .ovr-toppager-btn:hover { background: rgba(255, 255, 255, 0.15); }
 .ovr-search-stitch .ovr-toppager-label { color: rgba(255, 255, 255, 0.85); }
 
@@ -2952,10 +3168,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    /* Panel pad-top (14) + this height (42) + margin (20) = 76 = navy bar (56)
+    /* Panel pad-top (14) + this height (52) + margin (20) = 86 = navy bar (66)
        + results gap (20), so the first featured card lines up with the first
        results card regardless of font metrics. */
-    height: 42px;
+    height: 52px;
     margin-bottom: 20px;
     border-bottom: 2px solid var(--ss-gold);
     color: var(--ss-navy);
@@ -2986,6 +3202,246 @@
     gap: var(--ss-gap);
 }
 
+/* ── Map view: clean, muted, understated. Light basemap + subtle markers and
+   quiet controls so it never competes with the listing cards. ───────────── */
+.ovr-map-view {
+    width: 100%;
+    height: 70vh;
+    min-height: 480px;
+    border-radius: var(--ovr-radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--ovr-outline-variant);
+    background: #f2efe6;
+    box-shadow: var(--ovr-shadow-sm);
+}
+.ovr-map-view .leaflet-container { height: 100%; width: 100%; background: #f2efe6; }
+
+/* Stylish branded teardrop pin (replaces Leaflet's default marker). */
+.ovr-map-pin { background: none; border: 0; }
+.ovr-map-pin-pin {
+    position: relative;
+    display: block;
+    width: 26px;
+    height: 26px;
+    margin: 2px;
+    border-radius: 50% 50% 50% 0;
+    background: linear-gradient(135deg, var(--ovr-primary-light) 0%, var(--ss-navy) 75%);
+    border: 2px solid #fff;
+    box-shadow: 0 4px 10px rgba(1, 11, 98, 0.4);
+    transform: rotate(-45deg);
+    transform-origin: center;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.ovr-map-pin-pin::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 9px;
+    height: 9px;
+    margin: -4.5px 0 0 -4.5px;
+    border-radius: 50%;
+    background: var(--ss-gold);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+.ovr-map-pin:hover { z-index: 1000 !important; }
+.ovr-map-pin:hover .ovr-map-pin-pin {
+    transform: rotate(-45deg) scale(1.18);
+    box-shadow: 0 7px 16px rgba(1, 11, 98, 0.5);
+}
+
+/* ── Pin colours by property type (M3 F10). Falls back to the default brand
+   gradient for any type without a specific colour. ── */
+.ovr-map-pin--type-house     .ovr-map-pin-pin { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 75%); }
+.ovr-map-pin--type-condo     .ovr-map-pin-pin,
+.ovr-map-pin--type-apartment .ovr-map-pin-pin { background: linear-gradient(135deg, #1565c0 0%, #0d3d8a 75%); }
+.ovr-map-pin--type-villa     .ovr-map-pin-pin { background: linear-gradient(135deg, #6a1b9a 0%, #4a148c 75%); }
+.ovr-map-pin--type-townhouse .ovr-map-pin-pin { background: linear-gradient(135deg, #00838f 0%, #005662 75%); }
+.ovr-map-pin--type-cabin     .ovr-map-pin-pin,
+.ovr-map-pin--type-cottage   .ovr-map-pin-pin { background: linear-gradient(135deg, #8d6e63 0%, #5d4037 75%); }
+
+/* Featured listings get a gold ring + gold centre. */
+.ovr-map-pin.is-featured .ovr-map-pin-pin {
+    border-color: var(--ss-gold, #d4af37);
+    box-shadow: 0 0 0 2px var(--ss-gold, #d4af37), 0 4px 10px rgba(1, 11, 98, 0.4);
+}
+.ovr-map-pin.is-featured .ovr-map-pin-pin::after {
+    background: #fff;
+    box-shadow: 0 0 0 2px var(--ss-gold, #d4af37);
+}
+
+/* Booked-tonight listings are dimmed and desaturated. */
+.ovr-map-pin.is-booked .ovr-map-pin-pin {
+    filter: grayscale(0.7);
+    opacity: 0.6;
+}
+
+/* Legend. */
+.ovr-map-legend {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    padding: 8px 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: 12px;
+    line-height: 1.6;
+    color: #333;
+}
+.ovr-map-legend-item { display: flex; align-items: center; gap: 6px; }
+.ovr-map-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: linear-gradient(135deg, var(--ovr-primary-light) 0%, var(--ss-navy) 75%);
+    border: 1.5px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    flex: 0 0 auto;
+}
+.ovr-map-legend-dot.is-featured { border-color: var(--ss-gold, #d4af37); box-shadow: 0 0 0 1.5px var(--ss-gold, #d4af37); }
+.ovr-map-legend-dot.is-booked { filter: grayscale(0.7); opacity: 0.6; }
+
+/* Quiet zoom + attribution controls. */
+.ovr-map-view .leaflet-control-zoom {
+    border: 0;
+    border-radius: var(--ovr-radius-sm);
+    overflow: hidden;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+}
+.ovr-map-view .leaflet-control-zoom a {
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border: 0;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--ovr-on-surface-variant);
+    font-weight: 400;
+}
+.ovr-map-view .leaflet-control-zoom a:hover { background: #fff; color: var(--ovr-primary); }
+.ovr-map-view .leaflet-control-attribution {
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--ovr-outline);
+    font-size: 10px;
+}
+
+/* Tucked-away "Map" toggle — quiet secondary option beside Grid/List. */
+.ovr-map-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+    padding: 5px 10px;
+    border-radius: var(--ovr-radius-sm);
+    color: var(--ovr-on-surface-variant);
+    text-decoration: none;
+    font-size: 13px;
+    opacity: 0.7;
+    transition: opacity var(--ovr-transition), background var(--ovr-transition), color var(--ovr-transition);
+}
+.ovr-map-toggle .material-symbols-outlined { font-size: 16px; }
+.ovr-map-toggle:hover { opacity: 1; }
+.ovr-map-toggle.is-active { opacity: 1; font-weight: 600; color: var(--ovr-primary); }
+.ovr-map-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100%;
+    margin: 0;
+    padding: 24px;
+    text-align: center;
+    color: var(--ss-navy);
+    font-weight: 600;
+}
+.ovr-map-empty .material-symbols-outlined { font-size: 40px; color: var(--ss-gold); }
+/* Map marker popup card */
+.ovr-map-popup { width: 200px; }
+.ovr-map-popup img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; display: block; margin-bottom: 6px; }
+.ovr-map-popup-title { font-weight: 700; color: var(--ss-navy); font-size: 14px; line-height: 1.3; }
+.ovr-map-popup-price { color: var(--ss-navy); font-weight: 600; font-size: 13px; margin: 2px 0 6px; }
+.ovr-map-popup a.ovr-map-popup-link { color: var(--ss-gold); font-weight: 700; font-size: 13px; text-decoration: none; }
+
+/* ── Search "app-shell" scroll (desktop ≥1025px) ──────────────────────────
+   The page scrolls normally until the navy Featured-cities bar (.ovr-ss-villages)
+   has scrolled away; then the three-pane search area pins to fill the viewport
+   and each pane scrolls independently — put the cursor over a column and the
+   wheel scrolls only that column. --ss-shell-top is the height of the sticky
+   site header (+ admin bar), measured in ovr-search.js. Below 1025px the layout
+   collapses to one column and the page scrolls as a normal document. ──────── */
+@media (min-width: 1025px) {
+    .ovr-search-stitch .ovr-search-page {
+        position: sticky;
+        top: var(--ss-shell-top, 48px);
+        height: calc(100vh - var(--ss-shell-top, 48px));
+        padding-top: 24px;
+        padding-bottom: 24px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .ovr-search-stitch .ovr-search-layout {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        align-items: stretch;
+    }
+
+    /* Left pane: filters scroll on their own. */
+    .ovr-search-stitch .ovr-filters-sidebar {
+        height: 100%;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    /* Middle column wrapper becomes a flex column the panes live in. */
+    .ovr-search-stitch .ovr-search-main {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* Featured present → 3-col grid fills the column; each cell scrolls alone. */
+    .ovr-search-stitch .ovr-results-area {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-items: stretch;
+    }
+    .ovr-search-stitch .ovr-results-main {
+        min-height: 0;
+        overflow-y: auto;          /* middle: navy bar + cards scroll together */
+    }
+    .ovr-search-stitch .ovr-featured-panel {
+        min-height: 0;
+        overflow-y: auto;          /* featured rail scrolls on its own */
+    }
+
+    /* No featured / list view → header stays, the grid scrolls beneath it. */
+    .ovr-search-stitch .ovr-search-main > .ovr-results-header { flex: 0 0 auto; margin-bottom: 16px; }
+    .ovr-search-stitch .ovr-search-main > .ovr-search-results {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    /* Map view fills the middle column. */
+    .ovr-search-stitch .ovr-search-main > .ovr-map-view {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
+    }
+
+    /* Pagination sits as a fixed bar at the bottom of the middle column. */
+    .ovr-search-stitch .ovr-pagination { flex: 0 0 auto; margin-top: 16px; margin-bottom: 0; }
+
+    /* Slimmer scrollbars inside the panes. */
+    .ovr-search-stitch .ovr-filters-sidebar,
+    .ovr-search-stitch .ovr-results-main,
+    .ovr-search-stitch .ovr-featured-panel,
+    .ovr-search-stitch .ovr-search-main > .ovr-search-results { scrollbar-width: thin; }
+}
+
 /* ── Search card (standard = yellow/navy, featured = white/gold) ── */
 .ovr-search-stitch .ovr-ss-card {
     box-sizing: border-box;
@@ -2994,13 +3450,13 @@
     flex-direction: column;
     overflow: hidden;
     background: var(--ss-card-yellow);
-    border: 1px solid var(--ss-navy);
+    border: none;                       /* no outline — soft shadow defines the card */
     border-radius: var(--ovr-radius-lg);
-    box-shadow: var(--ovr-shadow-sm);
+    box-shadow: var(--ovr-shadow-md);
     color: var(--ss-navy);
     transition: box-shadow var(--ovr-transition);
 }
-.ovr-search-stitch .ovr-ss-card:hover { box-shadow: var(--ovr-shadow-md); }
+.ovr-search-stitch .ovr-ss-card:hover { box-shadow: var(--ovr-shadow-lg); }
 /* Gold emphasis via a box-shadow ring (not a thicker border) so the featured
    card keeps the same 1px border-box inner height → images stay aligned. */
 .ovr-search-stitch .ovr-ss-card--featured {
@@ -3095,11 +3551,12 @@
 .ovr-ss-card-desc {
     margin: 0;
     font-size: 13px;
-    line-height: 1.45;
-    min-height: 2.9em;   /* reserve 2 lines so every card body is the same height → images align */
+    line-height: 1.35;   /* tightened so the 3rd line costs little vertical space */
+    min-height: 4.05em;  /* reserve 3 lines so every card body is the same height → images align */
     color: rgba(0, 9, 97, 0.85);
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -3133,8 +3590,17 @@
     transition: opacity var(--ovr-transition);
 }
 .ovr-ss-btn:hover { opacity: 0.9; }
-.ovr-ss-btn-navy { background: var(--ss-navy); color: #fff; }
-.ovr-ss-btn-gold { background: var(--ss-gold); color: var(--ovr-ink-text); }
+/* Scoped with .ovr-search-stitch so these out-specify `.ovr-wrap a` (which
+   otherwise paints the navy button's label navy-on-navy → invisible). The
+   link-state selectors keep the text colour through hover/visited too. */
+.ovr-search-stitch .ovr-ss-btn-navy,
+.ovr-search-stitch .ovr-ss-btn-navy:link,
+.ovr-search-stitch .ovr-ss-btn-navy:visited,
+.ovr-search-stitch .ovr-ss-btn-navy:hover { background: var(--ss-navy); color: #fff; }
+.ovr-search-stitch .ovr-ss-btn-gold,
+.ovr-search-stitch .ovr-ss-btn-gold:link,
+.ovr-search-stitch .ovr-ss-btn-gold:visited,
+.ovr-search-stitch .ovr-ss-btn-gold:hover { background: var(--ss-gold); color: var(--ovr-ink-text); }
 
 /* ── Responsive ── */
 @media (max-width: 1024px) {
@@ -3175,3 +3641,120 @@
 .page-id-99 .ovr-card-subrow { margin-bottom: 8px; }
 .home .ovr-card-stats,
 .page-id-99 .ovr-card-stats { padding: 6px 0; margin-bottom: 8px; }
+
+/* ==========================================================================
+   27. Map view — split layout (filters | scrollable cards | clustered map)
+   --------------------------------------------------------------------------
+   The "Map" toggle renders a full-bleed three-pane view: the filters sidebar
+   stays on the left, this page of result cards scrolls in the middle, and a
+   clustered Leaflet map fills the right. Every matching listing is plotted &
+   clustered (PropertyQuery::get_map_points), independent of pagination.
+   ========================================================================== */
+
+/* Full-bleed the page and drop the featured-cities strip in map view. */
+.ovr-search-page--map { max-width: none; }
+.ovr-search-stitch:has(.ovr-search-page--map) .ovr-ss-villages { display: none; }
+
+.ovr-map-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 18px;
+    width: 100%;
+}
+
+.ovr-map-listcol { min-width: 0; display: flex; flex-direction: column; }
+.ovr-map-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-content: start;
+}
+.ovr-map-cardwrap {
+    border-radius: var(--ovr-radius-lg);
+    transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.ovr-map-cardwrap.is-active {
+    box-shadow: 0 0 0 2px var(--ss-gold);
+}
+
+.ovr-map-canvas { min-width: 0; }
+.ovr-map-split .ovr-map-view { height: 70vh; min-height: 480px; }
+
+/* Pin hover state mirrored from a hovered card. */
+.ovr-map-pin.is-hover { z-index: 1000 !important; }
+.ovr-map-pin.is-hover .ovr-map-pin-pin {
+    transform: rotate(-45deg) scale(1.18);
+    box-shadow: 0 7px 16px rgba(1, 11, 98, 0.5);
+}
+
+/* Popup snippet additions. */
+.ovr-map-popup-specs { color: var(--ovr-on-surface-variant); font-size: 12px; margin: 1px 0 3px; }
+
+/* Floating Map/List switch — hidden on desktop (both panes show). */
+.ovr-map-switch {
+    display: none;
+    gap: 0;
+    background: #fff;
+    border: 1px solid var(--ovr-outline-variant);
+    border-radius: 999px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+    overflow: hidden;
+}
+.ovr-map-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--ss-navy);
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 20px;
+    cursor: pointer;
+}
+.ovr-map-switch-btn .material-symbols-outlined { font-size: 18px; }
+.ovr-map-switch-btn.is-active { background: var(--ss-navy); color: #fff; }
+
+/* Desktop app-shell: cards scroll, map sticks full-height beside them. */
+@media (min-width: 1025px) {
+    .ovr-search-stitch .ovr-search-main > .ovr-map-split {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+    }
+    .ovr-search-stitch .ovr-map-listcol {
+        height: 100%;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+        scrollbar-width: thin;
+    }
+    .ovr-search-stitch .ovr-map-listcol > .ovr-results-header { flex: 0 0 auto; margin-bottom: 16px; }
+    .ovr-search-stitch .ovr-map-canvas { height: 100%; min-height: 0; }
+    .ovr-search-stitch .ovr-map-split .ovr-map-view { height: 100%; min-height: 0; }
+}
+
+/* Mobile/tablet: one card column; switch flips between list and map. */
+@media (max-width: 1024px) {
+    .ovr-map-split { grid-template-columns: 1fr; gap: 0; }
+    .ovr-map-cards { grid-template-columns: 1fr; }
+    .ovr-map-canvas { display: none; }
+    .ovr-map-split.show-map .ovr-map-canvas { display: block; }
+    .ovr-map-split.show-map .ovr-map-listcol { display: none; }
+    .ovr-map-split .ovr-map-view { height: calc(100vh - 180px); min-height: 360px; }
+
+    .ovr-map-switch {
+        display: inline-flex;
+        position: fixed;
+        bottom: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+    }
+}
+
+/* Listing-card video indicator (Feature B) */
+.ovr-card-video-flag{position:absolute;top:10px;left:10px;width:34px;height:34px;border-radius:9999px;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none}
+.ovr-card-video-flag .material-symbols-outlined{font-size:22px}
+.ovr-ss-card-media,.ovr-card-image{position:relative}

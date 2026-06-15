@@ -172,17 +172,36 @@ class SearchHandler {
 
         return [
             'keyword'       => sanitize_text_field( wp_unslash( $_GET['keyword'] ?? '' ) ),
-            'village'       => isset( $_GET['village'] )       ? $clean_slugs( $_GET['village'] )       : [],
+            // Village is the free-text Village Name (matched against meta).
+            'village'       => isset( $_GET['village'] ) ? array_values( array_filter( array_map( 'sanitize_text_field', (array) wp_unslash( $_GET['village'] ) ), 'strlen' ) ) : [],
+            // Village Section is the ovr_village taxonomy slug (curated facet).
+            'village_section' => isset( $_GET['village_section'] ) ? $clean_slugs( $_GET['village_section'] ) : [],
             'property_type' => isset( $_GET['property_type'] ) ? $clean_slugs( $_GET['property_type'] ) : [],
             'amenities'     => isset( $_GET['amenities'] )     ? $clean_slugs( $_GET['amenities'] )     : [],
+            'views'         => isset( $_GET['views'] )         ? $clean_slugs( $_GET['views'] )         : [],
+            'features'      => isset( $_GET['features'] )      ? $clean_slugs( $_GET['features'] )      : [],
             'bedrooms'      => absint( $_GET['bedrooms'] ?? 0 ),
             'price_min'     => floatval( $_GET['price_min'] ?? 0 ),
             'price_max'     => floatval( $_GET['price_max'] ?? 0 ),
             'guests'        => absint( $_GET['guests'] ?? 0 ),
             'pets'          => ! empty( $_GET['pets'] ),
+            // Availability date range (Feature 2/8): excludes listings hard-
+            // blocked over the stay. Only ISO YYYY-MM-DD values are honoured.
+            'checkin'       => self::clean_date( $_GET['checkin'] ?? '' ),
+            'checkout'      => self::clean_date( $_GET['checkout'] ?? '' ),
+            // Owner filter (Phase 22): show only one landlord's listings.
+            'owner_id'      => absint( $_GET['owner_id'] ?? 0 ),
             'sort'          => sanitize_key( $_GET['sort'] ?? 'newest' ),
             'per_page'      => absint( $_GET['per_page'] ?? 12 ),
             'paged'         => absint( $_GET['paged'] ?? get_query_var( 'paged', 1 ) ),
         ];
+    }
+
+    /**
+     * Accept only a strict YYYY-MM-DD date; anything else becomes ''.
+     */
+    private static function clean_date( $raw ): string {
+        $value = sanitize_text_field( wp_unslash( (string) $raw ) );
+        return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ? $value : '';
     }
 }

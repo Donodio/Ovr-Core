@@ -14,10 +14,14 @@ use OVR\Auth\LoginHandler;
 use OVR\Auth\RegistrationHandler;
 use OVR\Auth\PasswordResetHandler;
 use OVR\Frontend\Homepage;
+use OVR\Frontend\MapPage;
 use OVR\Frontend\SearchResults;
 use OVR\Frontend\FeaturedListings;
 use OVR\Frontend\VillagePage;
 use OVR\Frontend\Onboarding;
+use OVR\Frontend\SubscriptionSelect;
+use OVR\Frontend\Checkout;
+use OVR\Frontend\PaymentSuccess;
 use OVR\Subscription\PricingDisplay;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -36,19 +40,31 @@ class ShortcodeManager {
         add_shortcode( 'ovr_register', [ $this, 'shortcode_register' ] );
         add_shortcode( 'ovr_forgot_password', [ $this, 'shortcode_forgot_password' ] );
         add_shortcode( 'ovr_onboarding', [ $this, 'shortcode_onboarding' ] );
+        add_shortcode( 'ovr_subscription_select', [ $this, 'shortcode_subscription_select' ] );
 
         // Page shortcodes.
         add_shortcode( 'ovr_homepage', [ $this, 'shortcode_homepage' ] );
         add_shortcode( 'ovr_search_results', [ $this, 'shortcode_search_results' ] );
+        add_shortcode( 'ovr_map', [ $this, 'shortcode_map' ] );
         add_shortcode( 'ovr_featured_listings', [ $this, 'shortcode_featured' ] );
         add_shortcode( 'ovr_village_page', [ $this, 'shortcode_village' ] );
         add_shortcode( 'ovr_pricing_plans', [ $this, 'shortcode_pricing' ] );
+        add_shortcode( 'ovr_checkout', [ $this, 'shortcode_checkout' ] );
+        add_shortcode( 'ovr_payment_success', [ $this, 'shortcode_payment_success' ] );
 
         // Component shortcodes.
         add_shortcode( 'ovr_property_card', [ $this, 'shortcode_property_card' ] );
         add_shortcode( 'ovr_search_bar', [ $this, 'shortcode_search_bar' ] );
 
         add_shortcode( 'ovr_dashboard', [ $this, 'shortcode_dashboard' ] );
+
+        // Ad banner placement (M3 F8).
+        add_shortcode( 'ovr_ad_banner', [ $this, 'shortcode_ad_banner' ] );
+    }
+
+    public function shortcode_ad_banner( $atts = [] ): string {
+        $atts = shortcode_atts( [ 'placement' => 'homepage' ], (array) $atts, 'ovr_ad_banner' );
+        return \OVR\Frontend\AdBanners::render( (string) $atts['placement'] );
     }
 
     public function shortcode_login(): string {
@@ -66,6 +82,9 @@ class ShortcodeManager {
     public function shortcode_onboarding(): string {
         return Onboarding::render();
     }
+    public function shortcode_subscription_select(): string {
+        return SubscriptionSelect::render();
+    }
 
     public function shortcode_homepage(): string {
         return Homepage::render();
@@ -73,6 +92,10 @@ class ShortcodeManager {
 
     public function shortcode_search_results(): string {
         return SearchResults::render();
+    }
+
+    public function shortcode_map(): string {
+        return MapPage::render();
     }
 
     public function shortcode_featured(): string {
@@ -106,6 +129,14 @@ class ShortcodeManager {
             'only'           => (string) $atts['only'],
             'exclude'        => (string) $atts['exclude'],
         ] );
+    }
+
+    public function shortcode_checkout(): string {
+        return Checkout::render();
+    }
+
+    public function shortcode_payment_success(): string {
+        return PaymentSuccess::render();
     }
 
     public function shortcode_property_card( array $atts = [] ): string {

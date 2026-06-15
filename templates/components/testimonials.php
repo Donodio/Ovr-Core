@@ -29,7 +29,7 @@ $testimonials = $testimonials ?? [
     [
         'name'   => __( 'Maria Rodriguez', 'ovr-core' ),
         'role'   => __( 'Property Manager', 'ovr-core' ),
-        'quote'  => __( 'The dashboard makes managing 12 properties feel like managing one. Inquiries, calendars, payouts — all in one place.', 'ovr-core' ),
+        'quote'  => __( 'The dashboard makes managing 12 properties feel like managing one. Inquiries, calendars, reviews — all in one place.', 'ovr-core' ),
         'rating' => 5,
         'avatar' => '',
     ],

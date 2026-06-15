@@ -2,9 +2,10 @@
 /**
  * Rates / Pricing Table.
  *
- * Flexible seasonal rates (DESIGN.md §10) pulled from ovr_seasonal_pricing.
- * Shows nightly always; weekly/monthly columns appear only when any row has
- * those rates — rates are never converted between terms.
+ * Flexible pricing pulled from ovr_seasonal_pricing — Period · Price · Minimum
+ * Stay. No nightly-rate assumption; supports weekly, monthly, seasonal, and
+ * fixed-term rentals. When the table is empty, shows "See Description For
+ * Pricing" instead.
  *
  * @package OVR
  *
@@ -18,82 +19,57 @@ use OVR\Property\SeasonalPricing;
 $post_id = $post_id ?? 0;
 $pricing = $pricing ?? SeasonalPricing::get_pricing( $post_id );
 
-if ( empty( $pricing ) ) {
-    return;
-}
-
 $settings = get_option( 'ovr_settings', [] );
 $symbol   = $settings['currency_symbol'] ?? '$';
-$date_fmt = get_option( 'date_format' ) ?: 'M j, Y';
 
-// Only show weekly / monthly columns when at least one row provides them.
-$show_weekly  = false;
-$show_monthly = false;
-foreach ( $pricing as $season ) {
-    if ( ! empty( $season['weekly_rate'] ) )  { $show_weekly = true; }
-    if ( ! empty( $season['monthly_rate'] ) ) { $show_monthly = true; }
-}
-
-$money = static function ( $value ) use ( $symbol ) {
-    return $value > 0 ? $symbol . number_format( (float) $value, 0 ) : '—';
-};
+// "Check Description For Pricing" (Phase 4A) hides the table even when rows exist.
+$hidden    = SeasonalPricing::is_hidden( $post_id );
+$date_fmt  = get_option( 'date_format' ) ?: 'M j, Y';
 ?>
 <section class="ovr-detail-section ovr-seasonal-pricing" data-purpose="rates-table">
     <div class="ovr-detail-card">
         <h2 class="ovr-detail-heading"><?php esc_html_e( 'Rates / Pricing', 'ovr-core' ); ?></h2>
-        <div class="ovr-rates-wrap">
-            <table class="ovr-rates-table">
-                <thead>
-                    <tr>
-                        <th><?php esc_html_e( 'Season', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Date Range', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Nightly', 'ovr-core' ); ?></th>
-                        <?php if ( $show_weekly ) : ?>
-                            <th><?php esc_html_e( 'Weekly', 'ovr-core' ); ?></th>
-                        <?php endif; ?>
-                        <?php if ( $show_monthly ) : ?>
-                            <th><?php esc_html_e( 'Monthly', 'ovr-core' ); ?></th>
-                        <?php endif; ?>
-                        <th><?php esc_html_e( 'Min. Stay', 'ovr-core' ); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ( $pricing as $season ) :
-                        $name     = $season['season_name'] ?? '';
-                        $start    = $season['start_date']  ?? '';
-                        $end      = $season['end_date']    ?? '';
-                        $min_stay = absint( $season['min_stay'] ?? 1 );
-                    ?>
+
+        <?php if ( $hidden || empty( $pricing ) ) : ?>
+            <p class="ovr-rates-empty"><?php esc_html_e( 'See Description For Pricing', 'ovr-core' ); ?></p>
+        <?php else : ?>
+            <div class="ovr-rates-wrap">
+                <table class="ovr-rates-table">
+                    <thead>
                         <tr>
-                            <td class="ovr-rates-season"><?php echo esc_html( $name ); ?></td>
-                            <td>
-                                <?php
-                                if ( $start && $end ) {
-                                    printf(
-                                        '%s &mdash; %s',
-                                        esc_html( wp_date( $date_fmt, strtotime( $start ) ) ),
-                                        esc_html( wp_date( $date_fmt, strtotime( $end ) ) )
-                                    );
-                                }
-                                ?>
-                            </td>
-                            <td class="ovr-rates-amount"><?php echo esc_html( $money( $season['nightly_rate'] ?? 0 ) ); ?></td>
-                            <?php if ( $show_weekly ) : ?>
-                                <td><?php echo esc_html( $money( $season['weekly_rate'] ?? 0 ) ); ?></td>
-                            <?php endif; ?>
-                            <?php if ( $show_monthly ) : ?>
-                                <td><?php echo esc_html( $money( $season['monthly_rate'] ?? 0 ) ); ?></td>
-                            <?php endif; ?>
-                            <td>
-                                <?php
-                                /* translators: %d: minimum nights */
-                                printf( esc_html( _n( '%d night', '%d nights', $min_stay, 'ovr-core' ) ), $min_stay );
-                                ?>
-                            </td>
+                            <th><?php esc_html_e( 'Month or Season', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Price', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Minimum Term', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'From', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'To', 'ovr-core' ); ?></th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $pricing as $season ) :
+                            $d = SeasonalPricing::row_display( $season );
+                            // "$2,675 month" (price + period merged) — or just the
+                            // amount for a flat rate.
+                            $price_txt = '—';
+                            if ( $d['price'] > 0 ) {
+                                $price_txt = $symbol . number_format( $d['price'], 0 );
+                                if ( '' !== $d['per'] ) {
+                                    $price_txt .= ' ' . $d['per'];
+                                }
+                            }
+                            $from_txt = '' !== $d['from'] ? mysql2date( $date_fmt, $d['from'] ) : '—';
+                            $to_txt   = '' !== $d['to']   ? mysql2date( $date_fmt, $d['to'] )   : '—';
+                        ?>
+                            <tr>
+                                <td class="ovr-rates-season"><?php echo esc_html( $d['period'] ); ?></td>
+                                <td class="ovr-rates-amount"><?php echo esc_html( $price_txt ); ?></td>
+                                <td><?php echo $d['min'] !== '' ? esc_html( $d['min'] ) : '—'; ?></td>
+                                <td><?php echo esc_html( $from_txt ); ?></td>
+                                <td><?php echo esc_html( $to_txt ); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 </section>

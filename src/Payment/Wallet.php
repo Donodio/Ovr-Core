@@ -1,9 +1,13 @@
 <?php
 /**
- * Wallet / Balance.
+ * Account Credit.
  *
- * Per-user balance held in user meta. Every change is logged to
- * wp_ovr_wallet_transactions for the "My Balance" tab + audit trail.
+ * A per-user store-credit balance held in user meta, logged to
+ * wp_ovr_wallet_transactions for an audit trail. Credit may ONLY be granted by
+ * an admin (referral bonus, overpayment, goodwill) and spent against a
+ * subscription renewal or listing-upgrade purchase. It can never be topped up
+ * by the user, withdrawn, transferred, or cashed out — this site stores no
+ * landlord financial information.
  *
  * @package OVR\Payment
  * @since   1.0.0
@@ -17,10 +21,7 @@ class Wallet {
 
     public const META_BALANCE = 'ovr_balance';
 
-    public function init(): void {
-        // Recharge → credit handler.
-        add_action( 'ovr_payment_completed', [ $this, 'maybe_credit_topup' ], 10, 2 );
-    }
+    public function init(): void {}
 
     public static function get_balance( int $user_id ): float {
         return (float) get_user_meta( $user_id, self::META_BALANCE, true );
@@ -88,22 +89,6 @@ class Wallet {
             ARRAY_A
         );
         return $rows ?: [];
-    }
-
-    /**
-     * If a completed payment is flagged as a wallet topup (kind='topup'),
-     * credit the wallet automatically.
-     */
-    public function maybe_credit_topup( int $user_id, array $context = [] ): void {
-        if ( ( $context['payment_type'] ?? '' ) !== 'topup' ) return;
-        $amount = (float) ( $context['amount'] ?? 0 );
-        if ( $amount <= 0 ) return;
-        self::credit(
-            $user_id,
-            $amount,
-            __( 'Wallet topup', 'ovr-core' ),
-            (int) ( $context['payment_id'] ?? 0 ) ?: null
-        );
     }
 
     private static function default_currency(): string {

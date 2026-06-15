@@ -33,10 +33,14 @@ class PropertyMetaBoxes {
 
     /** @var string[] Numeric meta keys (cast on save). */
     private const NUMERIC_INT = [ 'bedrooms', 'beds', 'max_guests', 'sqft', 'min_stay', 'rating_count' ];
-    private const NUMERIC_DEC = [ 'bathrooms', 'base_price', 'latitude', 'longitude', 'rating_avg' ];
-    private const BOOLEAN     = [ 'pets_allowed', 'is_featured', 'is_bumped' ];
+    // base_price (Airbnb-style nightly rate) and country (US-only) were removed
+    // from the editor; the flexible Seasonal Pricing table is the pricing model.
+    // latitude/longitude are no longer entered by hand — they are generated
+    // automatically from the address (Phase 2, see Geocoder).
+    private const NUMERIC_DEC = [ 'bathrooms', 'rating_avg' ];
+    private const BOOLEAN     = [ 'pets_allowed', 'is_featured', 'is_bumped', 'hide_pricing' ];
     private const TEXT        = [
-        'address', 'city', 'state', 'zip', 'country',
+        'address', 'city', 'state', 'zip',
         'video_url', 'panorama_url', 'ical_url',
         'bump_expires', 'featured_expires', 'listing_status', 'booking_mode',
     ];
@@ -81,6 +85,39 @@ class PropertyMetaBoxes {
             'side',
             'high'
         );
+
+        // Sidebar: SEO (M3 F11) — optional per-listing meta overrides.
+        add_meta_box(
+            'ovr_property_seo',
+            __( 'SEO', 'ovr-core' ),
+            [ $this, 'render_seo_sidebar' ],
+            self::POST_TYPE,
+            'side',
+            'default'
+        );
+    }
+
+    /**
+     * Render the SEO sidebar box (M3 F11). All fields are optional — empty
+     * values fall back to auto-generated title/description from the listing.
+     */
+    public function render_seo_sidebar( \WP_Post $post ): void {
+        $title    = (string) get_post_meta( $post->ID, '_ovr_seo_title', true );
+        $desc     = (string) get_post_meta( $post->ID, '_ovr_seo_description', true );
+        $noindex  = '1' === (string) get_post_meta( $post->ID, '_ovr_seo_noindex', true );
+        ?>
+        <p>
+            <label for="ovr-seo-title"><strong><?php esc_html_e( 'Meta Title', 'ovr-core' ); ?></strong></label>
+            <input type="text" id="ovr-seo-title" name="ovr_seo[title]" class="widefat" maxlength="180" value="<?php echo esc_attr( $title ); ?>" placeholder="<?php echo esc_attr( get_the_title( $post ) ); ?>">
+        </p>
+        <p>
+            <label for="ovr-seo-desc"><strong><?php esc_html_e( 'Meta Description', 'ovr-core' ); ?></strong></label>
+            <textarea id="ovr-seo-desc" name="ovr_seo[description]" class="widefat" rows="3" maxlength="320" placeholder="<?php esc_attr_e( 'Auto-generated from the listing if left blank.', 'ovr-core' ); ?>"><?php echo esc_textarea( $desc ); ?></textarea>
+        </p>
+        <p>
+            <label><input type="checkbox" name="ovr_seo[noindex]" value="1" <?php checked( $noindex ); ?>> <?php esc_html_e( 'Discourage search engines (noindex)', 'ovr-core' ); ?></label>
+        </p>
+        <?php
     }
 
     /**
@@ -193,6 +230,9 @@ class PropertyMetaBoxes {
         $gallery_ids = self::parse_id_string( $gallery_raw );
         update_post_meta( $post_id, '_ovr_gallery_ids', implode( ',', $gallery_ids ) );
 
+        // Auto-watermark any gallery photo not yet watermarked (Phase 3).
+        $this->watermark_gallery_images( $gallery_ids );
+
         // Document IDs — capped at MAX_DOCS. Validates each ID exists & is an attachment.
         $docs_raw = isset( $raw['document_ids'] ) ? (string) wp_unslash( $raw['document_ids'] ) : '';
         $doc_ids  = array_slice( self::parse_id_string( $docs_raw ), 0, self::MAX_DOCS );
@@ -202,11 +242,24 @@ class PropertyMetaBoxes {
         } ) );
         update_post_meta( $post_id, '_ovr_document_ids', implode( ',', $doc_ids ) );
 
-        // Seasonal pricing (custom table).
-        $this->save_seasonal_pricing( $post_id, $raw['seasonal'] ?? [] );
+        // Seasonal pricing (custom table) — same per-unit save path as the
+        // front-end landlord editor so both write identical row shapes.
+        SeasonalPricing::save_pricing( $post_id, $raw['seasonal'] ?? [] );
 
         // Availability blocks (custom table).
         $this->save_availability( $post_id, $raw['availability'] ?? [] );
+
+        // Auto-generate map coordinates from the address (Phase 2).
+        \OVR\Property\Geocoder::geocode_listing( $post_id );
+
+        // (Watermarking happens inline in watermark_gallery_images() above.)
+
+        // SEO overrides (M3 F11). Optional per-listing meta title/description +
+        // a noindex toggle, consumed by OVR\Frontend\Seo.
+        $seo = isset( $_POST['ovr_seo'] ) && is_array( $_POST['ovr_seo'] ) ? wp_unslash( $_POST['ovr_seo'] ) : []; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+        update_post_meta( $post_id, '_ovr_seo_title', sanitize_text_field( (string) ( $seo['title'] ?? '' ) ) );
+        update_post_meta( $post_id, '_ovr_seo_description', sanitize_textarea_field( (string) ( $seo['description'] ?? '' ) ) );
+        update_post_meta( $post_id, '_ovr_seo_noindex', empty( $seo['noindex'] ) ? '' : '1' );
 
         // Bust caches updated by frontend templates.
         wp_cache_delete( 'ovr_pricing_'  . $post_id, 'ovr' );
@@ -217,42 +270,38 @@ class PropertyMetaBoxes {
     }
 
     /**
-     * Replace seasonal pricing rows for a property.
+     * Watermark any gallery image that hasn't been watermarked yet (Phase 3).
+     * Idempotent via the `_ovr_watermarked` flag; rebuilds the attachment's
+     * sized derivatives so the mark appears everywhere it's displayed.
+     *
+     * @param int[] $ids Gallery attachment IDs.
      */
-    private function save_seasonal_pricing( int $post_id, $rows ): void {
-        global $wpdb;
-        $table = $wpdb->prefix . 'ovr_seasonal_pricing';
-
-        $wpdb->delete( $table, [ 'property_id' => $post_id ], [ '%d' ] );
-
-        if ( ! is_array( $rows ) ) {
+    private function watermark_gallery_images( array $ids ): void {
+        if ( empty( $ids ) ) {
             return;
         }
+        $text = \OVR\Frontend\ListingForm::watermark_text();
+        if ( '' === trim( $text ) ) {
+            return;
+        }
+        require_once ABSPATH . 'wp-admin/includes/image.php';
 
-        $sort = 0;
-        foreach ( $rows as $row ) {
-            if ( ! is_array( $row ) ) continue;
-
-            $name  = sanitize_text_field( wp_unslash( $row['season_name']  ?? '' ) );
-            $start = sanitize_text_field( wp_unslash( $row['start_date']   ?? '' ) );
-            $end   = sanitize_text_field( wp_unslash( $row['end_date']     ?? '' ) );
-            $rate  = (float) ( $row['nightly_rate'] ?? 0 );
-            $min   = absint( $row['min_stay'] ?? 1 );
-
-            // Drop empty rows.
-            if ( '' === $name && '' === $start && '' === $end && 0.0 === $rate ) {
+        foreach ( $ids as $id ) {
+            $id = (int) $id;
+            if ( ! $id || get_post_meta( $id, '_ovr_watermarked', true ) ) {
                 continue;
             }
-
-            $wpdb->insert( $table, [
-                'property_id'  => $post_id,
-                'season_name'  => $name,
-                'start_date'   => $start ?: null,
-                'end_date'     => $end ?: null,
-                'nightly_rate' => $rate,
-                'min_stay'     => $min,
-                'sort_order'   => $sort++,
-            ], [ '%d', '%s', '%s', '%s', '%f', '%d', '%d' ] );
+            $file = get_attached_file( $id );
+            if ( ! $file || ! file_exists( $file ) ) {
+                continue;
+            }
+            if ( \OVR\Property\ImageTools::watermark( $file, $text ) ) {
+                update_post_meta( $id, '_ovr_watermarked', 1 );
+                $meta = wp_generate_attachment_metadata( $id, $file );
+                if ( $meta ) {
+                    wp_update_attachment_metadata( $id, $meta );
+                }
+            }
         }
     }
 
@@ -283,7 +332,7 @@ class PropertyMetaBoxes {
             if ( ! $start || ! $end ) continue;
 
             $type  = sanitize_key( $row['block_type'] ?? 'blocked' );
-            $allow = [ 'blocked', 'booked', 'tentative', 'maintenance' ];
+            $allow = [ 'blocked', 'booked', 'maintenance' ]; // Tentative removed (Phase 5).
             if ( ! in_array( $type, $allow, true ) ) $type = 'blocked';
 
             $notes  = sanitize_textarea_field( wp_unslash( $row['notes'] ?? '' ) );

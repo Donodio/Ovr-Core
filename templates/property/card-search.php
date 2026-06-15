@@ -44,14 +44,25 @@ $featured_variant = ! empty( $featured_variant );
 $bath_display = rtrim( rtrim( number_format( $bathrooms, 1 ), '0' ), '.' );
 $type_label   = $property_type ?: ( $village ? $village : __( 'Rental Home', 'ovr-core' ) );
 
-// Price line: nightly base rate when set (data model is per-night), else a
-// "Seasonal Rates" hint that matches the mockup's variable-pricing cards.
-$has_price = $base_price > 0;
+// Cap the blurb at 200 characters (the CSS also clamps it to 3 lines).
+$excerpt = trim( wp_strip_all_tags( $excerpt ) );
+if ( mb_strlen( $excerpt ) > 200 ) {
+    $excerpt = rtrim( mb_substr( $excerpt, 0, 199 ) ) . '…';
+}
+
+// Price line: a legacy nightly rate if one is set, else "Seasonal Rates" when
+// the listing has a flexible pricing table, else "See Description For Pricing".
+// No nightly-rate dependency.
+$has_price   = $base_price > 0;
+$has_pricing = ! empty( $has_pricing );
 ?>
 <article class="ovr-ss-card<?php echo $featured_variant ? ' ovr-ss-card--featured' : ''; ?>" id="ovr-ss-<?php echo esc_attr( (string) $post_id ); ?>">
 
     <a class="ovr-ss-card-media" href="<?php echo esc_url( $permalink ); ?>" aria-label="<?php echo esc_attr( $title ); ?>">
         <img src="<?php echo esc_url( $thumbnail ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy" width="400" height="300">
+        <?php if ( ! empty( $has_video ) ) : ?>
+            <span class="ovr-card-video-flag" aria-hidden="true"><span class="material-symbols-outlined">play_circle</span></span>
+        <?php endif; ?>
         <?php if ( $featured_variant ) : ?>
             <span class="ovr-ss-card-flag">
                 <span class="material-symbols-outlined">star</span><?php esc_html_e( 'Featured', 'ovr-core' ); ?>
@@ -97,17 +108,17 @@ $has_price = $base_price > 0;
             <div class="ovr-ss-card-price">
                 <?php if ( $has_price ) : ?>
                     <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?><span>/ <?php esc_html_e( 'night', 'ovr-core' ); ?></span>
-                <?php else : ?>
+                <?php elseif ( $has_pricing ) : ?>
                     <?php esc_html_e( 'Seasonal Rates', 'ovr-core' ); ?>
+                <?php else : ?>
+                    <span class="ovr-ss-price-desc"><?php esc_html_e( 'See Description For Pricing', 'ovr-core' ); ?></span>
                 <?php endif; ?>
             </div>
         </div>
 
         <div class="ovr-ss-card-actions">
             <a class="ovr-ss-btn ovr-ss-btn-navy" href="<?php echo esc_url( $permalink ); ?>"><?php esc_html_e( 'Details', 'ovr-core' ); ?></a>
-            <?php if ( $featured_variant ) : ?>
-                <a class="ovr-ss-btn ovr-ss-btn-gold" href="<?php echo esc_url( $permalink ); ?>#ovr-inquiry"><?php esc_html_e( 'Inquire', 'ovr-core' ); ?></a>
-            <?php endif; ?>
+            <a class="ovr-ss-btn ovr-ss-btn-gold" href="<?php echo esc_url( $permalink ); ?>#ovr-inquiry"><?php esc_html_e( 'Inquire', 'ovr-core' ); ?></a>
         </div>
     </div>
 </article>

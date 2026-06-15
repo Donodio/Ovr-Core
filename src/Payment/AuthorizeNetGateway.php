@@ -15,6 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class AuthorizeNetGateway implements PaymentGateway {
 
+    use GatewayPayload;
+
     public function get_id(): string {
         return 'authorize_net';
     }
@@ -29,11 +31,10 @@ class AuthorizeNetGateway implements PaymentGateway {
     }
 
     public function start_checkout( array $args ): array {
-        $user_id   = (int) ( $args['user_id']   ?? 0 );
-        $plan_slug = (string) ( $args['plan_slug'] ?? '' );
-        $amount    = (float) ( $args['amount']  ?? 0 );
+        $user_id = (int) ( $args['user_id'] ?? 0 );
+        $amount  = (float) ( $args['amount'] ?? 0 );
 
-        if ( ! $user_id || ! $plan_slug || $amount <= 0 ) {
+        if ( ! $this->payload_valid( $args ) ) {
             return [ 'success' => false, 'message' => __( 'Invalid checkout request.', 'ovr-core' ) ];
         }
 
@@ -41,13 +42,13 @@ class AuthorizeNetGateway implements PaymentGateway {
         $table    = $wpdb->prefix . 'ovr_payments';
         $inserted = $wpdb->insert( $table, [
             'user_id'        => $user_id,
-            'payment_type'   => 'subscription',
+            'payment_type'   => $this->payload_type( $args ),
             'amount'         => $amount,
             'currency'       => strtoupper( substr( (string) ( $args['currency'] ?? 'USD' ), 0, 3 ) ),
             'gateway'        => $this->get_id(),
             'transaction_id' => '',
             'status'         => 'pending',
-            'meta_data'      => wp_json_encode( [ 'plan_slug' => $plan_slug ] ),
+            'meta_data'      => wp_json_encode( $this->payload_meta( $args ) ),
         ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
 
         if ( false === $inserted ) {

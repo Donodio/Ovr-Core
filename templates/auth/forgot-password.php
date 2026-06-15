@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
         <div class="ovr-auth-card-body">
 
             <div class="ovr-auth-header">
-                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Villages Rentals', 'ovr-core' ); ?></div>
+                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Village Rentals', 'ovr-core' ); ?></div>
             </div>
 
             <?php if ( $success ) : ?>

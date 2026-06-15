@@ -11,7 +11,6 @@ $address  = (string) ( $meta['address']  ?? '' );
 $city     = (string) ( $meta['city']     ?? '' );
 $state    = (string) ( $meta['state']    ?? '' );
 $zip      = (string) ( $meta['zip']      ?? '' );
-$country  = (string) ( $meta['country']  ?? '' );
 $lat      = (float)  ( $meta['latitude']  ?? 0 );
 $lng      = (float)  ( $meta['longitude'] ?? 0 );
 ?>
@@ -48,47 +47,24 @@ $lng      = (float)  ( $meta['longitude'] ?? 0 );
         <input type="text" id="ovr-meta-zip" name="ovr_meta[zip]"
                value="<?php echo esc_attr( $zip ); ?>">
     </div>
-
-    <div class="ovr-field">
-        <label class="ovr-field__label" for="ovr-meta-country"><?php esc_html_e( 'Country', 'ovr-core' ); ?></label>
-        <input type="text" id="ovr-meta-country" name="ovr_meta[country]"
-               value="<?php echo esc_attr( $country ); ?>">
-    </div>
 </div>
 
 <div class="ovr-section-head" style="margin-top:32px">
-    <h3><span class="material-symbols-outlined">my_location</span> <?php esc_html_e( 'Map Coordinates', 'ovr-core' ); ?></h3>
+    <h3><span class="material-symbols-outlined">my_location</span> <?php esc_html_e( 'Map', 'ovr-core' ); ?></h3>
 </div>
 
 <p class="ovr-field__hint" style="margin-bottom:16px;font-size:13px">
-    <?php
-    $tip = sprintf(
-        /* translators: %s: link to OpenStreetMap */
-        esc_html__( 'Find coordinates by right-clicking the location on %s and selecting "Show address" → copy the lat/lng pair.', 'ovr-core' ),
-        '<a href="https://www.openstreetmap.org/" target="_blank" rel="noopener" style="color:var(--ovr-a-primary);font-weight:600">OpenStreetMap</a>'
-    );
-    echo wp_kses( $tip, [ 'a' => [ 'href' => [], 'target' => [], 'rel' => [], 'style' => [] ] ] );
-    ?>
+    <?php esc_html_e( 'The map is generated automatically from the address above — there is nothing to place by hand. Coordinates refresh when you save; the hourly backfill also fills in any listing still missing a map.', 'ovr-core' ); ?>
 </p>
 
-<div class="ovr-field-grid ovr-field-grid--2">
-    <div class="ovr-field">
-        <label class="ovr-field__label" for="ovr-meta-lat"><?php esc_html_e( 'Latitude', 'ovr-core' ); ?></label>
-        <input type="number" id="ovr-meta-lat" name="ovr_meta[latitude]"
-               step="any" value="<?php echo esc_attr( $lat ? (string) $lat : '' ); ?>"
-               placeholder="40.7128">
-    </div>
-
-    <div class="ovr-field">
-        <label class="ovr-field__label" for="ovr-meta-lng"><?php esc_html_e( 'Longitude', 'ovr-core' ); ?></label>
-        <input type="number" id="ovr-meta-lng" name="ovr_meta[longitude]"
-               step="any" value="<?php echo esc_attr( $lng ? (string) $lng : '' ); ?>"
-               placeholder="-74.0060">
-    </div>
-</div>
-
 <?php if ( $lat && $lng ) : ?>
-    <div style="margin-top:24px;border-radius:var(--ovr-a-radius-md);overflow:hidden;border:1px solid var(--ovr-a-outline)">
+    <p class="ovr-field__hint" style="margin-bottom:8px;font-size:12px;color:var(--ovr-a-on-surface-variant)">
+        <?php
+        /* translators: 1: latitude, 2: longitude */
+        printf( esc_html__( 'Detected location: %1$s, %2$s', 'ovr-core' ), esc_html( (string) $lat ), esc_html( (string) $lng ) );
+        ?>
+    </p>
+    <div style="border-radius:var(--ovr-a-radius-md);overflow:hidden;border:1px solid var(--ovr-a-outline)">
         <iframe
             src="<?php echo esc_url( 'https://www.openstreetmap.org/export/embed.html?bbox=' . ( $lng - 0.01 ) . ',' . ( $lat - 0.01 ) . ',' . ( $lng + 0.01 ) . ',' . ( $lat + 0.01 ) . '&layer=mapnik&marker=' . $lat . ',' . $lng ); ?>"
             width="100%" height="280" frameborder="0"
@@ -96,4 +72,6 @@ $lng      = (float)  ( $meta['longitude'] ?? 0 );
             style="border:0;display:block"
             title="<?php esc_attr_e( 'Property location preview', 'ovr-core' ); ?>"></iframe>
     </div>
+<?php else : ?>
+    <p class="ovr-field__hint" style="font-size:13px"><?php esc_html_e( 'No map yet — add an address and save, and the map will be generated automatically.', 'ovr-core' ); ?></p>
 <?php endif; ?>

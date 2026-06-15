@@ -38,6 +38,13 @@ $views         = (int) ( $views ?? 0 );
 $monthly_views = is_array( $monthly_views ?? null ) ? $monthly_views : [];
 $is_owner      = ! empty( $is_owner );
 
+// The actual village name is the free-text meta (Phase 21) — e.g. "Mallory
+// Square", "Bonnybrook". Fall back to the Village Section term only if it's blank.
+$village_name = trim( (string) get_post_meta( $post_id, '_ovr_village_name', true ) );
+if ( '' === $village_name && $village ) {
+    $village_name = (string) $village->name;
+}
+
 // Sub-line under the title: "Patio Villa · 2 Bedrooms · Village of X".
 $subbits = array_filter( [
     $property_type,
@@ -45,9 +52,9 @@ $subbits = array_filter( [
         /* translators: %d: bedroom count */
         ? sprintf( _n( '%d Bedroom', '%d Bedrooms', $bedrooms, 'ovr-core' ), $bedrooms )
         : '',
-    $village
+    '' !== $village_name
         /* translators: %s: village name */
-        ? sprintf( __( 'Village of %s', 'ovr-core' ), $village->name )
+        ? sprintf( __( 'Village of %s', 'ovr-core' ), $village_name )
         : '',
 ] );
 
@@ -55,15 +62,18 @@ $subbits = array_filter( [
 $author_id   = (int) get_post_field( 'post_author', $post_id );
 $owner_name  = $author_id ? get_the_author_meta( 'display_name', $author_id ) : '';
 $owner_phone = $author_id ? (string) get_user_meta( $author_id, 'ovr_phone', true ) : '';
-$owner_url   = $author_id ? get_author_posts_url( $author_id ) : '';
+// "View Listings" → the search page filtered to this owner (Phase 22), not the
+// WP author archive (which renders nothing useful for landlords).
+$owner_url   = '';
+if ( $author_id && class_exists( Pages::class ) ) {
+    $owner_url = add_query_arg( 'owner_id', $author_id, Pages::get_page_url( 'ovr_page_search' ) );
+}
 $avatar_url  = $author_id ? get_avatar_url( $author_id, [ 'size' => 120 ] ) : '';
 $listings_n  = $author_id ? (int) count_user_posts( $author_id, 'ovr_property', true ) : 0;
 
 $is_verified = $author_id
     ? (bool) apply_filters( 'ovr_owner_is_verified', (bool) get_user_meta( $author_id, 'ovr_verified', true ), $author_id, $post_id )
     : false;
-
-$owner_comments = trim( (string) get_post_meta( $post_id, '_ovr_owner_comments', true ) );
 
 $compare_url = class_exists( Pages::class ) ? Pages::get_page_url( 'ovr_page_search' ) : home_url( '/' );
 
@@ -100,8 +110,19 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
                 </span>
             </div>
             <?php if ( $has_seasonal ) : ?>
-                <p class="ovr-owner-price-note"><?php esc_html_e( 'Seasonal & weekly/monthly rates available below.', 'ovr-core' ); ?></p>
+                <p class="ovr-owner-price-note"><?php esc_html_e( 'Seasonal, weekly & monthly rates available below.', 'ovr-core' ); ?></p>
             <?php endif; ?>
+        <?php elseif ( $has_seasonal ) : ?>
+            <div class="ovr-owner-price">
+                <span class="ovr-owner-price-label"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></span>
+                <span class="ovr-owner-price-amount" style="font-size:18px"><?php esc_html_e( 'See rates below', 'ovr-core' ); ?></span>
+            </div>
+            <p class="ovr-owner-price-note"><?php esc_html_e( 'Weekly, monthly, seasonal & fixed-term options.', 'ovr-core' ); ?></p>
+        <?php else : ?>
+            <div class="ovr-owner-price">
+                <span class="ovr-owner-price-label"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></span>
+                <span class="ovr-owner-price-amount" style="font-size:18px"><?php esc_html_e( 'See Description For Pricing', 'ovr-core' ); ?></span>
+            </div>
         <?php endif; ?>
 
         <a href="#ovr-inquiry" class="ovr-btn ovr-btn-full ovr-inquire-cta">
@@ -145,7 +166,10 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
                     <a href="#ovr-inquiry"><?php esc_html_e( 'Email Owner', 'ovr-core' ); ?></a>
                     <?php if ( $owner_phone ) : ?>
                         <span aria-hidden="true">·</span>
-                        <a href="tel:<?php echo esc_attr( preg_replace( '/[^0-9+]/', '', $owner_phone ) ); ?>"><?php echo esc_html( $owner_phone ); ?></a>
+                        <?php // Phone hidden until clicked (Phase 18 anti-spam). ?>
+                        <span class="ovr-owner-phone" data-ovr-phone="<?php echo esc_attr( preg_replace( '/[^0-9+]/', '', $owner_phone ) ); ?>" data-ovr-phone-display="<?php echo esc_attr( $owner_phone ); ?>">
+                            <button type="button" class="ovr-phone-reveal"><span class="material-symbols-outlined">call</span><?php esc_html_e( 'Show phone', 'ovr-core' ); ?></button>
+                        </span>
                     <?php endif; ?>
                 </p>
                 <p class="ovr-owner-line ovr-owner-listings-count">
@@ -164,17 +188,7 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
         <?php endif; ?>
     </div>
 
-    <!-- 3. Owner comments -->
-    <div class="ovr-owner-card ovr-owner-comments-card">
-        <p class="ovr-owner-block-label"><?php esc_html_e( 'Owner Comments', 'ovr-core' ); ?></p>
-        <?php if ( $owner_comments ) : ?>
-            <p class="ovr-owner-comments-text">&ldquo;<?php echo esc_html( $owner_comments ); ?>&rdquo;</p>
-        <?php else : ?>
-            <p class="ovr-owner-comments-text is-empty"><?php esc_html_e( 'No comments from the owner yet.', 'ovr-core' ); ?></p>
-        <?php endif; ?>
-    </div>
-
-    <!-- 4. QR + visits chart (owner only) -->
+    <!-- QR + visits chart (owner only) -->
     <?php if ( $is_owner ) : ?>
         <div class="ovr-owner-card ovr-owner-meta-card">
             <div class="ovr-owner-meta-head">
@@ -216,3 +230,31 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
         </div>
     <?php endif; ?>
 </div>
+
+<style>
+    .ovr-phone-reveal{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;margin:0;font:inherit;color:var(--ovr-secondary,#0a66c2);font-weight:600;cursor:pointer;text-decoration:underline}
+    .ovr-phone-reveal:hover{opacity:.85}
+    .ovr-phone-reveal .material-symbols-outlined{font-size:16px}
+    .ovr-owner-phone a{font-weight:600}
+</style>
+<script>
+(function(){
+    var card = document.currentScript ? document.currentScript.previousElementSibling : null;
+    // Delegate so it works regardless of where this partial is injected.
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest('.ovr-phone-reveal');
+        if (!btn) { return; }
+        var wrap = btn.closest('.ovr-owner-phone');
+        if (!wrap) { return; }
+        var tel = wrap.getAttribute('data-ovr-phone') || '';
+        var disp = wrap.getAttribute('data-ovr-phone-display') || tel;
+        var a = document.createElement('a');
+        a.href = 'tel:' + tel;
+        a.textContent = disp;
+        wrap.innerHTML = '';
+        wrap.appendChild(a);
+        // Optional analytics hook (Phase 18): fire a custom event on reveal.
+        try { document.dispatchEvent(new CustomEvent('ovr:phone-revealed', { detail: { tel: tel } })); } catch(_){}
+    });
+})();
+</script>

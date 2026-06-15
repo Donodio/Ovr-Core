@@ -51,22 +51,33 @@ class PasswordResetHandler {
                     'login'  => rawurlencode( $user->user_login ),
                 ], Pages::get_page_url( 'ovr_page_login' ) );
 
-                $message  = sprintf(
-                    /* translators: 1: Site name, 2: Reset URL */
-                    __( "Hello,\n\nSomeone requested a password reset for your account at %1\$s.\n\nTo reset your password, click the link below:\n%2\$s\n\nIf you didn't request this, you can safely ignore this email.\n\nThanks,\nOur Villages Rentals", 'ovr-core' ),
-                    get_bloginfo( 'name' ),
-                    $reset_url
-                );
+                // Route through the admin-editable template system (M3 F6).
+                $sent = class_exists( '\OVR\Email\Mailer' )
+                    ? \OVR\Email\Mailer::send( 'password_reset', [
+                        'user_name' => $user->display_name,
+                        'reset_url' => $reset_url,
+                    ], [ 'user_email' => $email ] )
+                    : false;
 
-                wp_mail(
-                    $email,
-                    sprintf(
-                        /* translators: %s: Site name */
-                        __( '[%s] Password Reset Request', 'ovr-core' ),
-                        get_bloginfo( 'name' )
-                    ),
-                    $message
-                );
+                // Safety net: if the template is missing/disabled, still send a
+                // plain reset email so account recovery never breaks.
+                if ( ! $sent ) {
+                    $message = sprintf(
+                        /* translators: 1: Site name, 2: Reset URL */
+                        __( "Hello,\n\nSomeone requested a password reset for your account at %1\$s.\n\nTo reset your password, click the link below:\n%2\$s\n\nIf you didn't request this, you can safely ignore this email.\n\nThanks,\nOur Village Rentals", 'ovr-core' ),
+                        get_bloginfo( 'name' ),
+                        $reset_url
+                    );
+                    wp_mail(
+                        $email,
+                        sprintf(
+                            /* translators: %s: Site name */
+                            __( '[%s] Password Reset Request', 'ovr-core' ),
+                            get_bloginfo( 'name' )
+                        ),
+                        $message
+                    );
+                }
             }
         }
 

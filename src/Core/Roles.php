@@ -18,76 +18,38 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Roles {
 
     /**
-     * Initialize — nothing needed at runtime for roles.
+     * Initialize — keep live roles in sync with the capability registry.
+     *
+     * create_roles() only runs on activation, so existing installs would
+     * never receive caps added in later releases. maybe_sync() reconciles
+     * them once per cap-set version bump.
      *
      * @since 1.0.0
      */
     public function init(): void {
-        // Roles are created on activation. Nothing needed on every load.
+        add_action( 'admin_init', [ Capabilities::class, 'maybe_sync' ] );
     }
 
     /**
      * Create custom roles and add capabilities.
      *
-     * Called during plugin activation.
+     * Called during plugin activation. Capability sets live in the central
+     * Capabilities registry so the permission matrix is defined once.
      *
      * @since 1.0.0
      */
     public static function create_roles(): void {
-        // OVR Landlord — can manage their own properties.
-        add_role( 'ovr_landlord', __( 'Landlord', 'ovr-core' ), [
-            // WordPress defaults.
-            'read'                    => true,
-            'upload_files'            => true,
+        // OVR Landlord — manages their own properties + Phase 2 tooling.
+        $landlord_caps = array_fill_keys( Capabilities::landlord(), true );
+        $landlord_caps['read']         = true;
+        $landlord_caps['upload_files'] = true;
+        add_role( 'ovr_landlord', __( 'Landlord', 'ovr-core' ), $landlord_caps );
 
-            // OVR Property capabilities (mapped to custom CPT).
-            'edit_ovr_properties'          => true,
-            'edit_published_ovr_properties'=> true,
-            'publish_ovr_properties'       => true,
-            'delete_ovr_properties'        => true,
-            'delete_published_ovr_properties' => true,
-
-            // OVR-specific capabilities.
-            'ovr_manage_listings'     => true,
-            'ovr_view_dashboard'      => true,
-            'ovr_manage_subscription' => true,
-            'ovr_send_inquiries'      => true,
-            'ovr_view_inquiries'      => true,
-            'ovr_manage_profile'      => true,
-        ] );
-
-        // Add OVR capabilities to Administrator role.
-        $admin = get_role( 'administrator' );
-        if ( $admin ) {
-            $admin_caps = [
-                'edit_ovr_properties',
-                'edit_others_ovr_properties',
-                'edit_published_ovr_properties',
-                'publish_ovr_properties',
-                'delete_ovr_properties',
-                'delete_others_ovr_properties',
-                'delete_published_ovr_properties',
-                'read_private_ovr_properties',
-                'ovr_manage_listings',
-                'ovr_manage_all_listings',
-                'ovr_view_dashboard',
-                'ovr_manage_subscription',
-                'ovr_manage_all_subscriptions',
-                'ovr_manage_settings',
-                'ovr_manage_users',
-                'ovr_view_reports',
-                'ovr_manage_reviews',
-                'ovr_manage_payments',
-                'ovr_send_inquiries',
-                'ovr_view_inquiries',
-                'ovr_view_all_inquiries',
-                'ovr_manage_profile',
-            ];
-
-            foreach ( $admin_caps as $cap ) {
-                $admin->add_cap( $cap );
-            }
-        }
+        // Support Agent role + administrator caps are applied by the registry,
+        // which also stamps the synced cap-set version so init()'s maybe_sync()
+        // stays a no-op until the matrix changes again.
+        Capabilities::sync();
+        update_option( Capabilities::SYNC_OPTION, Capabilities::SYNC_VERSION );
     }
 
     /**

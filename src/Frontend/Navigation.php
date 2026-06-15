@@ -21,6 +21,9 @@ class Navigation {
         if ( is_user_logged_in() ) {
             $dashboard_url = Pages::get_page_url( 'ovr_page_dashboard' );
             $items .= '<li class="menu-item ovr-nav-dashboard"><a href="' . esc_url( $dashboard_url ) . '">' . esc_html__( 'Dashboard', 'ovr-core' ) . '</a></li>';
+            if ( current_user_can( 'manage_options' ) ) {
+                $items .= '<li class="menu-item ovr-nav-admin"><a href="' . esc_url( admin_url() ) . '">' . esc_html__( 'Site Admin', 'ovr-core' ) . '</a></li>';
+            }
             $items .= '<li class="menu-item ovr-nav-logout"><a href="' . esc_url( wp_logout_url( home_url() ) ) . '">' . esc_html__( 'Logout', 'ovr-core' ) . '</a></li>';
         } else {
             $login_url    = Pages::get_page_url( 'ovr_page_login' );
