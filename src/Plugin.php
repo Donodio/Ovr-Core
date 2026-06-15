@@ -177,6 +177,11 @@ class Plugin {
         $this->modules['email_events'] = new \OVR\Email\EmailEvents();
         $this->modules['email_events']->init();
 
+        // Settings behaviour bindings (M3 F5) — image quality, sessions, login
+        // throttling, 2FA, favicon. Front + admin.
+        $this->modules['settings_behaviors'] = new \OVR\Core\SettingsBehaviors();
+        $this->modules['settings_behaviors']->init();
+
         // Backblaze B2 offloading + URL rewriting (Feature E). Runs on front +
         // admin so externally-stored media resolves to its B2 URL everywhere.
         $this->modules['storage_offloader'] = new \OVR\Storage\StorageOffloader();

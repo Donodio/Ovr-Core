@@ -110,6 +110,43 @@ class Settings {
         if ( isset( $input['bump_daily_limit'] ) )       $clean['bump_daily_limit']       = max( 1, (int) $input['bump_daily_limit'] );
         if ( isset( $input['listing_retention_days'] ) ) $clean['listing_retention_days'] = max( 1, (int) $input['listing_retention_days'] );
 
+        // General (M3 F5) — branding + locale.
+        if ( isset( $input['site_name'] ) )      $clean['site_name']      = sanitize_text_field( $input['site_name'] );
+        if ( isset( $input['support_email'] ) )  $clean['support_email']  = sanitize_email( $input['support_email'] );
+        if ( isset( $input['business_phone'] ) ) $clean['business_phone'] = sanitize_text_field( $input['business_phone'] );
+        if ( isset( $input['logo_url'] ) )       $clean['logo_url']       = esc_url_raw( $input['logo_url'] );
+        if ( isset( $input['favicon_url'] ) )    $clean['favicon_url']    = esc_url_raw( $input['favicon_url'] );
+        if ( isset( $input['timezone_string'] ) ) $clean['timezone_string'] = sanitize_text_field( $input['timezone_string'] );
+        if ( isset( $input['date_format'] ) )    $clean['date_format']    = sanitize_text_field( $input['date_format'] );
+
+        // Listing caps (M3 F5).
+        foreach ( [ 'max_listings', 'max_photos', 'max_videos', 'max_documents' ] as $ck ) {
+            if ( isset( $input[ $ck ] ) ) $clean[ $ck ] = max( 0, (int) $input[ $ck ] );
+        }
+        if ( isset( $input['default_listing_status'] ) ) {
+            $clean['default_listing_status'] = in_array( $input['default_listing_status'], [ 'active', 'inactive' ], true ) ? $input['default_listing_status'] : 'active';
+        }
+
+        // Subscription default (M3 F5).
+        if ( isset( $input['default_membership'] ) ) $clean['default_membership'] = sanitize_text_field( $input['default_membership'] );
+
+        // Media (M3 F5).
+        if ( isset( $input['image_quality'] ) )    $clean['image_quality']    = max( 10, min( 100, (int) $input['image_quality'] ) );
+        $clean['enable_watermark'] = ! empty( $input['enable_watermark'] );
+        if ( isset( $input['watermark_position'] ) ) {
+            $allowed = [ 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center' ];
+            $clean['watermark_position'] = in_array( $input['watermark_position'], $allowed, true ) ? $input['watermark_position'] : 'bottom-right';
+        }
+        if ( isset( $input['watermark_opacity'] ) ) $clean['watermark_opacity'] = max( 0, min( 100, (int) $input['watermark_opacity'] ) );
+
+        // Security (M3 F5).
+        if ( isset( $input['password_min_length'] ) ) $clean['password_min_length'] = max( 6, min( 64, (int) $input['password_min_length'] ) );
+        $clean['password_require_mixed'] = ! empty( $input['password_require_mixed'] );
+        if ( isset( $input['session_timeout_hours'] ) ) $clean['session_timeout_hours'] = max( 0, (int) $input['session_timeout_hours'] );
+        if ( isset( $input['login_attempt_limit'] ) )   $clean['login_attempt_limit']   = max( 0, (int) $input['login_attempt_limit'] );
+        if ( isset( $input['login_lockout_minutes'] ) ) $clean['login_lockout_minutes'] = max( 1, (int) $input['login_lockout_minutes'] );
+        $clean['enable_2fa'] = ! empty( $input['enable_2fa'] );
+
         // Storage — Backblaze B2 (Feature E).
         $clean['b2_enabled']      = ! empty( $input['b2_enabled'] );
         $clean['b2_delete_local'] = ! empty( $input['b2_delete_local'] );
@@ -211,6 +248,8 @@ class Settings {
             'billing'       => __( 'Billing',         'ovr-core' ),
             'subscriptions' => __( 'Subscriptions',   'ovr-core' ),
             'listings'      => __( 'Listings',        'ovr-core' ),
+            'media'         => __( 'Media',           'ovr-core' ),
+            'security'      => __( 'Security',        'ovr-core' ),
             'storage'       => __( 'Storage',         'ovr-core' ),
             'reputation'    => __( 'Reputation',      'ovr-core' ),
             'roles'         => __( 'User Roles',      'ovr-core' ),
@@ -250,6 +289,8 @@ class Settings {
                     'billing'       => 'receipt_long',
                     'subscriptions' => 'subscriptions',
                     'listings'      => 'home_work',
+                    'media'         => 'image',
+                    'security'      => 'lock',
                     'storage'       => 'cloud',
                     'reputation'    => 'star',
                     'roles'         => 'admin_panel_settings',
@@ -287,6 +328,8 @@ class Settings {
                                 case 'billing':       $this->render_billing( $settings );       break;
                                 case 'subscriptions': $this->render_subscriptions( $settings ); break;
                                 case 'listings':      $this->render_listings( $settings );      break;
+                                case 'media':         $this->render_media( $settings );         break;
+                                case 'security':      $this->render_security( $settings );      break;
                                 case 'storage':       $this->render_storage( $settings );       break;
                                 case 'reputation':    $this->render_reputation( $settings );    break;
                                 case 'fleet':         $this->render_fleet( $settings );         break;
@@ -385,7 +428,56 @@ class Settings {
     }
 
     private function render_general( array $s ): void {
+        $opt = esc_attr( self::OPTION );
         ?>
+        <tr>
+            <th><label for="ovr-site-name"><?php esc_html_e( 'Site Name', 'ovr-core' ); ?></label></th>
+            <td>
+                <input id="ovr-site-name" name="<?php echo $opt; ?>[site_name]" type="text" class="regular-text"
+                       value="<?php echo esc_attr( $s['site_name'] ?? get_bloginfo( 'name' ) ); ?>">
+                <p class="description"><?php esc_html_e( 'Brand name shown in emails and across the platform.', 'ovr-core' ); ?></p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-support-email"><?php esc_html_e( 'Support Email', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-support-email" name="<?php echo $opt; ?>[support_email]" type="email" class="regular-text"
+                       value="<?php echo esc_attr( $s['support_email'] ?? get_option( 'admin_email' ) ); ?>">
+                <p class="description"><?php esc_html_e( 'Where admin-bound notifications are sent.', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-phone"><?php esc_html_e( 'Phone Number', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-phone" name="<?php echo $opt; ?>[business_phone]" type="text" class="regular-text"
+                       value="<?php echo esc_attr( $s['business_phone'] ?? '' ); ?>"></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-logo"><?php esc_html_e( 'Logo URL', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-logo" name="<?php echo $opt; ?>[logo_url]" type="url" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( $s['logo_url'] ?? '' ); ?>" placeholder="https://…/logo.png"></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-favicon"><?php esc_html_e( 'Favicon URL', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-favicon" name="<?php echo $opt; ?>[favicon_url]" type="url" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( $s['favicon_url'] ?? '' ); ?>" placeholder="https://…/favicon.ico">
+                <p class="description"><?php esc_html_e( 'Output in the site head on front-end pages.', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-tz"><?php esc_html_e( 'Timezone', 'ovr-core' ); ?></label></th>
+            <td>
+                <select id="ovr-tz" name="<?php echo $opt; ?>[timezone_string]">
+                    <option value=""><?php esc_html_e( '— Use WordPress default —', 'ovr-core' ); ?></option>
+                    <?php
+                    $cur_tz = (string) ( $s['timezone_string'] ?? '' );
+                    echo wp_timezone_choice( $cur_tz ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- core helper outputs safe option markup
+                    ?>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-dateformat"><?php esc_html_e( 'Date Format', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-dateformat" name="<?php echo $opt; ?>[date_format]" type="text" class="small-text"
+                       value="<?php echo esc_attr( $s['date_format'] ?? get_option( 'date_format' ) ); ?>">
+                <p class="description"><?php esc_html_e( 'PHP date format used in platform displays (e.g. F j, Y).', 'ovr-core' ); ?></p></td>
+        </tr>
         <tr>
             <th><label for="ovr-currency"><?php esc_html_e( 'Currency Code', 'ovr-core' ); ?></label></th>
             <td>
@@ -593,6 +685,25 @@ class Settings {
             </td>
         </tr>
         <tr>
+            <th><label for="ovr-default-plan"><?php esc_html_e( 'Default Membership', 'ovr-core' ); ?></label></th>
+            <td>
+                <?php
+                $plans = class_exists( '\OVR\Subscription\Plans' ) ? (array) \OVR\Subscription\Plans::get_plans() : [];
+                $cur_plan = (string) ( $s['default_membership'] ?? '' );
+                ?>
+                <select id="ovr-default-plan" name="<?php echo esc_attr( self::OPTION ); ?>[default_membership]">
+                    <option value=""><?php esc_html_e( '— None —', 'ovr-core' ); ?></option>
+                    <?php foreach ( $plans as $slug => $plan ) :
+                        $pslug  = is_string( $slug ) ? $slug : (string) ( $plan['slug'] ?? '' );
+                        $plabel = is_array( $plan ) ? (string) ( $plan['name'] ?? $pslug ) : (string) $plan;
+                    ?>
+                        <option value="<?php echo esc_attr( $pslug ); ?>" <?php selected( $cur_plan, $pslug ); ?>><?php echo esc_html( $plabel ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="description"><?php esc_html_e( 'Membership assigned/suggested to new landlords by default.', 'ovr-core' ); ?></p>
+            </td>
+        </tr>
+        <tr>
             <th><?php esc_html_e( 'Feature Toggles', 'ovr-core' ); ?></th>
             <td>
                 <div class="ovr-settings-checkgroup">
@@ -639,6 +750,122 @@ class Settings {
                        value="<?php echo esc_attr( (string) ( $s['listing_retention_days'] ?? 90 ) ); ?>" class="small-text">
                 <p class="description"><?php esc_html_e( 'Soft-deleted listings are recoverable for this long, then permanently removed by a daily cleanup. Default 90 days.', 'ovr-core' ); ?></p>
             </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-max-listings"><?php esc_html_e( 'Maximum Listings / Owner', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-max-listings" name="<?php echo $opt; ?>[max_listings]" type="number" min="0" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['max_listings'] ?? 0 ) ); ?>">
+                <p class="description"><?php esc_html_e( '0 = unlimited (subscription plan limits still apply).', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-max-photos"><?php esc_html_e( 'Maximum Photos / Listing', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-max-photos" name="<?php echo $opt; ?>[max_photos]" type="number" min="0" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['max_photos'] ?? 0 ) ); ?>">
+                <p class="description"><?php esc_html_e( '0 = unlimited.', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-max-videos"><?php esc_html_e( 'Maximum Videos / Listing', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-max-videos" name="<?php echo $opt; ?>[max_videos]" type="number" min="0" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['max_videos'] ?? 1 ) ); ?>"></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-max-docs"><?php esc_html_e( 'Maximum Documents / Listing', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-max-docs" name="<?php echo $opt; ?>[max_documents]" type="number" min="0" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['max_documents'] ?? 3 ) ); ?>"></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-default-status"><?php esc_html_e( 'Default Listing Status', 'ovr-core' ); ?></label></th>
+            <td>
+                <select id="ovr-default-status" name="<?php echo $opt; ?>[default_listing_status]">
+                    <?php $ds = (string) ( $s['default_listing_status'] ?? 'active' ); ?>
+                    <option value="active" <?php selected( $ds, 'active' ); ?>><?php esc_html_e( 'Active', 'ovr-core' ); ?></option>
+                    <option value="inactive" <?php selected( $ds, 'inactive' ); ?>><?php esc_html_e( 'Inactive', 'ovr-core' ); ?></option>
+                </select>
+                <p class="description"><?php esc_html_e( 'Owner-facing status applied to newly created listings.', 'ovr-core' ); ?></p>
+            </td>
+        </tr>
+        <?php
+    }
+
+    /**
+     * Media tab (M3 F5) — image quality + watermark behaviour.
+     */
+    private function render_media( array $s ): void {
+        $opt = esc_attr( self::OPTION );
+        $pos = (string) ( $s['watermark_position'] ?? 'bottom-right' );
+        ?>
+        <tr>
+            <th><label for="ovr-img-quality"><?php esc_html_e( 'Image Quality', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-img-quality" name="<?php echo $opt; ?>[image_quality]" type="number" min="10" max="100" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['image_quality'] ?? 82 ) ); ?>">
+                <p class="description"><?php esc_html_e( 'JPEG/WebP compression quality (10–100). Lower = smaller files. Default 82.', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><?php esc_html_e( 'Watermark', 'ovr-core' ); ?></th>
+            <td>
+                <div class="ovr-settings-checkgroup">
+                    <label><input type="checkbox" name="<?php echo $opt; ?>[enable_watermark]" value="1" <?php checked( ! empty( $s['enable_watermark'] ) ); ?>> <?php esc_html_e( 'Watermark uploaded photos', 'ovr-core' ); ?></label>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-wm-pos"><?php esc_html_e( 'Watermark Position', 'ovr-core' ); ?></label></th>
+            <td>
+                <select id="ovr-wm-pos" name="<?php echo $opt; ?>[watermark_position]">
+                    <?php foreach ( [ 'top-left' => 'Top Left', 'top-right' => 'Top Right', 'bottom-left' => 'Bottom Left', 'bottom-right' => 'Bottom Right', 'center' => 'Center' ] as $k => $label ) : ?>
+                        <option value="<?php echo esc_attr( $k ); ?>" <?php selected( $pos, $k ); ?>><?php echo esc_html( $label ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-wm-op"><?php esc_html_e( 'Watermark Opacity (%)', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-wm-op" name="<?php echo $opt; ?>[watermark_opacity]" type="number" min="0" max="100" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['watermark_opacity'] ?? 70 ) ); ?>"></td>
+        </tr>
+        <?php
+    }
+
+    /**
+     * Security tab (M3 F5) — password rules, sessions, login throttling, 2FA.
+     */
+    private function render_security( array $s ): void {
+        $opt = esc_attr( self::OPTION );
+        ?>
+        <tr>
+            <th><label for="ovr-pw-min"><?php esc_html_e( 'Minimum Password Length', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-pw-min" name="<?php echo $opt; ?>[password_min_length]" type="number" min="6" max="64" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['password_min_length'] ?? 8 ) ); ?>"></td>
+        </tr>
+        <tr>
+            <th><?php esc_html_e( 'Password Strength', 'ovr-core' ); ?></th>
+            <td><div class="ovr-settings-checkgroup">
+                <label><input type="checkbox" name="<?php echo $opt; ?>[password_require_mixed]" value="1" <?php checked( ! empty( $s['password_require_mixed'] ) ); ?>> <?php esc_html_e( 'Require letters and numbers', 'ovr-core' ); ?></label>
+            </div></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-session"><?php esc_html_e( 'Session Timeout (hours)', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-session" name="<?php echo $opt; ?>[session_timeout_hours]" type="number" min="0" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['session_timeout_hours'] ?? 0 ) ); ?>">
+                <p class="description"><?php esc_html_e( '0 = WordPress default (2 days / 14 days "remember me").', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-login-limit"><?php esc_html_e( 'Login Attempt Limit', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-login-limit" name="<?php echo $opt; ?>[login_attempt_limit]" type="number" min="0" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['login_attempt_limit'] ?? 0 ) ); ?>">
+                <p class="description"><?php esc_html_e( '0 = no limit. After this many failures from one IP, login is temporarily blocked.', 'ovr-core' ); ?></p></td>
+        </tr>
+        <tr>
+            <th><label for="ovr-lockout"><?php esc_html_e( 'Lockout Duration (minutes)', 'ovr-core' ); ?></label></th>
+            <td><input id="ovr-lockout" name="<?php echo $opt; ?>[login_lockout_minutes]" type="number" min="1" step="1" class="small-text"
+                       value="<?php echo esc_attr( (string) ( $s['login_lockout_minutes'] ?? 15 ) ); ?>"></td>
+        </tr>
+        <tr>
+            <th><?php esc_html_e( 'Two-Factor Authentication', 'ovr-core' ); ?></th>
+            <td><div class="ovr-settings-checkgroup">
+                <label><input type="checkbox" name="<?php echo $opt; ?>[enable_2fa]" value="1" <?php checked( ! empty( $s['enable_2fa'] ) ); ?>> <?php esc_html_e( 'Require an emailed one-time code for administrator logins', 'ovr-core' ); ?></label>
+            </div>
+            <p class="description"><?php esc_html_e( 'Adds an email OTP step for users who can manage the platform. Fails open if email cannot be sent. Define OVR_DISABLE_2FA in wp-config.php to bypass in an emergency.', 'ovr-core' ); ?></p></td>
         </tr>
         <?php
     }

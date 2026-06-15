@@ -152,7 +152,16 @@ class ImageTools {
             return false;
         }
 
-        return self::process( $file, static function ( $img ) use ( $text ) {
+        // Position + opacity are admin-configurable (M3 F5 Media settings).
+        $settings = (array) get_option( 'ovr_settings', [] );
+        $position = (string) ( $settings['watermark_position'] ?? 'bottom-right' );
+        $opacity  = isset( $settings['watermark_opacity'] ) ? (int) $settings['watermark_opacity'] : 70;
+        $opacity  = max( 0, min( 100, $opacity ) );
+        // GD alpha: 0 = opaque, 127 = transparent.
+        $alpha       = (int) round( ( 100 - $opacity ) / 100 * 127 );
+        $shadowAlpha = min( 127, $alpha + 35 );
+
+        return self::process( $file, static function ( $img ) use ( $text, $position, $alpha, $shadowAlpha ) {
             $w = imagesx( $img );
             $h = imagesy( $img );
             imagealphablending( $img, true );
@@ -160,16 +169,31 @@ class ImageTools {
             $margin = (int) round( $w * 0.025 ) + 6;
             $font   = self::font();
 
+            // Resolve top-left origin (x,y) for a block of width $bw, height $bh.
+            $place = static function ( int $bw, int $bh ) use ( $w, $h, $margin, $position ) {
+                switch ( $position ) {
+                    case 'top-left':     return [ $margin, $margin ];
+                    case 'top-right':    return [ $w - $bw - $margin, $margin ];
+                    case 'bottom-left':  return [ $margin, $h - $bh - $margin ];
+                    case 'center':       return [ (int) round( ( $w - $bw ) / 2 ), (int) round( ( $h - $bh ) / 2 ) ];
+                    case 'bottom-right':
+                    default:             return [ $w - $bw - $margin, $h - $bh - $margin ];
+                }
+            };
+
             if ( $font ) {
-                $size   = max( 12, (int) round( $w * 0.035 ) );
-                $box    = imagettfbbox( $size, 0, $font, $text );
-                $tw     = abs( $box[2] - $box[0] );
-                $x      = $w - $tw - $margin;
-                $y      = $h - $margin;
-                $shadow = imagecolorallocatealpha( $img, 0, 0, 0, 75 );
-                $white  = imagecolorallocatealpha( $img, 255, 255, 255, 40 );
-                imagettftext( $img, $size, 0, (int) $x + 2, (int) $y + 2, $shadow, $font, $text );
-                imagettftext( $img, $size, 0, (int) $x, (int) $y, $white, $font, $text );
+                $size = max( 12, (int) round( $w * 0.035 ) );
+                $box  = imagettfbbox( $size, 0, $font, $text );
+                $tw   = abs( $box[2] - $box[0] );
+                $th   = abs( $box[7] - $box[1] );
+                [ $ox, $oy ] = $place( $tw, $th );
+                // imagettftext y is the baseline, so add text height to the top origin.
+                $bx     = (int) $ox;
+                $by     = (int) $oy + $th;
+                $shadow = imagecolorallocatealpha( $img, 0, 0, 0, $shadowAlpha );
+                $white  = imagecolorallocatealpha( $img, 255, 255, 255, $alpha );
+                imagettftext( $img, $size, 0, $bx + 2, $by + 2, $shadow, $font, $text );
+                imagettftext( $img, $size, 0, $bx, $by, $white, $font, $text );
             } else {
                 // Portable fallback: GD's built-in font upscaled onto a buffer.
                 $gd  = 5;
@@ -182,7 +206,8 @@ class ImageTools {
                 $scale = max( 2, (int) round( ( $w * 0.32 ) / $tw0 ) );
                 $dw    = $tw0 * $scale;
                 $dh    = $th0 * $scale;
-                imagecopyresampled( $img, $buf, $w - $dw - $margin, $h - $dh - $margin, 0, 0, $dw, $dh, $tw0, $th0 );
+                [ $dx, $dy ] = $place( $dw, $dh );
+                imagecopyresampled( $img, $buf, (int) $dx, (int) $dy, 0, 0, $dw, $dh, $tw0, $th0 );
             }
 
             return $img;

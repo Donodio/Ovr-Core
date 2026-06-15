@@ -54,8 +54,12 @@ class RegistrationHandler {
         if ( email_exists( $email ) ) {
             $errors[] = __( 'An account with this email already exists.', 'ovr-core' );
         }
-        if ( strlen( $password ) < 8 ) {
-            $errors[] = __( 'Password must be at least 8 characters.', 'ovr-core' );
+        // Password policy (M3 F5 Security settings; falls back to 8-char min).
+        $pw_error = class_exists( '\OVR\Core\SettingsBehaviors' )
+            ? \OVR\Core\SettingsBehaviors::password_error( (string) $password )
+            : ( strlen( (string) $password ) < 8 ? __( 'Password must be at least 8 characters.', 'ovr-core' ) : '' );
+        if ( '' !== $pw_error ) {
+            $errors[] = $pw_error;
         }
         if ( $password !== $confirm ) {
             $errors[] = __( 'Passwords do not match.', 'ovr-core' );

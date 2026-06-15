@@ -310,7 +310,7 @@ class ListingForm {
             $ostatus = sanitize_key( wp_unslash( $_POST['listing_status'] ) );
             update_post_meta( $post_id, '_ovr_listing_status', in_array( $ostatus, [ 'active', 'inactive' ], true ) ? $ostatus : 'active' );
         } elseif ( ! $editing ) {
-            update_post_meta( $post_id, '_ovr_listing_status', 'active' );
+            update_post_meta( $post_id, '_ovr_listing_status', \OVR\Core\SettingsBehaviors::default_listing_status() );
         }
 
         // Admin-only status (Phase 8B): Approved / Hidden / Suspended / Pending
@@ -341,6 +341,11 @@ class ListingForm {
             array_map( 'absint', explode( ',', $raw ) ),
             static fn( $id ) => $id && 'attachment' === get_post_type( $id )
         ) );
+        // Enforce the admin photo cap (M3 F5; 0 = unlimited).
+        $photo_cap = \OVR\Core\SettingsBehaviors::max_photos();
+        if ( $photo_cap > 0 && count( $gids ) > $photo_cap ) {
+            $gids = array_slice( $gids, 0, $photo_cap );
+        }
         update_post_meta( $post_id, '_ovr_gallery_ids', implode( ',', $gids ) );
         if ( $gids ) {
             set_post_thumbnail( $post_id, $gids[0] );
@@ -439,7 +444,7 @@ class ListingForm {
             $ob = (int) ( $orders[ $b ] ?? 0 );
             return $oa <=> $ob;
         } );
-        $ids = array_slice( $ids, 0, self::MAX_DOCS );
+        $ids = array_slice( $ids, 0, \OVR\Core\SettingsBehaviors::max_documents() );
 
         $meta = [];
         foreach ( $ids as $i => $id ) {
