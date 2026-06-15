@@ -218,6 +218,45 @@ class ImageTools {
      * Load → run a GD callback → save back over the same file, preserving type.
      * The callback receives the GD image and returns the image to save (or null).
      */
+    /**
+     * Write a WebP copy of a JPEG/PNG source to $dest (M3 F12). Returns false
+     * when GD lacks WebP support or the source can't be read; never throws.
+     *
+     * @param string $src     Source image path.
+     * @param string $dest    Destination .webp path.
+     * @param int    $quality 0–100.
+     */
+    public static function to_webp( string $src, string $dest, int $quality = 82 ): bool {
+        if ( ! function_exists( 'imagewebp' ) || ! is_readable( $src ) ) {
+            return false;
+        }
+        $info = @getimagesize( $src );
+        if ( false === $info ) {
+            return false;
+        }
+        switch ( $info[2] ) {
+            case IMAGETYPE_JPEG:
+                $img = @imagecreatefromjpeg( $src );
+                break;
+            case IMAGETYPE_PNG:
+                $img = function_exists( 'imagecreatefrompng' ) ? @imagecreatefrompng( $src ) : false;
+                if ( $img ) {
+                    imagepalettetotruecolor( $img );
+                    imagealphablending( $img, true );
+                    imagesavealpha( $img, true );
+                }
+                break;
+            default:
+                return false; // GIF/WebP sources skipped.
+        }
+        if ( false === $img ) {
+            return false;
+        }
+        $ok = imagewebp( $img, $dest, max( 0, min( 100, $quality ) ) );
+        imagedestroy( $img );
+        return (bool) $ok;
+    }
+
     private static function process( string $file, callable $cb ) {
         if ( ! is_readable( $file ) || ! function_exists( 'imagecreatefromjpeg' ) ) {
             return false;

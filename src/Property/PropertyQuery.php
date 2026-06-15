@@ -399,6 +399,17 @@ class PropertyQuery {
      * @return array<int, array>
      */
     public static function get_map_points( array $filters = [], int $max = 3000 ): array {
+        // Versioned transient cache (M3 F12) — this query loops every matching
+        // listing's meta/terms, so caching it is a meaningful win. The version
+        // is bumped by Core\Performance whenever a listing is saved/deleted, so
+        // results never go stale.
+        $ver       = class_exists( '\OVR\Core\Performance' ) ? \OVR\Core\Performance::mappoints_version() : 1;
+        $cache_key = 'ovr_mappoints_' . $ver . '_' . md5( wp_json_encode( [ $filters, $max ] ) );
+        $cached    = get_transient( $cache_key );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
         $args = self::build_args( $filters );
         $args['posts_per_page']         = $max;
         $args['paged']                  = 1;
@@ -464,6 +475,8 @@ class PropertyQuery {
                 'avail'    => isset( $busy[ $pid ] ) ? 'booked' : 'available',
             ];
         }
+
+        set_transient( $cache_key, $points, 10 * MINUTE_IN_SECONDS );
         return $points;
     }
 

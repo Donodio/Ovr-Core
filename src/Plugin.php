@@ -196,6 +196,11 @@ class Plugin {
         $this->modules['seo'] = new \OVR\Frontend\Seo();
         $this->modules['seo']->init();
 
+        // Performance: WebP generation/serving + query caching (M3 F12). Runs on
+        // front (serving) + admin (generation on upload).
+        $this->modules['performance'] = new \OVR\Core\Performance();
+        $this->modules['performance']->init();
+
         // Boot admin UI (only inside wp-admin / AJAX).
         if ( is_admin() ) {
             $this->boot_admin();
