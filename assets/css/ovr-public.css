@@ -738,6 +738,34 @@
     margin-bottom: 32px;
 }
 
+/* ── Accessibility (M3) ── */
+/* Visible keyboard-focus ring for any OVR interactive element that doesn't
+   already define one. Mouse users are unaffected (:focus-visible). */
+.ovr-wrap a:focus-visible,
+.ovr-wrap button:focus-visible,
+.ovr-wrap input:focus-visible,
+.ovr-wrap select:focus-visible,
+.ovr-wrap textarea:focus-visible,
+.ovr-wrap [tabindex]:focus-visible,
+.ovr-ad-banner:focus-visible,
+.ovr-hero-dots button:focus-visible,
+.ovr-map-legend:focus-visible {
+    outline: 3px solid var(--ovr-secondary, #b8860b);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Screen-reader-only text utility. */
+.ovr-sr-only {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* ── Ad Banners (M3 F8) ── */
 .ovr-ad-banners {
     display: flex;

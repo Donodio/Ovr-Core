@@ -33,7 +33,51 @@
         var isFilled = icon.classList.contains('fill');
         icon.classList.toggle('fill');
         icon.style.color = isFilled ? '' : 'var(--ovr-error)';
+        btn.setAttribute('aria-pressed', isFilled ? 'false' : 'true');
     });
+
+    /* ──────────────────────────────────────
+       Accessibility layer (M3)
+       Marks decorative Material-Symbols icons as aria-hidden, labels
+       icon-only controls from their title attribute, gives empty alt to
+       image elements missing one, and primes favorite buttons' pressed state.
+       Covers plugin- and Elementor-rendered markup alike.
+       ────────────────────────────────────── */
+    (function initA11y() {
+        // Decorative icon fonts should not be announced.
+        document.querySelectorAll('.material-symbols-outlined').forEach(function (icon) {
+            if (!icon.hasAttribute('aria-label') && !icon.hasAttribute('aria-hidden')) {
+                icon.setAttribute('aria-hidden', 'true');
+            }
+        });
+
+        // Icon-only buttons / links: borrow the title as an accessible name.
+        // Material-Symbols icons render their label as ligature text, so that
+        // text must be excluded when deciding whether a control is icon-only.
+        document.querySelectorAll('.ovr-wrap button, .ovr-wrap a').forEach(function (el) {
+            if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return;
+            var text = el.textContent || '';
+            el.querySelectorAll('.material-symbols-outlined').forEach(function (ic) {
+                text = text.replace(ic.textContent || '', '');
+            });
+            if (text.replace(/\s+/g, '').length) return; // has real visible text
+            var title = el.getAttribute('title');
+            if (title) el.setAttribute('aria-label', title);
+        });
+
+        // Images without an alt attribute are treated as decorative.
+        document.querySelectorAll('.ovr-wrap img:not([alt])').forEach(function (img) {
+            img.setAttribute('alt', '');
+        });
+
+        // Favorite buttons start unpressed unless already filled.
+        document.querySelectorAll('.ovr-card-favorite').forEach(function (btn) {
+            if (!btn.hasAttribute('aria-pressed')) {
+                var ic = btn.querySelector('.material-symbols-outlined');
+                btn.setAttribute('aria-pressed', ic && ic.classList.contains('fill') ? 'true' : 'false');
+            }
+        });
+    })();
 
     /* ──────────────────────────────────────
        Promo Code Apply
