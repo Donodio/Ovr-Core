@@ -249,6 +249,28 @@ class Seo {
      * @return array{title:string,description:string,url:string,image:string,og_type:string,noindex:bool}|null
      */
     private function context(): ?array {
+        // Front page / posts page: give it an OG + description so shares and
+        // search snippets aren't blank (it also carries Organization/WebSite LD).
+        if ( is_front_page() || is_home() ) {
+            $settings = (array) get_option( Settings::OPTION, [] );
+            $desc     = $this->trim_desc( (string) get_bloginfo( 'description' ) );
+            if ( '' === $desc ) {
+                $desc = sprintf(
+                    /* translators: %s: site name */
+                    __( 'Find and book vacation and long-term village rentals on %s — browse photos, prices and availability and contact owners directly.', 'ovr-core' ),
+                    $this->site_name()
+                );
+            }
+            return [
+                'title'       => $this->site_name(),
+                'description' => $desc,
+                'url'         => home_url( '/' ),
+                'image'       => (string) ( $settings['logo_url'] ?? '' ),
+                'og_type'     => 'website',
+                'noindex'     => false,
+            ];
+        }
+
         if ( is_singular( 'ovr_property' ) ) {
             $pid   = get_queried_object_id();
             $desc  = (string) get_post_meta( $pid, '_ovr_seo_description', true );
