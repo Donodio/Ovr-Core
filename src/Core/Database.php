@@ -534,5 +534,25 @@ class Database {
             KEY property_id (property_id),
             KEY created_at (created_at)
         ) {$charset_collate};" );
+
+        // Homepage Hero Slides (M3 F7) — an admin-managed slideshow that feeds the
+        // Elementor "OVR Hero Section" widget. Each slide: a background image plus
+        // optional per-slide heading/subtitle/CTA. sort_order = display order.
+        $table_slides = $wpdb->prefix . 'ovr_hero_slides';
+        dbDelta( "CREATE TABLE {$table_slides} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            image_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            heading varchar(255) NOT NULL DEFAULT '',
+            subtitle text DEFAULT NULL,
+            cta_text varchar(120) NOT NULL DEFAULT '',
+            cta_url varchar(500) NOT NULL DEFAULT '',
+            sort_order int(11) NOT NULL DEFAULT 0,
+            is_enabled tinyint(1) NOT NULL DEFAULT 1,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY sort_order (sort_order),
+            KEY is_enabled (is_enabled)
+        ) {$charset_collate};" );
     }
 }

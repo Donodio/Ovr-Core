@@ -85,6 +85,69 @@
     }
 
     /* ──────────────────────────────────────
+       Hero Slideshow (M3 F7)
+       Rotates the admin-managed hero slides (and their per-slide captions),
+       building clickable position dots. Single-slide heroes are left static,
+       and auto-advance is suppressed when the user prefers reduced motion.
+       ────────────────────────────────────── */
+    (function initHeroSlideshows() {
+        var heroes = document.querySelectorAll('.ovr-hero--slideshow');
+        if (!heroes.length) return;
+
+        var reduceMotion = window.matchMedia &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        heroes.forEach(function (hero) {
+            var stage    = hero.querySelector('.ovr-hero-slideshow');
+            var slides   = stage ? stage.querySelectorAll('.ovr-hero-slide') : [];
+            var captions = hero.querySelectorAll('.ovr-hero-caption');
+            if (slides.length < 2) return;
+
+            var interval = parseInt(stage.getAttribute('data-interval'), 10) || 6000;
+            var current  = 0;
+            var timer    = null;
+
+            // Build position dots.
+            var dotsWrap = document.createElement('div');
+            dotsWrap.className = 'ovr-hero-dots';
+            var dots = [];
+            for (var i = 0; i < slides.length; i++) {
+                var dot = document.createElement('button');
+                dot.type = 'button';
+                dot.setAttribute('aria-label', 'Slide ' + (i + 1));
+                if (i === 0) dot.className = 'is-active';
+                (function (idx) {
+                    dot.addEventListener('click', function () { go(idx); restart(); });
+                })(i);
+                dotsWrap.appendChild(dot);
+                dots.push(dot);
+            }
+            hero.appendChild(dotsWrap);
+
+            function setActive(list, idx) {
+                for (var j = 0; j < list.length; j++) {
+                    list[j].classList.toggle('is-active', j === idx);
+                }
+            }
+
+            function go(idx) {
+                current = (idx + slides.length) % slides.length;
+                setActive(slides, current);
+                if (captions.length) setActive(captions, current);
+                setActive(dots, current);
+            }
+
+            function restart() {
+                if (reduceMotion) return;
+                if (timer) clearInterval(timer);
+                timer = setInterval(function () { go(current + 1); }, interval);
+            }
+
+            restart();
+        });
+    })();
+
+    /* ──────────────────────────────────────
        Mobile Nav Toggle (Phase 2 enhancement)
        ────────────────────────────────────── */
 

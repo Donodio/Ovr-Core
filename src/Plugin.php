@@ -238,6 +238,7 @@ class Plugin {
         $this->modules['admin_audit_log'] = new \OVR\Admin\AuditLogAdmin();
         $this->modules['admin_emails'] = new \OVR\Admin\EmailManagerAdmin();
         $this->modules['admin_search'] = new \OVR\Admin\GlobalSearch();
+        $this->modules['admin_hero_slides'] = new \OVR\Admin\HeroSlidesAdmin();
 
         $this->modules['admin_meta_boxes']->init();
         $this->modules['admin_property_editor']->init();
@@ -260,6 +261,7 @@ class Plugin {
         $this->modules['admin_audit_log']->init();
         $this->modules['admin_emails']->init();
         $this->modules['admin_search']->init();
+        $this->modules['admin_hero_slides']->init();
     }
 
     /**

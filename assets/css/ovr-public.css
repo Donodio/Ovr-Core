@@ -689,6 +689,83 @@
     background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent, rgba(0,0,0,0.2));
 }
 
+/* ── Hero Slideshow (M3 F7) — admin-managed slides feeding the hero widget ── */
+.ovr-hero-slideshow .ovr-hero-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+}
+
+.ovr-hero-slideshow .ovr-hero-slide.is-active {
+    opacity: 1;
+}
+
+.ovr-hero-slideshow .ovr-hero-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Per-slide captions are stacked; only the active one shows. The wrapper holds
+   its height from the tallest caption so the hero doesn't jump between slides. */
+.ovr-hero-captions {
+    display: grid;
+}
+
+.ovr-hero-captions .ovr-hero-caption {
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.8s ease-in-out;
+}
+
+.ovr-hero-captions .ovr-hero-caption.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ovr-hero-captions .ovr-hero-caption h1 {
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    margin-bottom: 16px;
+}
+
+.ovr-hero-captions .ovr-hero-caption p {
+    color: #ffffff;
+    font-size: 18px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    margin-bottom: 32px;
+}
+
+/* Slide-position dots. */
+.ovr-hero-dots {
+    position: absolute;
+    bottom: 22px;
+    left: 0;
+    right: 0;
+    z-index: 12;
+    display: flex;
+    gap: 9px;
+    justify-content: center;
+}
+
+.ovr-hero-dots button {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+}
+
+.ovr-hero-dots button.is-active {
+    background: #ffffff;
+    transform: scale(1.25);
+}
+
 .ovr-hero-content {
     position: relative;
     z-index: 10;

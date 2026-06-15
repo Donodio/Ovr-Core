@@ -14,6 +14,7 @@ namespace OVR\Elementor\Widgets;
 use Elementor\Widget_Base;
 use Elementor\Controls_Manager;
 use OVR\Core\Pages;
+use OVR\Frontend\HeroSlides;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -59,12 +60,45 @@ class HeroSliderWidget extends Widget_Base {
             ],
         ] );
 
+        /* ── Background source: single image or the admin-managed slideshow ── */
+        $this->add_control( 'bg_source', [
+            'label'       => esc_html__( 'Background', 'ovr-core' ),
+            'type'        => Controls_Manager::SELECT,
+            'default'     => 'single',
+            'options'     => [
+                'single'    => esc_html__( 'Single Image', 'ovr-core' ),
+                'slideshow' => esc_html__( 'Homepage Slideshow', 'ovr-core' ),
+            ],
+            'description' => esc_html__( 'Slides are managed under Properties → Homepage Slides. If none are set, the single image below is used.', 'ovr-core' ),
+        ] );
+
+        $this->add_control( 'slide_content', [
+            'label'       => esc_html__( 'Slide Captions', 'ovr-core' ),
+            'type'        => Controls_Manager::SELECT,
+            'default'     => 'widget',
+            'options'     => [
+                'widget'    => esc_html__( 'Use the heading/content below', 'ovr-core' ),
+                'per_slide' => esc_html__( 'Use each slide\'s own heading/subtitle/button', 'ovr-core' ),
+            ],
+            'condition'   => [ 'bg_source' => 'slideshow' ],
+        ] );
+
+        $this->add_control( 'slide_interval', [
+            'label'       => esc_html__( 'Slide Interval (seconds)', 'ovr-core' ),
+            'type'        => Controls_Manager::NUMBER,
+            'default'     => 6,
+            'min'         => 2,
+            'max'         => 30,
+            'condition'   => [ 'bg_source' => 'slideshow' ],
+        ] );
+
         $this->add_control( 'bg_image', [
             'label'   => esc_html__( 'Background Image', 'ovr-core' ),
             'type'    => Controls_Manager::MEDIA,
             'default' => [
                 'url' => OVR_PLUGIN_URL . 'assets/images/ovr-placeholder.jpg',
             ],
+            'condition' => [ 'bg_source' => 'single' ],
         ] );
 
         $this->add_control( 'heading', [
@@ -219,17 +253,39 @@ class HeroSliderWidget extends Widget_Base {
         $bg_url     = $settings['bg_image']['url'] ?? '';
         $search_url = Pages::get_page_url( 'ovr_page_search' );
         $layout     = $settings['hero_layout'] ?? 'action_cards';
+
+        // Slideshow mode (M3 F7): pull admin-managed slides; fall back to the
+        // single background image when the slideshow is empty.
+        $is_slideshow = ( 'slideshow' === ( $settings['bg_source'] ?? 'single' ) );
+        $slides       = $is_slideshow ? HeroSlides::enabled() : [];
+        $is_slideshow  = $is_slideshow && ! empty( $slides );
+        $per_slide     = $is_slideshow && 'per_slide' === ( $settings['slide_content'] ?? 'widget' );
+        $interval_ms   = max( 2, (int) ( $settings['slide_interval'] ?? 6 ) ) * 1000;
         ?>
         <div class="ovr-wrap">
-            <section class="ovr-hero">
-                <div class="ovr-hero-bg">
-                    <?php if ( $bg_url ) : ?>
-                        <img src="<?php echo esc_url( $bg_url ); ?>" alt="" loading="eager">
-                    <?php endif; ?>
-                    <div class="ovr-hero-overlay"></div>
-                </div>
+            <section class="ovr-hero<?php echo $is_slideshow ? ' ovr-hero--slideshow' : ''; ?>">
+                <?php if ( $is_slideshow ) : ?>
+                    <div class="ovr-hero-bg ovr-hero-slideshow" data-interval="<?php echo esc_attr( (string) $interval_ms ); ?>">
+                        <?php foreach ( $slides as $i => $slide ) : ?>
+                            <div class="ovr-hero-slide<?php echo 0 === $i ? ' is-active' : ''; ?>" data-slide-index="<?php echo esc_attr( (string) $i ); ?>">
+                                <img src="<?php echo esc_url( $slide['image'] ); ?>" alt="" loading="<?php echo 0 === $i ? 'eager' : 'lazy'; ?>">
+                            </div>
+                        <?php endforeach; ?>
+                        <div class="ovr-hero-overlay"></div>
+                    </div>
+                <?php else : ?>
+                    <div class="ovr-hero-bg">
+                        <?php if ( $bg_url ) : ?>
+                            <img src="<?php echo esc_url( $bg_url ); ?>" alt="" loading="eager">
+                        <?php endif; ?>
+                        <div class="ovr-hero-overlay"></div>
+                    </div>
+                <?php endif; ?>
 
                 <div class="ovr-hero-content">
+                    <?php if ( $per_slide ) : ?>
+                        <?php $this->render_slide_captions( $slides ); ?>
+                    <?php else : ?>
                     <?php if ( ! empty( $settings['heading'] ) ) : ?>
                         <h1 class="ovr-h1"><?php echo esc_html( $settings['heading'] ); ?></h1>
                     <?php endif; ?>
@@ -275,8 +331,38 @@ class HeroSliderWidget extends Widget_Base {
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>
+                    <?php endif; /* per_slide */ ?>
                 </div>
             </section>
+        </div>
+        <?php
+    }
+
+    /**
+     * Render rotating per-slide captions (heading / subtitle / CTA) for the
+     * slideshow background. The active caption is synced to the active slide by
+     * the front-end rotator via matching data-slide-index attributes.
+     *
+     * @param array<int, array{image:string,heading:string,subtitle:string,cta_text:string,cta_url:string}> $slides
+     */
+    private function render_slide_captions( array $slides ): void {
+        ?>
+        <div class="ovr-hero-captions">
+            <?php foreach ( $slides as $i => $slide ) : ?>
+                <div class="ovr-hero-caption<?php echo 0 === $i ? ' is-active' : ''; ?>" data-slide-index="<?php echo esc_attr( (string) $i ); ?>">
+                    <?php if ( '' !== $slide['heading'] ) : ?>
+                        <h1 class="ovr-h1"><?php echo esc_html( $slide['heading'] ); ?></h1>
+                    <?php endif; ?>
+                    <?php if ( '' !== $slide['subtitle'] ) : ?>
+                        <p><?php echo esc_html( $slide['subtitle'] ); ?></p>
+                    <?php endif; ?>
+                    <?php if ( '' !== $slide['cta_text'] && '' !== $slide['cta_url'] ) : ?>
+                        <a href="<?php echo esc_url( $slide['cta_url'] ); ?>" class="ovr-btn ovr-btn-lg ovr-btn-pill" style="background:#fff;color:var(--ovr-primary)">
+                            <?php echo esc_html( $slide['cta_text'] ); ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
         </div>
         <?php
     }
