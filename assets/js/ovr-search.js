@@ -195,14 +195,29 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Stylish branded teardrop pin (CSS divIcon).
-        var ovrPin = window.L.divIcon({
-            className: 'ovr-map-pin',
-            html: '<span class="ovr-map-pin-pin"></span>',
-            iconSize: [30, 38],
-            iconAnchor: [15, 34],
-            popupAnchor: [0, -32]
-        });
+        // Branded teardrop pin (CSS divIcon), styled per listing (M3 F10):
+        //  - a property-type class drives the pin colour
+        //  - .is-featured adds a gold ring
+        //  - .is-booked dims the pin for listings unavailable tonight
+        // Pins are cached by their class signature so identical listings reuse
+        // one icon instance.
+        var pinCache = {};
+        function pinFor(p) {
+            var type = (p.type || 'default').toString().replace(/[^a-z0-9_-]/gi, '');
+            var classes = 'ovr-map-pin ovr-map-pin--type-' + type;
+            if (p.featured) classes += ' is-featured';
+            if (p.avail === 'booked') classes += ' is-booked';
+            if (pinCache[classes]) return pinCache[classes];
+            var icon = window.L.divIcon({
+                className: classes,
+                html: '<span class="ovr-map-pin-pin"></span>',
+                iconSize: [30, 38],
+                iconAnchor: [15, 34],
+                popupAnchor: [0, -32]
+            });
+            pinCache[classes] = icon;
+            return icon;
+        }
 
         // Cluster when the markercluster plugin is available; otherwise plain.
         var useCluster = typeof window.L.markerClusterGroup === 'function';
@@ -239,15 +254,18 @@
             if (isNaN(lat) || isNaN(lng)) return;
             if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
             var id = String(p.id);
-            var marker = window.L.marker([lat, lng], { icon: ovrPin });
+            var marker = window.L.marker([lat, lng], { icon: pinFor(p) });
             marker.bindPopup(buildPopup(p, symbol));
-            marker.on('click', function () { highlightCard(id); });
+            marker.on('click', function () { highlightCard(id); trackMap('marker_click'); });
+            marker.on('popupopen', function () { trackMap('popup_view'); });
             byId[id] = marker;
             layer.addLayer(marker);
             bounds.push([lat, lng]);
         });
 
         map.addLayer(layer);
+        trackMap('map_view');
+        addLegend(map);
 
         if (bounds.length === 1) {
             map.setView(bounds[0], 14);
@@ -344,6 +362,44 @@
         return String(str == null ? '' : str)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    /* Map interaction analytics (M3 F10). Fires a fire-and-forget beacon to the
+       ovr_map_track AJAX endpoint, which increments per-action counters. Each
+       action is counted at most once per page view for views, but every marker
+       interaction is sent. Silently no-ops when ovrData is unavailable. */
+    var trackedOnce = {};
+    function trackMap(action) {
+        if (typeof window.ovrData === 'undefined' || !window.ovrData.ajaxUrl) return;
+        if (action === 'map_view') {
+            if (trackedOnce[action]) return;
+            trackedOnce[action] = true;
+        }
+        var body = 'action=ovr_map_track&event=' + encodeURIComponent(action) +
+            '&nonce=' + encodeURIComponent(window.ovrData.nonce || '');
+        try {
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(window.ovrData.ajaxUrl, new Blob([body], { type: 'application/x-www-form-urlencoded' }));
+            } else {
+                fetch(window.ovrData.ajaxUrl, { method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body, keepalive: true });
+            }
+        } catch (e) { /* analytics must never break the map */ }
+    }
+
+    /* A compact legend explaining the pin colours / states. */
+    function addLegend(map) {
+        if (!window.L || !window.L.control) return;
+        var legend = window.L.control({ position: 'bottomright' });
+        legend.onAdd = function () {
+            var div = window.L.DomUtil.create('div', 'ovr-map-legend');
+            div.innerHTML =
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-featured"></i>Featured</span>' +
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot"></i>Available</span>' +
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-booked"></i>Booked tonight</span>';
+            return div;
+        };
+        legend.addTo(map);
     }
 
     function initSearchUI() {

@@ -47,10 +47,48 @@ class AjaxHandler {
         add_action( 'admin_post_ovr_update_profile',  [ $this, 'update_profile' ] );
         add_action( 'admin_post_ovr_change_password', [ $this, 'change_password' ] );
 
+        // Map interaction analytics (M3 F10) — beacon from ovr-search.js.
+        add_action( 'wp_ajax_ovr_map_track', [ $this, 'map_track' ] );
+        add_action( 'wp_ajax_nopriv_ovr_map_track', [ $this, 'map_track' ] );
+
         // Frontend: direct profile-photo upload (simple, in-house — no Gravatar).
         add_action( 'wp_ajax_ovr_upload_avatar', [ $this, 'upload_avatar' ] );
         // Serve the uploaded photo wherever WordPress asks for the user's avatar.
         add_filter( 'get_avatar_data', [ $this, 'filter_avatar_data' ], 10, 2 );
+    }
+
+    /**
+     * Record a map interaction event (M3 F10). Increments a per-event counter
+     * plus a per-day total in the `ovr_map_stats` option. Whitelisted events
+     * only; nonce-guarded but tolerant (analytics is non-critical).
+     */
+    public function map_track(): void {
+        if ( ! check_ajax_referer( 'ovr_public_nonce', 'nonce', false ) ) {
+            wp_send_json_error( [], 403 );
+        }
+        $event   = sanitize_key( wp_unslash( $_POST['event'] ?? '' ) );
+        $allowed = [ 'map_view', 'marker_click', 'popup_view', 'card_focus' ];
+        if ( ! in_array( $event, $allowed, true ) ) {
+            wp_send_json_error( [], 400 );
+        }
+
+        $stats = get_option( 'ovr_map_stats', [] );
+        if ( ! is_array( $stats ) ) {
+            $stats = [];
+        }
+        $stats['total']          = (int) ( $stats['total'] ?? 0 ) + 1;
+        $stats[ $event ]         = (int) ( $stats[ $event ] ?? 0 ) + 1;
+        $day                     = current_time( 'Y-m-d' );
+        $stats['by_day']         = isset( $stats['by_day'] ) && is_array( $stats['by_day'] ) ? $stats['by_day'] : [];
+        $stats['by_day'][ $day ] = (int) ( $stats['by_day'][ $day ] ?? 0 ) + 1;
+        // Keep only the last 60 days of the daily series so the option stays small.
+        if ( count( $stats['by_day'] ) > 60 ) {
+            ksort( $stats['by_day'] );
+            $stats['by_day'] = array_slice( $stats['by_day'], -60, null, true );
+        }
+
+        update_option( 'ovr_map_stats', $stats, false );
+        wp_send_json_success();
     }
 
     /**

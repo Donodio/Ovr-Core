@@ -171,7 +171,17 @@ class PlatformOverview {
 
         $settings = (array) get_option( Settings::OPTION, [] );
 
+        // Map engagement (M3 F10) — counters fed by the ovr_map_track beacon.
+        $map_stats = get_option( 'ovr_map_stats', [] );
+        $map_stats = is_array( $map_stats ) ? $map_stats : [];
+
         return [
+            'map_engagement'      => [
+                'views'         => (int) ( $map_stats['map_view'] ?? 0 ),
+                'marker_clicks' => (int) ( $map_stats['marker_click'] ?? 0 ),
+                'popup_views'   => (int) ( $map_stats['popup_view'] ?? 0 ),
+                'total'         => (int) ( $map_stats['total'] ?? 0 ),
+            ],
             'properties_total'    => $properties_total,
             'properties_active'   => $properties_active,
             'properties_featured' => $properties_featured,

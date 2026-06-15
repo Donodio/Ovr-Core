@@ -405,11 +405,20 @@ class PropertyQuery {
         $args['fields']                 = 'ids';
         $args['no_found_rows']          = true;
         $args['update_post_meta_cache'] = true;
-        $args['update_post_term_cache'] = false;
+        // Prime the term cache in bulk (M3 F10 reads each listing's property type
+        // for its map pin icon) — far cheaper than per-post term queries.
+        $args['update_post_term_cache'] = true;
         unset( $args['meta_key'], $args['orderby'], $args['order'] );
 
         $ids    = ( new \WP_Query( $args ) )->posts;
         $points = [];
+
+        // Availability state for the map (M3 F10): one query for the listings
+        // that are hard-blocked for tonight, so each pin can show available vs
+        // booked without a per-point query.
+        $today    = current_time( 'Y-m-d' );
+        $tomorrow = gmdate( 'Y-m-d', strtotime( $today . ' +1 day' ) );
+        $busy     = array_flip( Availability::unavailable_property_ids( $today, $tomorrow ) );
 
         foreach ( (array) $ids as $pid ) {
             $pid = (int) $pid;
@@ -425,19 +434,42 @@ class PropertyQuery {
             ) {
                 continue;
             }
+
+            // Primary property type → pin icon category.
+            $type_slug  = '';
+            $type_label = '';
+            $types      = wp_get_post_terms( $pid, 'ovr_property_type' );
+            if ( ! is_wp_error( $types ) && ! empty( $types ) ) {
+                $type_slug  = (string) $types[0]->slug;
+                $type_label = (string) $types[0]->name;
+            }
+
+            // Active featured boost → gold pin.
+            $featured = '1' === (string) get_post_meta( $pid, '_ovr_is_featured', true )
+                && self::boost_unexpired( (string) get_post_meta( $pid, '_ovr_featured_expires', true ), $today );
+
             $points[] = [
-                'id'    => $pid,
-                'title' => get_the_title( $pid ),
-                'url'   => get_permalink( $pid ),
-                'thumb' => get_the_post_thumbnail_url( $pid, 'medium' ) ?: '',
-                'price' => (float) get_post_meta( $pid, '_ovr_base_price', true ),
-                'beds'  => (int) get_post_meta( $pid, '_ovr_bedrooms', true ),
-                'baths' => (float) get_post_meta( $pid, '_ovr_bathrooms', true ),
-                'lat'   => $lat,
-                'lng'   => $lng,
+                'id'       => $pid,
+                'title'    => get_the_title( $pid ),
+                'url'      => get_permalink( $pid ),
+                'thumb'    => get_the_post_thumbnail_url( $pid, 'medium' ) ?: '',
+                'price'    => (float) get_post_meta( $pid, '_ovr_base_price', true ),
+                'beds'     => (int) get_post_meta( $pid, '_ovr_bedrooms', true ),
+                'baths'    => (float) get_post_meta( $pid, '_ovr_bathrooms', true ),
+                'lat'      => $lat,
+                'lng'      => $lng,
+                'type'     => $type_slug,
+                'type_label' => $type_label,
+                'featured' => $featured,
+                'avail'    => isset( $busy[ $pid ] ) ? 'booked' : 'available',
             ];
         }
         return $points;
+    }
+
+    /** True when a boost-expiry date is empty (no expiry) or still in the future. */
+    private static function boost_unexpired( string $expires, string $today ): bool {
+        return '' === $expires || $expires >= $today;
     }
 
     /**

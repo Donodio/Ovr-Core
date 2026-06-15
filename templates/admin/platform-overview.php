@@ -314,6 +314,23 @@ $tones = [
             </span>
         </div>
 
+        <!-- Map engagement (M3 F10) -->
+        <?php $map = is_array( $stats['map_engagement'] ?? null ) ? $stats['map_engagement'] : [ 'views' => 0, 'marker_clicks' => 0, 'popup_views' => 0 ]; ?>
+        <div class="ovr-tile" data-widget="map_engagement" data-widget-label="<?php esc_attr_e( 'Map Engagement', 'ovr-core' ); ?>"<?php echo $is_hidden( 'map_engagement' ); ?>>
+            <div class="ovr-tile-h">
+                <span class="material-symbols-outlined">map</span>
+                <p class="ovr-tile-lbl"><?php esc_html_e( 'Map Engagement', 'ovr-core' ); ?></p>
+            </div>
+            <p class="ovr-tile-val"><?php echo esc_html( number_format( (int) $map['views'] ) ); ?></p>
+            <span class="ovr-tile-sub">
+                <?php printf(
+                    esc_html__( '%1$s map views · %2$s pin clicks', 'ovr-core' ),
+                    esc_html( number_format( (int) $map['views'] ) ),
+                    esc_html( number_format( (int) $map['marker_clicks'] ) )
+                ); ?>
+            </span>
+        </div>
+
         <!-- System health -->
         <?php $health = is_array( $stats['system_health'] ?? null ) ? $stats['system_health'] : [ 'ok' => true, 'items' => [] ]; ?>
         <div class="ovr-tile<?php echo $health['ok'] ? '' : ' ovr-tile--alert'; ?>" data-widget="system_health" data-widget-label="<?php esc_attr_e( 'System Health', 'ovr-core' ); ?>"<?php echo $is_hidden( 'system_health' ); ?>>
