@@ -81,72 +81,101 @@ class AdBannersAdmin {
             $total_click += (int) $b['clicks'];
         }
         ?>
-        <div class="wrap">
-            <h1 class="wp-heading-inline"><?php esc_html_e( 'Ad Banners', 'ovr-core' ); ?></h1>
-            <a href="<?php echo esc_url( add_query_arg( 'view', 'new', $this->page_url() ) ); ?>" class="page-title-action"><?php esc_html_e( 'Add Banner', 'ovr-core' ); ?></a>
-            <hr class="wp-header-end">
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Ad Banners', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'Promotional banners shown on the front end. Use the shortcode below — clicks are tracked through a redirect, so counts stay accurate even when pages are cached.', 'ovr-core' ); ?>
+                            <br><code class="ovr-adm-mono">[ovr_ad_banner placement="homepage"]</code></p>
+                    </div>
+                    <div class="ovr-adm-actions">
+                        <a href="<?php echo esc_url( add_query_arg( 'view', 'new', $this->page_url() ) ); ?>" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">add</span><?php esc_html_e( 'Add Banner', 'ovr-core' ); ?></a>
+                    </div>
+                </div>
 
-            <?php $this->notice( $notice ); ?>
+                <?php $this->notice( $notice ); ?>
 
-            <p class="description" style="max-width:720px">
-                <?php esc_html_e( 'Place a banner on the front end with the shortcode below (replace the placement as needed). Clicks are tracked through a redirect, so counts stay accurate even when pages are cached.', 'ovr-core' ); ?>
-                <br><code>[ovr_ad_banner placement="homepage"]</code>
-            </p>
+                <div class="ovr-adm-stats ovr-adm-stats--3">
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">visibility</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo esc_html( number_format_i18n( $total_impr ) ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Impressions', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">ads_click</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo esc_html( number_format_i18n( $total_click ) ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Clicks', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">percent</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo esc_html( self::ctr( $total_click, $total_impr ) ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'CTR', 'ovr-core' ); ?></div></div>
+                    </div>
+                </div>
 
-            <p style="margin:10px 0 16px">
-                <strong><?php esc_html_e( 'Totals:', 'ovr-core' ); ?></strong>
-                <?php echo esc_html( sprintf( __( '%1$s impressions · %2$s clicks · %3$s CTR', 'ovr-core' ), number_format_i18n( $total_impr ), number_format_i18n( $total_click ), self::ctr( $total_click, $total_impr ) ) ); ?>
-            </p>
-
-            <table class="wp-list-table widefat fixed striped">
-                <thead><tr>
-                    <th><?php esc_html_e( 'Banner', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Placement', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Schedule', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Impressions', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Clicks', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'CTR', 'ovr-core' ); ?></th>
-                    <th></th>
-                </tr></thead>
-                <tbody>
-                <?php if ( empty( $banners ) ) : ?>
-                    <tr><td colspan="8"><?php esc_html_e( 'No banners yet.', 'ovr-core' ); ?></td></tr>
-                <?php endif; ?>
-                <?php foreach ( $banners as $b ) :
-                    $id        = (int) $b['id'];
-                    $thumb     = $b['image_id'] ? (string) wp_get_attachment_image_url( (int) $b['image_id'], 'thumbnail' ) : '';
-                    $edit_url  = add_query_arg( [ 'view' => 'edit', 'id' => $id ], $this->page_url() );
-                    $toggle    = wp_nonce_url( add_query_arg( [ 'action' => 'ovr_ad_banner_toggle', 'id' => $id ], admin_url( 'admin-post.php' ) ), 'ovr_ad_banner_toggle_' . $id );
-                    $delete    = wp_nonce_url( add_query_arg( [ 'action' => 'ovr_ad_banner_delete', 'id' => $id ], admin_url( 'admin-post.php' ) ), 'ovr_ad_banner_delete_' . $id );
-                    $sched     = $this->schedule_label( $b['starts_at'] ?? null, $b['ends_at'] ?? null );
-                ?>
-                    <tr>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:10px">
-                                <span style="width:56px;height:36px;background:#f0f0f1;border-radius:4px;overflow:hidden;flex:0 0 auto;display:inline-block">
-                                    <?php if ( $thumb ) : ?><img src="<?php echo esc_url( $thumb ); ?>" alt="" style="width:100%;height:100%;object-fit:cover"><?php endif; ?>
-                                </span>
-                                <strong><?php echo esc_html( $b['title'] ?: __( '(untitled)', 'ovr-core' ) ); ?></strong>
-                            </div>
-                        </td>
-                        <td><?php echo esc_html( $placements[ $b['placement'] ] ?? $b['placement'] ); ?></td>
-                        <td><?php echo esc_html( $sched ); ?></td>
-                        <td><?php echo (int) $b['is_enabled']
-                            ? '<span style="color:#2e7d32;font-weight:600">' . esc_html__( 'Enabled', 'ovr-core' ) . '</span>'
-                            : '<span style="color:#b3261e;font-weight:600">' . esc_html__( 'Disabled', 'ovr-core' ) . '</span>'; ?></td>
-                        <td><?php echo esc_html( number_format_i18n( (int) $b['impressions'] ) ); ?></td>
-                        <td><?php echo esc_html( number_format_i18n( (int) $b['clicks'] ) ); ?></td>
-                        <td><?php echo esc_html( self::ctr( (int) $b['clicks'], (int) $b['impressions'] ) ); ?></td>
-                        <td>
-                            <a class="button button-small" href="<?php echo esc_url( $edit_url ); ?>"><?php esc_html_e( 'Edit', 'ovr-core' ); ?></a>
-                            <a class="button button-small" href="<?php echo esc_url( $toggle ); ?>"><?php echo (int) $b['is_enabled'] ? esc_html__( 'Disable', 'ovr-core' ) : esc_html__( 'Enable', 'ovr-core' ); ?></a>
-                            <a class="button button-small button-link-delete" href="<?php echo esc_url( $delete ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this banner permanently?', 'ovr-core' ) ); ?>')"><?php esc_html_e( 'Delete', 'ovr-core' ); ?></a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                <div class="ovr-adm-card">
+                    <?php if ( empty( $banners ) ) : ?>
+                        <div class="ovr-adm-empty">
+                            <span class="material-symbols-outlined">ad_units</span>
+                            <h3><?php esc_html_e( 'No banners yet', 'ovr-core' ); ?></h3>
+                            <p><?php esc_html_e( 'Add your first banner to start promoting on the front end.', 'ovr-core' ); ?></p>
+                        </div>
+                    <?php else : ?>
+                        <table class="ovr-adm-table">
+                            <thead><tr>
+                                <th><?php esc_html_e( 'Banner', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Placement', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Schedule', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Impressions', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Clicks', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'CTR', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Actions', 'ovr-core' ); ?></th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ( $banners as $b ) :
+                                $id        = (int) $b['id'];
+                                $thumb     = $b['image_id'] ? (string) wp_get_attachment_image_url( (int) $b['image_id'], 'thumbnail' ) : '';
+                                $edit_url  = add_query_arg( [ 'view' => 'edit', 'id' => $id ], $this->page_url() );
+                                $toggle    = wp_nonce_url( add_query_arg( [ 'action' => 'ovr_ad_banner_toggle', 'id' => $id ], admin_url( 'admin-post.php' ) ), 'ovr_ad_banner_toggle_' . $id );
+                                $delete    = wp_nonce_url( add_query_arg( [ 'action' => 'ovr_ad_banner_delete', 'id' => $id ], admin_url( 'admin-post.php' ) ), 'ovr_ad_banner_delete_' . $id );
+                                $sched     = $this->schedule_label( $b['starts_at'] ?? null, $b['ends_at'] ?? null );
+                                $enabled   = (int) $b['is_enabled'];
+                            ?>
+                                <tr>
+                                    <td>
+                                        <div style="display:flex;align-items:center;gap:12px">
+                                            <span style="width:56px;height:36px;background:var(--gray-light);border-radius:var(--r-sm);overflow:hidden;flex:0 0 auto;display:inline-block">
+                                                <?php if ( $thumb ) : ?><img src="<?php echo esc_url( $thumb ); ?>" alt="" style="width:100%;height:100%;object-fit:cover"><?php endif; ?>
+                                            </span>
+                                            <span class="ovr-adm-name"><?php echo esc_html( $b['title'] ?: __( '(untitled)', 'ovr-core' ) ); ?></span>
+                                        </div>
+                                    </td>
+                                    <td><span class="ovr-adm-badge ovr-adm-badge--blue"><?php echo esc_html( $placements[ $b['placement'] ] ?? $b['placement'] ); ?></span></td>
+                                    <td><?php echo esc_html( $sched ); ?></td>
+                                    <td>
+                                        <?php if ( $enabled ) : ?>
+                                            <span class="ovr-adm-status ovr-adm-status--on"><span class="material-symbols-outlined">check_circle</span><?php esc_html_e( 'Enabled', 'ovr-core' ); ?></span>
+                                        <?php else : ?>
+                                            <span class="ovr-adm-status ovr-adm-status--off"><span class="material-symbols-outlined">do_not_disturb_on</span><?php esc_html_e( 'Disabled', 'ovr-core' ); ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="ovr-adm-num"><?php echo esc_html( number_format_i18n( (int) $b['impressions'] ) ); ?></td>
+                                    <td class="ovr-adm-num"><?php echo esc_html( number_format_i18n( (int) $b['clicks'] ) ); ?></td>
+                                    <td class="ovr-adm-num"><?php echo esc_html( self::ctr( (int) $b['clicks'], (int) $b['impressions'] ) ); ?></td>
+                                    <td>
+                                        <div class="ovr-adm-cell-actions">
+                                            <a class="ovr-adm-act ovr-adm-act--edit" title="<?php esc_attr_e( 'Edit', 'ovr-core' ); ?>" href="<?php echo esc_url( $edit_url ); ?>"><span class="material-symbols-outlined">edit</span></a>
+                                            <a class="ovr-adm-act" title="<?php echo $enabled ? esc_attr__( 'Disable', 'ovr-core' ) : esc_attr__( 'Enable', 'ovr-core' ); ?>" href="<?php echo esc_url( $toggle ); ?>"><span class="material-symbols-outlined"><?php echo $enabled ? 'toggle_off' : 'toggle_on'; ?></span></a>
+                                            <a class="ovr-adm-act ovr-adm-act--danger" title="<?php esc_attr_e( 'Delete', 'ovr-core' ); ?>" href="<?php echo esc_url( $delete ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this banner permanently?', 'ovr-core' ) ); ?>')"><span class="material-symbols-outlined">delete</span></a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
         <?php
     }
@@ -164,69 +193,80 @@ class AdBannersAdmin {
         $thumb     = $image_id ? (string) wp_get_attachment_image_url( $image_id, 'medium' ) : '';
         $placements = AdBanners::placements();
         ?>
-        <div class="wrap">
-            <h1><?php echo $id ? esc_html__( 'Edit Banner', 'ovr-core' ) : esc_html__( 'Add Banner', 'ovr-core' ); ?></h1>
-            <p><a href="<?php echo esc_url( $this->page_url() ); ?>">&larr; <?php esc_html_e( 'All banners', 'ovr-core' ); ?></a></p>
+        <div class="wrap ovr-adm">
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php echo $id ? esc_html__( 'Edit Banner', 'ovr-core' ) : esc_html__( 'Add Banner', 'ovr-core' ); ?></h1>
+                    </div>
+                    <div class="ovr-adm-actions">
+                        <a href="<?php echo esc_url( $this->page_url() ); ?>" class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">arrow_back</span><?php esc_html_e( 'All banners', 'ovr-core' ); ?></a>
+                    </div>
+                </div>
 
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                <input type="hidden" name="action" value="ovr_ad_banner_save">
-                <input type="hidden" name="banner_id" value="<?php echo esc_attr( (string) $id ); ?>">
-                <input type="hidden" name="image_id" id="ovr-banner-image-id" value="<?php echo esc_attr( (string) $image_id ); ?>">
-                <?php wp_nonce_field( 'ovr_ad_banner_save' ); ?>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                    <input type="hidden" name="action" value="ovr_ad_banner_save">
+                    <input type="hidden" name="banner_id" value="<?php echo esc_attr( (string) $id ); ?>">
+                    <input type="hidden" name="image_id" id="ovr-banner-image-id" value="<?php echo esc_attr( (string) $image_id ); ?>">
+                    <?php wp_nonce_field( 'ovr_ad_banner_save' ); ?>
 
-                <table class="form-table">
-                    <tr>
-                        <th><label for="ovr-banner-title"><?php esc_html_e( 'Title', 'ovr-core' ); ?></label></th>
-                        <td><input id="ovr-banner-title" name="title" type="text" class="regular-text" value="<?php echo esc_attr( (string) ( $banner['title'] ?? '' ) ); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Image', 'ovr-core' ); ?></th>
-                        <td>
-                            <div id="ovr-banner-thumb" style="width:320px;max-width:100%;height:auto;background:#f0f0f1;border-radius:6px;overflow:hidden;margin-bottom:8px;<?php echo $thumb ? '' : 'display:none'; ?>">
-                                <img src="<?php echo esc_url( $thumb ); ?>" alt="" style="width:100%;display:block">
+                    <div class="ovr-adm-card">
+                        <div class="ovr-adm-card-body">
+                            <div class="ovr-adm-form-grid">
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label" for="ovr-banner-title"><?php esc_html_e( 'Title', 'ovr-core' ); ?></label>
+                                    <input id="ovr-banner-title" name="title" type="text" class="ovr-adm-input" value="<?php echo esc_attr( (string) ( $banner['title'] ?? '' ) ); ?>">
+                                </div>
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label" for="ovr-banner-placement"><?php esc_html_e( 'Placement', 'ovr-core' ); ?></label>
+                                    <select id="ovr-banner-placement" name="placement" class="ovr-adm-select">
+                                        <?php foreach ( $placements as $slug => $label ) : ?>
+                                            <option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $banner['placement'] ?? 'homepage', $slug ); ?>><?php echo esc_html( $label ); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="ovr-adm-field ovr-adm-field--full">
+                                    <label class="ovr-adm-label"><?php esc_html_e( 'Image', 'ovr-core' ); ?></label>
+                                    <div id="ovr-banner-thumb" style="width:320px;max-width:100%;height:auto;background:var(--gray-light);border-radius:var(--r-md);overflow:hidden;margin-bottom:10px;<?php echo $thumb ? '' : 'display:none'; ?>">
+                                        <img src="<?php echo esc_url( $thumb ); ?>" alt="" style="width:100%;display:block">
+                                    </div>
+                                    <div>
+                                        <button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-adm-btn--sm" id="ovr-banner-pick"><span class="material-symbols-outlined">image</span><?php esc_html_e( 'Select Image', 'ovr-core' ); ?></button>
+                                    </div>
+                                    <p class="ovr-adm-hint"><?php esc_html_e( 'Wide images work best. The banner is shown at full container width.', 'ovr-core' ); ?></p>
+                                </div>
+                                <div class="ovr-adm-field ovr-adm-field--full">
+                                    <label class="ovr-adm-label" for="ovr-banner-link"><?php esc_html_e( 'Link URL', 'ovr-core' ); ?></label>
+                                    <input id="ovr-banner-link" name="link_url" type="url" class="ovr-adm-input" placeholder="https://example.com" value="<?php echo esc_attr( (string) ( $banner['link_url'] ?? '' ) ); ?>">
+                                    <p class="ovr-adm-hint"><?php esc_html_e( 'Where the banner links to. Leave blank for a non-clickable banner.', 'ovr-core' ); ?></p>
+                                </div>
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label" for="ovr-banner-start"><?php esc_html_e( 'Start Date', 'ovr-core' ); ?></label>
+                                    <input id="ovr-banner-start" class="ovr-adm-input" type="date" name="starts_at" value="<?php echo esc_attr( self::date_value( $banner['starts_at'] ?? '' ) ); ?>">
+                                </div>
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label" for="ovr-banner-end"><?php esc_html_e( 'End Date', 'ovr-core' ); ?></label>
+                                    <input id="ovr-banner-end" class="ovr-adm-input" type="date" name="ends_at" value="<?php echo esc_attr( self::date_value( $banner['ends_at'] ?? '' ) ); ?>">
+                                    <p class="ovr-adm-hint"><?php esc_html_e( 'Optional. Leave blank for no start/end limit.', 'ovr-core' ); ?></p>
+                                </div>
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label" for="ovr-banner-order"><?php esc_html_e( 'Sort Order', 'ovr-core' ); ?></label>
+                                    <input id="ovr-banner-order" name="sort_order" type="number" value="<?php echo esc_attr( (string) ( $banner['sort_order'] ?? 0 ) ); ?>" class="ovr-adm-input">
+                                </div>
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label"><?php esc_html_e( 'Visibility', 'ovr-core' ); ?></label>
+                                    <label class="ovr-adm-check"><input type="checkbox" name="is_enabled" value="1" <?php checked( $banner ? (int) $banner['is_enabled'] : 1 ); ?>> <?php esc_html_e( 'Show this banner', 'ovr-core' ); ?></label>
+                                </div>
                             </div>
-                            <button type="button" class="button" id="ovr-banner-pick"><?php esc_html_e( 'Select Image', 'ovr-core' ); ?></button>
-                            <p class="description"><?php esc_html_e( 'Wide images work best. The banner is shown at full container width.', 'ovr-core' ); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th><label for="ovr-banner-link"><?php esc_html_e( 'Link URL', 'ovr-core' ); ?></label></th>
-                        <td><input id="ovr-banner-link" name="link_url" type="url" class="large-text" placeholder="https://example.com" value="<?php echo esc_attr( (string) ( $banner['link_url'] ?? '' ) ); ?>">
-                            <p class="description"><?php esc_html_e( 'Where the banner links to. Leave blank for a non-clickable banner.', 'ovr-core' ); ?></p></td>
-                    </tr>
-                    <tr>
-                        <th><label for="ovr-banner-placement"><?php esc_html_e( 'Placement', 'ovr-core' ); ?></label></th>
-                        <td>
-                            <select id="ovr-banner-placement" name="placement">
-                                <?php foreach ( $placements as $slug => $label ) : ?>
-                                    <option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $banner['placement'] ?? 'homepage', $slug ); ?>><?php echo esc_html( $label ); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Schedule', 'ovr-core' ); ?></th>
-                        <td>
-                            <label><?php esc_html_e( 'Start', 'ovr-core' ); ?> <input type="date" name="starts_at" value="<?php echo esc_attr( self::date_value( $banner['starts_at'] ?? '' ) ); ?>"></label>
-                            &nbsp;
-                            <label><?php esc_html_e( 'End', 'ovr-core' ); ?> <input type="date" name="ends_at" value="<?php echo esc_attr( self::date_value( $banner['ends_at'] ?? '' ) ); ?>"></label>
-                            <p class="description"><?php esc_html_e( 'Optional. Leave blank for no start/end limit.', 'ovr-core' ); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th><label for="ovr-banner-order"><?php esc_html_e( 'Sort Order', 'ovr-core' ); ?></label></th>
-                        <td><input id="ovr-banner-order" name="sort_order" type="number" value="<?php echo esc_attr( (string) ( $banner['sort_order'] ?? 0 ) ); ?>" class="small-text"></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Enabled', 'ovr-core' ); ?></th>
-                        <td><label><input type="checkbox" name="is_enabled" value="1" <?php checked( $banner ? (int) $banner['is_enabled'] : 1 ); ?>> <?php esc_html_e( 'Show this banner', 'ovr-core' ); ?></label></td>
-                    </tr>
-                </table>
+                        </div>
+                        <div class="ovr-adm-form-foot">
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">save</span><?php echo $id ? esc_html__( 'Update Banner', 'ovr-core' ) : esc_html__( 'Create Banner', 'ovr-core' ); ?></button>
+                            <a href="<?php echo esc_url( $this->page_url() ); ?>" class="ovr-adm-btn ovr-adm-btn--ghost"><?php esc_html_e( 'Cancel', 'ovr-core' ); ?></a>
+                        </div>
+                    </div>
+                </form>
 
-                <?php submit_button( $id ? __( 'Update Banner', 'ovr-core' ) : __( 'Create Banner', 'ovr-core' ) ); ?>
-            </form>
-
-            <script>
+                <script>
             ( function () {
                 var pick = document.getElementById( 'ovr-banner-pick' );
                 pick.addEventListener( 'click', function ( e ) {
@@ -248,7 +288,8 @@ class AdBannersAdmin {
                     frame.open();
                 } );
             } )();
-            </script>
+                </script>
+            </div>
         </div>
         <?php
     }

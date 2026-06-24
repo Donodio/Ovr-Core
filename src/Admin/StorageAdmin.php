@@ -66,98 +66,130 @@ class StorageAdmin {
         $detail     = isset( $_GET['detail'] ) ? sanitize_text_field( wp_unslash( $_GET['detail'] ) ) : '';
         $action_url = admin_url( 'admin-post.php' );
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Cloud Storage', 'ovr-core' ); ?></h1>
-            <p class="description" style="max-width:760px">
-                <?php esc_html_e( 'Backblaze B2 offloads media to low-cost cloud storage and serves it from there. Monitor coverage and recover files below. Credentials live under Settings → Storage.', 'ovr-core' ); ?>
-            </p>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Cloud Storage', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'Backblaze B2 offloads media to low-cost cloud storage and serves it from there. Monitor coverage and recover files below. Credentials live under Settings → Storage.', 'ovr-core' ); ?></p>
+                    </div>
+                </div>
 
-            <?php $this->notice( $notice, $detail ); ?>
+                <?php $this->notice( $notice, $detail ); ?>
 
-            <!-- Connection status -->
-            <div class="ovr-storage-card" style="background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:16px;margin:14px 0;max-width:760px">
-                <h2 style="margin-top:0"><?php esc_html_e( 'Connection', 'ovr-core' ); ?></h2>
-                <?php if ( $configured ) : ?>
-                    <p style="color:#2e7d32;font-weight:600"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'B2 offloading is enabled.', 'ovr-core' ); ?></p>
-                    <p><?php printf( esc_html__( 'Bucket: %s', 'ovr-core' ), '<code>' . esc_html( (string) ( $settings['b2_bucket_name'] ?? '' ) ) . '</code>' ); ?>
-                       <?php echo ! empty( $settings['b2_delete_local'] ) ? esc_html__( '· Local copies of sized images are removed after upload.', 'ovr-core' ) : esc_html__( '· Local copies are kept.', 'ovr-core' ); ?>
-                    </p>
-                    <form method="post" action="<?php echo esc_url( $action_url ); ?>" style="margin-top:8px">
-                        <input type="hidden" name="action" value="ovr_storage_test">
-                        <?php wp_nonce_field( 'ovr_storage_test' ); ?>
-                        <button class="button"><?php esc_html_e( 'Test Connection', 'ovr-core' ); ?></button>
-                    </form>
-                <?php else : ?>
-                    <p style="color:#b3261e;font-weight:600"><span class="dashicons dashicons-warning"></span> <?php esc_html_e( 'B2 offloading is not configured.', 'ovr-core' ); ?></p>
-                    <p><a class="button" href="<?php echo esc_url( add_query_arg( [ 'post_type' => 'ovr_property', 'page' => Settings::PAGE_SLUG ], admin_url( 'edit.php' ) ) ); ?>"><?php esc_html_e( 'Configure Storage', 'ovr-core' ); ?></a></p>
-                <?php endif; ?>
+                <!-- Connection status -->
+                <div class="ovr-adm-card">
+                    <div class="ovr-adm-card-head">
+                        <h2><?php esc_html_e( 'Connection', 'ovr-core' ); ?></h2>
+                    </div>
+                    <div class="ovr-adm-card-body">
+                        <?php if ( $configured ) : ?>
+                            <p>
+                                <span class="ovr-adm-status ovr-adm-status--on"><span class="material-symbols-outlined">cloud_done</span><?php esc_html_e( 'B2 offloading is enabled.', 'ovr-core' ); ?></span>
+                            </p>
+                            <p style="margin:12px 0 16px">
+                                <?php printf( esc_html__( 'Bucket: %s', 'ovr-core' ), '<code class="ovr-adm-mono">' . esc_html( (string) ( $settings['b2_bucket_name'] ?? '' ) ) . '</code>' ); ?>
+                                <?php echo ! empty( $settings['b2_delete_local'] ) ? esc_html__( '· Local copies of sized images are removed after upload.', 'ovr-core' ) : esc_html__( '· Local copies are kept.', 'ovr-core' ); ?>
+                            </p>
+                            <form method="post" action="<?php echo esc_url( $action_url ); ?>">
+                                <input type="hidden" name="action" value="ovr_storage_test">
+                                <?php wp_nonce_field( 'ovr_storage_test' ); ?>
+                                <button type="submit" class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">wifi_tethering</span><?php esc_html_e( 'Test Connection', 'ovr-core' ); ?></button>
+                            </form>
+                        <?php else : ?>
+                            <p>
+                                <span class="ovr-adm-status ovr-adm-status--danger"><span class="material-symbols-outlined">cloud_off</span><?php esc_html_e( 'B2 offloading is not configured.', 'ovr-core' ); ?></span>
+                            </p>
+                            <p style="margin-top:14px">
+                                <a class="ovr-adm-btn ovr-adm-btn--navy" href="<?php echo esc_url( add_query_arg( [ 'post_type' => 'ovr_property', 'page' => Settings::PAGE_SLUG, 'tab' => 'storage' ], admin_url( 'edit.php' ) ) ); ?>"><span class="material-symbols-outlined">settings</span><?php esc_html_e( 'Configure Storage', 'ovr-core' ); ?></a>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="ovr-adm-stats ovr-adm-stats--5" style="margin-top:20px">
+                    <?php
+                    $this->stat_card( __( 'Offload Coverage', 'ovr-core' ), $coverage . '%', sprintf( __( '%1$s of %2$s images', 'ovr-core' ), number_format_i18n( $stats['images_total'] - $stats['pending'] ), number_format_i18n( $stats['images_total'] ) ), '', 'donut_large' );
+                    $this->stat_card( __( 'Files in B2', 'ovr-core' ), number_format_i18n( $stats['rows'] ), sprintf( __( '%s attachments', 'ovr-core' ), number_format_i18n( $stats['attachments'] ) ), '', 'cloud' );
+                    $this->stat_card( __( 'Stored', 'ovr-core' ), size_format( $stats['bytes'] ?: 0 ), __( 'total in cloud', 'ovr-core' ), '', 'database' );
+                    $this->stat_card( __( 'Pending Offload', 'ovr-core' ), number_format_i18n( $stats['pending'] ), __( 'images not yet uploaded', 'ovr-core' ), $stats['pending'] > 0 ? 'warn' : '', 'cloud_upload' );
+                    $this->stat_card( __( 'Local Missing', 'ovr-core' ), number_format_i18n( $stats['local_missing'] ), __( 'originals only in B2', 'ovr-core' ), $stats['local_missing'] > 0 ? 'alert' : '', 'sd_card_alert' );
+                    ?>
+                </div>
+
+                <!-- Recovery tools -->
+                <div class="ovr-adm-card">
+                    <div class="ovr-adm-card-head">
+                        <h2><?php esc_html_e( 'Recovery Tools', 'ovr-core' ); ?></h2>
+                    </div>
+                    <div class="ovr-adm-card-body" style="display:flex;gap:10px;flex-wrap:wrap">
+                        <form method="post" action="<?php echo esc_url( $action_url ); ?>">
+                            <input type="hidden" name="action" value="ovr_storage_offload">
+                            <?php wp_nonce_field( 'ovr_storage_offload' ); ?>
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--navy" <?php disabled( ! $configured || $stats['pending'] === 0 ); ?>>
+                                <span class="material-symbols-outlined">cloud_upload</span><?php printf( esc_html__( 'Offload Pending (up to %d)', 'ovr-core' ), self::BATCH ); ?>
+                            </button>
+                        </form>
+                        <form method="post" action="<?php echo esc_url( $action_url ); ?>">
+                            <input type="hidden" name="action" value="ovr_storage_restore">
+                            <?php wp_nonce_field( 'ovr_storage_restore' ); ?>
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--ghost" <?php disabled( $stats['local_missing'] === 0 ); ?>>
+                                <span class="material-symbols-outlined">restore</span><?php printf( esc_html__( 'Restore Missing Originals (up to %d)', 'ovr-core' ), self::BATCH ); ?>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Recent files -->
+                <div class="ovr-adm-card">
+                    <div class="ovr-adm-card-head">
+                        <h2><?php esc_html_e( 'Recently Offloaded', 'ovr-core' ); ?></h2>
+                    </div>
+                    <?php if ( empty( $recent ) ) : ?>
+                        <div class="ovr-adm-empty">
+                            <span class="material-symbols-outlined">cloud_off</span>
+                            <h3><?php esc_html_e( 'Nothing offloaded yet', 'ovr-core' ); ?></h3>
+                            <p><?php esc_html_e( 'Files uploaded to B2 will appear here.', 'ovr-core' ); ?></p>
+                        </div>
+                    <?php else : ?>
+                        <table class="ovr-adm-table">
+                            <thead><tr>
+                                <th><?php esc_html_e( 'Attachment', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Size', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Bytes', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Key', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'When', 'ovr-core' ); ?></th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ( $recent as $r ) : ?>
+                                <tr>
+                                    <td><a href="<?php echo esc_url( get_edit_post_link( (int) $r['attachment_id'] ) ?: '#' ); ?>">#<?php echo (int) $r['attachment_id']; ?></a></td>
+                                    <td><?php echo esc_html( (string) $r['size_name'] ); ?></td>
+                                    <td class="ovr-adm-num"><?php echo esc_html( size_format( (int) $r['file_size'] ?: 0 ) ); ?></td>
+                                    <td><code class="ovr-adm-mono"><?php echo esc_html( (string) $r['storage_key'] ); ?></code></td>
+                                    <td><?php echo esc_html( (string) $r['created_at'] ); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                </div>
             </div>
-
-            <!-- Stats -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;max-width:760px">
-                <?php
-                $this->stat_card( __( 'Offload Coverage', 'ovr-core' ), $coverage . '%', sprintf( __( '%1$s of %2$s images', 'ovr-core' ), number_format_i18n( $stats['images_total'] - $stats['pending'] ), number_format_i18n( $stats['images_total'] ) ) );
-                $this->stat_card( __( 'Files in B2', 'ovr-core' ), number_format_i18n( $stats['rows'] ), sprintf( __( '%s attachments', 'ovr-core' ), number_format_i18n( $stats['attachments'] ) ) );
-                $this->stat_card( __( 'Stored', 'ovr-core' ), size_format( $stats['bytes'] ?: 0 ), __( 'total in cloud', 'ovr-core' ) );
-                $this->stat_card( __( 'Pending Offload', 'ovr-core' ), number_format_i18n( $stats['pending'] ), __( 'images not yet uploaded', 'ovr-core' ), $stats['pending'] > 0 ? 'warn' : '' );
-                $this->stat_card( __( 'Local Missing', 'ovr-core' ), number_format_i18n( $stats['local_missing'] ), __( 'originals only in B2', 'ovr-core' ), $stats['local_missing'] > 0 ? 'alert' : '' );
-                ?>
-            </div>
-
-            <!-- Recovery tools -->
-            <div style="margin:18px 0;max-width:760px;display:flex;gap:10px;flex-wrap:wrap">
-                <form method="post" action="<?php echo esc_url( $action_url ); ?>">
-                    <input type="hidden" name="action" value="ovr_storage_offload">
-                    <?php wp_nonce_field( 'ovr_storage_offload' ); ?>
-                    <button class="button button-primary" <?php disabled( ! $configured || $stats['pending'] === 0 ); ?>>
-                        <?php printf( esc_html__( 'Offload Pending (up to %d)', 'ovr-core' ), self::BATCH ); ?>
-                    </button>
-                </form>
-                <form method="post" action="<?php echo esc_url( $action_url ); ?>">
-                    <input type="hidden" name="action" value="ovr_storage_restore">
-                    <?php wp_nonce_field( 'ovr_storage_restore' ); ?>
-                    <button class="button" <?php disabled( $stats['local_missing'] === 0 ); ?>>
-                        <?php printf( esc_html__( 'Restore Missing Originals (up to %d)', 'ovr-core' ), self::BATCH ); ?>
-                    </button>
-                </form>
-            </div>
-
-            <!-- Recent files -->
-            <h2><?php esc_html_e( 'Recently Offloaded', 'ovr-core' ); ?></h2>
-            <table class="wp-list-table widefat fixed striped" style="max-width:980px">
-                <thead><tr>
-                    <th><?php esc_html_e( 'Attachment', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Size', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Bytes', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Key', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'When', 'ovr-core' ); ?></th>
-                </tr></thead>
-                <tbody>
-                <?php if ( empty( $recent ) ) : ?>
-                    <tr><td colspan="5"><?php esc_html_e( 'Nothing offloaded yet.', 'ovr-core' ); ?></td></tr>
-                <?php endif; ?>
-                <?php foreach ( $recent as $r ) : ?>
-                    <tr>
-                        <td><a href="<?php echo esc_url( get_edit_post_link( (int) $r['attachment_id'] ) ?: '#' ); ?>">#<?php echo (int) $r['attachment_id']; ?></a></td>
-                        <td><?php echo esc_html( (string) $r['size_name'] ); ?></td>
-                        <td><?php echo esc_html( size_format( (int) $r['file_size'] ?: 0 ) ); ?></td>
-                        <td><code style="font-size:11px"><?php echo esc_html( (string) $r['storage_key'] ); ?></code></td>
-                        <td><?php echo esc_html( (string) $r['created_at'] ); ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
         </div>
         <?php
     }
 
-    private function stat_card( string $label, string $value, string $sub, string $tone = '' ): void {
-        $color = 'warn' === $tone ? '#b26a00' : ( 'alert' === $tone ? '#b3261e' : '#1d2327' );
+    private function stat_card( string $label, string $value, string $sub, string $tone = '', string $icon = 'insights' ): void {
         ?>
-        <div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:14px">
-            <div style="font-size:12px;color:#646970;text-transform:uppercase;letter-spacing:.04em"><?php echo esc_html( $label ); ?></div>
-            <div style="font-size:26px;font-weight:700;color:<?php echo esc_attr( $color ); ?>;margin:4px 0"><?php echo esc_html( $value ); ?></div>
-            <div style="font-size:12px;color:#646970"><?php echo esc_html( $sub ); ?></div>
+        <div class="ovr-adm-stat">
+            <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined"><?php echo esc_html( $icon ); ?></span></div>
+            <div>
+                <div class="ovr-adm-stat-v"><?php echo esc_html( $value ); ?></div>
+                <div class="ovr-adm-stat-l"><?php echo esc_html( $label ); ?></div>
+                <div class="ovr-adm-stat-l" style="margin-top:0"><?php echo esc_html( $sub ); ?></div>
+            </div>
         </div>
         <?php
     }

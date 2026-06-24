@@ -26,8 +26,16 @@ class AdminAssets {
         $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
         if ( ! $screen ) return;
 
-        $is_property_screen = ( 'ovr_property' === $screen->post_type );
-        if ( ! $is_property_screen ) return;
+        // OVR admin surface = the property CPT (and its submenu pages, which
+        // all carry post_type=ovr_property), the testimonials CPT, and the
+        // property taxonomy editors. The shared admin design system + fonts
+        // load across all of them so every OVR screen reads the same.
+        $ovr_post_types = [ 'ovr_property', 'ovr_testimonial' ];
+        $ovr_taxonomies = [ 'ovr_village', 'ovr_property_type', 'ovr_amenity', 'ovr_rental_type', 'ovr_view', 'ovr_feature' ];
+
+        $is_ovr_screen = in_array( $screen->post_type, $ovr_post_types, true )
+            || in_array( (string) $screen->taxonomy, $ovr_taxonomies, true );
+        if ( ! $is_ovr_screen ) return;
 
         // Inter font for admin parity with frontend.
         wp_enqueue_style(
@@ -48,6 +56,16 @@ class AdminAssets {
         wp_enqueue_style(
             'ovr-admin',
             OVR_PLUGIN_URL . 'assets/css/ovr-admin.css',
+            [ 'ovr-admin-fonts', 'ovr-admin-icons' ],
+            OVR_VERSION
+        );
+
+        // Shared OVR admin design system (.ovr-adm) — one source of truth for
+        // the navy/blue/gold scheme used across every standardized screen,
+        // plus the "chrome" rules for native WP list/taxonomy/editor screens.
+        wp_enqueue_style(
+            'ovr-admin-ui',
+            OVR_PLUGIN_URL . 'assets/css/ovr-admin-ui.css',
             [ 'ovr-admin-fonts', 'ovr-admin-icons' ],
             OVR_VERSION
         );

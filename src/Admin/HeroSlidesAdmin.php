@@ -101,49 +101,59 @@ class HeroSlidesAdmin {
             $slides = [ [ 'image_id' => 0, 'heading' => '', 'subtitle' => '', 'cta_text' => '', 'cta_url' => '', 'is_enabled' => 1 ] ];
         }
         ?>
-        <div class="wrap ovr-admin-wrap">
-            <h1><?php esc_html_e( 'Homepage Slides', 'ovr-core' ); ?></h1>
-            <p class="description" style="max-width:720px;margin:6px 0 16px">
-                <?php esc_html_e( 'Build the homepage hero slideshow. Each slide is a background image with an optional heading, subtitle and button. They rotate in the order shown here. To display them, edit the homepage in Elementor, open the "OVR Hero Section" widget and set Background to "Homepage Slideshow".', 'ovr-core' ); ?>
-            </p>
-
-            <?php if ( ! empty( $_GET['updated'] ) ) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Homepage slides saved.', 'ovr-core' ); ?></p></div>
-            <?php endif; ?>
-
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                <input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
-                <?php wp_nonce_field( self::SAVE_ACTION ); ?>
-
-                <div id="ovr-slides-list">
-                    <?php foreach ( array_values( $slides ) as $i => $slide ) : $this->render_row( $slide, (int) $i ); endforeach; ?>
+        <div class="wrap ovr-adm">
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Homepage Slides', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'Build the homepage hero slideshow. Each slide is a background image with an optional heading, subtitle and button. They rotate in the order shown here. To display them, edit the homepage in Elementor, open the "OVR Hero Section" widget and set Background to "Homepage Slideshow".', 'ovr-core' ); ?></p>
+                    </div>
                 </div>
 
-                <p>
-                    <button type="button" class="button" id="ovr-add-slide"><?php esc_html_e( '+ Add Slide', 'ovr-core' ); ?></button>
-                </p>
+                <?php if ( ! empty( $_GET['updated'] ) ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--success"><span class="material-symbols-outlined">check_circle</span><span><?php esc_html_e( 'Homepage slides saved.', 'ovr-core' ); ?></span></div>
+                <?php endif; ?>
 
-                <?php submit_button( __( 'Save Slides', 'ovr-core' ) ); ?>
-            </form>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                    <input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
+                    <?php wp_nonce_field( self::SAVE_ACTION ); ?>
 
-            <script type="text/template" id="ovr-slide-row-tpl"><?php
-                $this->render_row( [ 'image_id' => 0, 'heading' => '', 'subtitle' => '', 'cta_text' => '', 'cta_url' => '', 'is_enabled' => 1 ] );
-            ?></script>
+                    <div class="ovr-adm-card">
+                        <div class="ovr-adm-card-body">
+                            <div id="ovr-slides-list">
+                                <?php foreach ( array_values( $slides ) as $i => $slide ) : $this->render_row( $slide, (int) $i ); endforeach; ?>
+                            </div>
 
-            <style>
-                .ovr-slide-row { display:flex; gap:16px; margin-bottom:14px; padding:14px; background:#fff; border:1px solid #dcdcde; border-radius:8px; max-width:900px; }
-                .ovr-slide-media { flex:0 0 180px; }
-                .ovr-slide-thumb { width:180px; height:108px; background:#f0f0f1; border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; color:#8c8f94; font-size:12px; }
-                .ovr-slide-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-                .ovr-slide-media .button { width:100%; margin-top:8px; text-align:center; }
-                .ovr-slide-fields { flex:1 1 auto; display:flex; flex-direction:column; gap:8px; }
-                .ovr-slide-fields input[type=text], .ovr-slide-fields input[type=url], .ovr-slide-fields textarea { width:100%; }
-                .ovr-slide-row .ovr-slide-foot { display:flex; align-items:center; justify-content:space-between; }
-                .ovr-slide-handle { cursor:move; color:#8c8f94; user-select:none; padding-right:6px; }
-                .ovr-slide-remove { color:#b32d2e; cursor:pointer; }
-            </style>
+                            <p>
+                                <button type="button" class="ovr-adm-btn ovr-adm-btn--ghost" id="ovr-add-slide"><span class="material-symbols-outlined">add</span><?php esc_html_e( 'Add Slide', 'ovr-core' ); ?></button>
+                            </p>
+                        </div>
 
-            <script>
+                        <div class="ovr-adm-form-foot">
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">save</span><?php esc_html_e( 'Save Slides', 'ovr-core' ); ?></button>
+                        </div>
+                    </div>
+                </form>
+
+                <script type="text/template" id="ovr-slide-row-tpl"><?php
+                    $this->render_row( [ 'image_id' => 0, 'heading' => '', 'subtitle' => '', 'cta_text' => '', 'cta_url' => '', 'is_enabled' => 1 ] );
+                ?></script>
+
+                <style>
+                    .ovr-adm .ovr-slide-row { display:flex; gap:16px; margin-bottom:14px; padding:14px; background:var(--surf); border:1px solid var(--gray-border); border-radius:var(--r-md); }
+                    .ovr-adm .ovr-slide-row:last-child { margin-bottom:0; }
+                    .ovr-adm .ovr-slide-media { flex:0 0 180px; }
+                    .ovr-adm .ovr-slide-thumb { width:180px; height:108px; background:var(--gray-light); border:1px solid var(--gray-border); border-radius:var(--r-sm); overflow:hidden; display:flex; align-items:center; justify-content:center; color:var(--gray-mid); font-size:12px; }
+                    .ovr-adm .ovr-slide-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+                    .ovr-adm .ovr-slide-media .ovr-adm-btn { width:100%; margin-top:8px; }
+                    .ovr-adm .ovr-slide-fields { flex:1 1 auto; display:flex; flex-direction:column; gap:8px; }
+                    .ovr-adm .ovr-slide-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+                    .ovr-adm .ovr-slide-remove { display:inline-flex; align-items:center; gap:5px; color:var(--red); cursor:pointer; font-size:14px; font-weight:600; }
+                    .ovr-adm .ovr-slide-remove:hover { color:var(--red); text-decoration:underline; }
+                    .ovr-adm .ovr-slide-remove .material-symbols-outlined { font-size:18px; }
+                </style>
+
+                <script>
             ( function () {
                 var list = document.getElementById( 'ovr-slides-list' );
                 var tpl  = document.getElementById( 'ovr-slide-row-tpl' ).innerHTML;
@@ -205,6 +215,7 @@ class HeroSlidesAdmin {
                 reindex();
             } )();
             </script>
+            </div>
         </div>
         <?php
     }
@@ -230,22 +241,22 @@ class HeroSlidesAdmin {
                         <?php esc_html_e( 'No image', 'ovr-core' ); ?>
                     <?php endif; ?>
                 </div>
-                <button type="button" class="button ovr-slide-pick"><?php esc_html_e( 'Select Image', 'ovr-core' ); ?></button>
+                <button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-adm-btn--sm ovr-slide-pick"><span class="material-symbols-outlined">image</span><?php esc_html_e( 'Select Image', 'ovr-core' ); ?></button>
             </div>
 
             <div class="ovr-slide-fields">
-                <input type="text" name="ovr_slide_heading[]" placeholder="<?php esc_attr_e( 'Heading (optional)', 'ovr-core' ); ?>" value="<?php echo esc_attr( (string) ( $slide['heading'] ?? '' ) ); ?>">
-                <textarea name="ovr_slide_subtitle[]" rows="2" placeholder="<?php esc_attr_e( 'Subtitle (optional)', 'ovr-core' ); ?>"><?php echo esc_textarea( (string) ( $slide['subtitle'] ?? '' ) ); ?></textarea>
+                <input type="text" class="ovr-adm-input" name="ovr_slide_heading[]" placeholder="<?php esc_attr_e( 'Heading (optional)', 'ovr-core' ); ?>" value="<?php echo esc_attr( (string) ( $slide['heading'] ?? '' ) ); ?>">
+                <textarea class="ovr-adm-textarea" name="ovr_slide_subtitle[]" rows="2" placeholder="<?php esc_attr_e( 'Subtitle (optional)', 'ovr-core' ); ?>"><?php echo esc_textarea( (string) ( $slide['subtitle'] ?? '' ) ); ?></textarea>
                 <div style="display:flex;gap:8px">
-                    <input type="text" name="ovr_slide_cta_text[]" placeholder="<?php esc_attr_e( 'Button text (optional)', 'ovr-core' ); ?>" value="<?php echo esc_attr( (string) ( $slide['cta_text'] ?? '' ) ); ?>" style="flex:0 0 220px">
-                    <input type="url" name="ovr_slide_cta_url[]" placeholder="<?php esc_attr_e( 'Button link (https://…)', 'ovr-core' ); ?>" value="<?php echo esc_attr( (string) ( $slide['cta_url'] ?? '' ) ); ?>">
+                    <input type="text" class="ovr-adm-input" name="ovr_slide_cta_text[]" placeholder="<?php esc_attr_e( 'Button text (optional)', 'ovr-core' ); ?>" value="<?php echo esc_attr( (string) ( $slide['cta_text'] ?? '' ) ); ?>" style="flex:0 0 220px">
+                    <input type="url" class="ovr-adm-input" name="ovr_slide_cta_url[]" placeholder="<?php esc_attr_e( 'Button link (https://…)', 'ovr-core' ); ?>" value="<?php echo esc_attr( (string) ( $slide['cta_url'] ?? '' ) ); ?>">
                 </div>
                 <div class="ovr-slide-foot">
-                    <label>
+                    <label class="ovr-adm-check">
                         <input type="checkbox" class="ovr-slide-enabled" name="ovr_slide_enabled[]" value="<?php echo esc_attr( (string) $index ); ?>" <?php checked( $enabled ); ?>>
                         <?php esc_html_e( 'Visible in slideshow', 'ovr-core' ); ?>
                     </label>
-                    <a class="ovr-slide-remove" role="button"><?php esc_html_e( 'Remove slide', 'ovr-core' ); ?></a>
+                    <a class="ovr-slide-remove" role="button"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove slide', 'ovr-core' ); ?></a>
                 </div>
             </div>
         </div>

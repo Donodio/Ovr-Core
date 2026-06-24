@@ -49,51 +49,87 @@ class GlobalSearch {
         $term   = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
         $groups = ( '' !== $term ) ? $this->search( $term ) : [];
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Global Search', 'ovr-core' ); ?></h1>
-            <form method="get" style="margin:14px 0">
-                <input type="hidden" name="post_type" value="ovr_property">
-                <input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE_SLUG ); ?>">
-                <input type="search" name="s" value="<?php echo esc_attr( $term ); ?>" class="regular-text"
-                       placeholder="<?php esc_attr_e( 'Search users, listings, payments, reviews, inquiries, IDs…', 'ovr-core' ); ?>" style="width:420px;max-width:100%">
-                <button class="button button-primary"><?php esc_html_e( 'Search', 'ovr-core' ); ?></button>
-            </form>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Global Search', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'Search across listings, members, payments, reviews and inquiries from one place.', 'ovr-core' ); ?></p>
+                    </div>
+                </div>
 
-            <?php if ( '' === $term ) : ?>
-                <p class="description"><?php esc_html_e( 'Enter a name, email, property ID, transaction ID, or keyword.', 'ovr-core' ); ?></p>
-            <?php else :
-                $total = array_sum( array_map( static fn( $g ) => count( $g['rows'] ), $groups ) );
-                ?>
-                <p class="description">
-                    <?php
-                    /* translators: 1: count, 2: term */
-                    printf( esc_html__( '%1$d results for "%2$s"', 'ovr-core' ), (int) $total, esc_html( $term ) );
-                    ?>
-                </p>
-                <?php foreach ( $groups as $group ) :
-                    if ( empty( $group['rows'] ) ) {
-                        continue;
-                    }
-                    ?>
-                    <h2 style="margin-top:24px"><?php echo esc_html( $group['label'] ); ?> <span style="color:#646970;font-weight:400">(<?php echo (int) count( $group['rows'] ); ?>)</span></h2>
-                    <table class="wp-list-table widefat fixed striped">
-                        <tbody>
-                        <?php foreach ( $group['rows'] as $row ) : ?>
-                            <tr>
-                                <td style="width:60%">
-                                    <?php if ( ! empty( $row['url'] ) ) : ?>
-                                        <a href="<?php echo esc_url( $row['url'] ); ?>"><strong><?php echo esc_html( $row['title'] ); ?></strong></a>
-                                    <?php else : ?>
-                                        <strong><?php echo esc_html( $row['title'] ); ?></strong>
-                                    <?php endif; ?>
-                                </td>
-                                <td style="color:#646970"><?php echo esc_html( $row['meta'] ); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php endforeach; ?>
-            <?php endif; ?>
+                <div class="ovr-adm-card">
+                    <div class="ovr-adm-toolbar">
+                        <form method="get" action="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>">
+                            <input type="hidden" name="post_type" value="ovr_property">
+                            <input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE_SLUG ); ?>">
+                            <div class="ovr-adm-search">
+                                <span class="material-symbols-outlined">search</span>
+                                <input type="search" name="s" value="<?php echo esc_attr( $term ); ?>"
+                                       placeholder="<?php esc_attr_e( 'Search users, listings, payments, reviews, inquiries, IDs…', 'ovr-core' ); ?>">
+                            </div>
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">search</span><?php esc_html_e( 'Search', 'ovr-core' ); ?></button>
+                        </form>
+                    </div>
+                </div>
+
+                <?php if ( '' === $term ) : ?>
+                    <div class="ovr-adm-card">
+                        <div class="ovr-adm-empty">
+                            <span class="material-symbols-outlined">manage_search</span>
+                            <h3><?php esc_html_e( 'Enter a search query', 'ovr-core' ); ?></h3>
+                            <p><?php esc_html_e( 'Enter a name, email, property ID, transaction ID, or keyword.', 'ovr-core' ); ?></p>
+                        </div>
+                    </div>
+                <?php else :
+                    $any = false;
+                    foreach ( $groups as $group ) :
+                        if ( empty( $group['rows'] ) ) {
+                            continue;
+                        }
+                        $any = true;
+                        ?>
+                        <div class="ovr-adm-card">
+                            <div class="ovr-adm-card-head">
+                                <h2><?php echo esc_html( $group['label'] ); ?></h2>
+                                <span class="ovr-adm-count"><?php echo (int) count( $group['rows'] ); ?></span>
+                            </div>
+                            <table class="ovr-adm-table">
+                                <tbody>
+                                <?php foreach ( $group['rows'] as $row ) : ?>
+                                    <tr>
+                                        <td style="width:60%">
+                                            <?php if ( ! empty( $row['url'] ) ) : ?>
+                                                <a href="<?php echo esc_url( $row['url'] ); ?>"><span class="ovr-adm-name"><?php echo esc_html( $row['title'] ); ?></span></a>
+                                            <?php else : ?>
+                                                <span class="ovr-adm-name"><?php echo esc_html( $row['title'] ); ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><span class="ovr-adm-sub"><?php echo esc_html( $row['meta'] ); ?></span></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <?php if ( ! $any ) : ?>
+                        <div class="ovr-adm-card">
+                            <div class="ovr-adm-empty">
+                                <span class="material-symbols-outlined">search_off</span>
+                                <h3>
+                                    <?php
+                                    /* translators: %s: term */
+                                    printf( esc_html__( 'No results for "%s"', 'ovr-core' ), esc_html( $term ) );
+                                    ?>
+                                </h3>
+                                <p><?php esc_html_e( 'Try a different name, email, ID, or keyword.', 'ovr-core' ); ?></p>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
         <?php
     }

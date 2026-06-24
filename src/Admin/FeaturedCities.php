@@ -120,45 +120,57 @@ class FeaturedCities {
             $items = [ [ 'name' => '', 'image_id' => 0 ] ]; // Start with one blank row.
         }
         ?>
-        <div class="wrap ovr-admin-wrap">
-            <h1><?php esc_html_e( 'Featured Cities', 'ovr-core' ); ?></h1>
-            <p class="description" style="max-width:640px;margin:6px 0 16px">
-                <?php esc_html_e( 'These cities appear in the strip at the top of the Search Results page, in the order listed here. Each links to a search for that city. If you add none, the page falls back to your villages automatically.', 'ovr-core' ); ?>
-            </p>
-
-            <?php if ( ! empty( $_GET['updated'] ) ) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Featured cities saved.', 'ovr-core' ); ?></p></div>
-            <?php endif; ?>
-
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                <input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
-                <?php wp_nonce_field( self::SAVE_ACTION ); ?>
-
-                <div id="ovr-cities-list">
-                    <?php foreach ( $items as $item ) :
-                        $name     = (string) ( $item['name'] ?? '' );
-                        $image_id = (int) ( $item['image_id'] ?? 0 );
-                        $thumb    = $image_id ? (string) wp_get_attachment_image_url( $image_id, 'thumbnail' ) : '';
-                        $this->render_row( $name, $image_id, $thumb );
-                    endforeach; ?>
+        <div class="wrap ovr-adm">
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Featured Cities', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'These cities appear in the strip at the top of the Search Results page, in the order listed here. Each links to a search for that city. If you add none, the page falls back to your villages automatically.', 'ovr-core' ); ?></p>
+                    </div>
                 </div>
 
-                <p><button type="button" class="button" id="ovr-add-city"><?php esc_html_e( '+ Add City', 'ovr-core' ); ?></button></p>
+                <?php if ( ! empty( $_GET['updated'] ) ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--success"><span class="material-symbols-outlined">check_circle</span><span><?php esc_html_e( 'Featured cities saved.', 'ovr-core' ); ?></span></div>
+                <?php endif; ?>
 
-                <?php submit_button( __( 'Save Featured Cities', 'ovr-core' ) ); ?>
-            </form>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                    <input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
+                    <?php wp_nonce_field( self::SAVE_ACTION ); ?>
 
-            <script type="text/template" id="ovr-city-row-tpl"><?php $this->render_row( '', 0, '' ); ?></script>
+                    <div class="ovr-adm-card">
+                        <div class="ovr-adm-card-body">
+                            <div id="ovr-cities-list">
+                                <?php foreach ( $items as $item ) :
+                                    $name     = (string) ( $item['name'] ?? '' );
+                                    $image_id = (int) ( $item['image_id'] ?? 0 );
+                                    $thumb    = $image_id ? (string) wp_get_attachment_image_url( $image_id, 'thumbnail' ) : '';
+                                    $this->render_row( $name, $image_id, $thumb );
+                                endforeach; ?>
+                            </div>
 
-            <style>
-                .ovr-city-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; padding:10px 12px; background:#fff; border:1px solid #dcdcde; border-radius:6px; max-width:760px; }
-                .ovr-city-row .ovr-city-name { flex:1 1 auto; }
-                .ovr-city-thumb { width:56px; height:42px; flex:0 0 auto; background:#f0f0f1; border-radius:4px; overflow:hidden; }
-                .ovr-city-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-                .ovr-city-remove { color:#b32d2e; cursor:pointer; }
-            </style>
+                            <p><button type="button" class="ovr-adm-btn ovr-adm-btn--ghost" id="ovr-add-city"><span class="material-symbols-outlined">add</span><?php esc_html_e( 'Add City', 'ovr-core' ); ?></button></p>
+                        </div>
 
-            <script>
+                        <div class="ovr-adm-form-foot">
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">save</span><?php esc_html_e( 'Save Featured Cities', 'ovr-core' ); ?></button>
+                        </div>
+                    </div>
+                </form>
+
+                <script type="text/template" id="ovr-city-row-tpl"><?php $this->render_row( '', 0, '' ); ?></script>
+
+                <style>
+                    .ovr-adm .ovr-city-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; padding:10px 12px; background:var(--surf); border:1px solid var(--gray-border); border-radius:var(--r-sm); }
+                    .ovr-adm .ovr-city-row:last-child { margin-bottom:0; }
+                    .ovr-adm .ovr-city-row .ovr-city-name { flex:1 1 auto; }
+                    .ovr-adm .ovr-city-thumb { width:56px; height:42px; flex:0 0 auto; background:var(--gray-light); border:1px solid var(--gray-border); border-radius:var(--r-sm); overflow:hidden; }
+                    .ovr-adm .ovr-city-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+                    .ovr-adm .ovr-city-remove { display:inline-flex; align-items:center; gap:5px; color:var(--red); cursor:pointer; font-size:14px; font-weight:600; flex:0 0 auto; }
+                    .ovr-adm .ovr-city-remove:hover { text-decoration:underline; }
+                    .ovr-adm .ovr-city-remove .material-symbols-outlined { font-size:18px; }
+                </style>
+
+                <script>
             ( function () {
                 var list = document.getElementById( 'ovr-cities-list' );
                 var tpl  = document.getElementById( 'ovr-city-row-tpl' ).innerHTML;
@@ -209,6 +221,7 @@ class FeaturedCities {
                 } );
             } )();
             </script>
+            </div>
         </div>
         <?php
     }
@@ -216,13 +229,13 @@ class FeaturedCities {
     private function render_row( string $name, int $image_id, string $thumb ): void {
         ?>
         <div class="ovr-city-row">
-            <input type="text" name="ovr_city_name[]" class="regular-text ovr-city-name" placeholder="<?php esc_attr_e( 'City name (e.g. Spanish Springs)', 'ovr-core' ); ?>" value="<?php echo esc_attr( $name ); ?>">
+            <input type="text" name="ovr_city_name[]" class="ovr-adm-input ovr-city-name" placeholder="<?php esc_attr_e( 'City name (e.g. Spanish Springs)', 'ovr-core' ); ?>" value="<?php echo esc_attr( $name ); ?>">
             <input type="hidden" name="ovr_city_image[]" class="ovr-city-image-id" value="<?php echo esc_attr( (string) $image_id ); ?>">
             <span class="ovr-city-thumb"<?php echo $thumb ? '' : ' style="display:none"'; ?>>
                 <img src="<?php echo esc_url( $thumb ); ?>" alt="">
             </span>
-            <button type="button" class="button ovr-city-pick"><?php esc_html_e( 'Select Image', 'ovr-core' ); ?></button>
-            <a class="ovr-city-remove" role="button"><?php esc_html_e( 'Remove', 'ovr-core' ); ?></a>
+            <button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-adm-btn--sm ovr-city-pick"><span class="material-symbols-outlined">image</span><?php esc_html_e( 'Select Image', 'ovr-core' ); ?></button>
+            <a class="ovr-city-remove" role="button"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></a>
         </div>
         <?php
     }

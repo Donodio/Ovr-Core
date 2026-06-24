@@ -34,9 +34,9 @@ $edit_url = static function ( int $id ) use ( $base_url, $status, $paged ): stri
 };
 
 $status_meta = [
-    'pending'  => [ 'label' => __( 'Pending', 'ovr-core' ),  'icon' => 'pending',      'accent' => '#cca72f', 'chip_bg' => '#ffe088', 'chip_fg' => '#4e3d00' ],
-    'approved' => [ 'label' => __( 'Approved', 'ovr-core' ), 'icon' => 'check_circle', 'accent' => '#006c4a', 'chip_bg' => '#74f7be', 'chip_fg' => '#00513a' ],
-    'rejected' => [ 'label' => __( 'Rejected', 'ovr-core' ), 'icon' => 'cancel',       'accent' => '#ba1a1a', 'chip_bg' => '#ffdad6', 'chip_fg' => '#93000a' ],
+    'pending'  => [ 'label' => __( 'Pending', 'ovr-core' ),  'icon' => 'pending',      'accent' => '#DEAF0C', 'chip_bg' => '#fef5d6', 'chip_fg' => '#b8920a' ],
+    'approved' => [ 'label' => __( 'Approved', 'ovr-core' ), 'icon' => 'check_circle', 'accent' => '#2E7D32', 'chip_bg' => '#e4f4e4', 'chip_fg' => '#2E7D32' ],
+    'rejected' => [ 'label' => __( 'Rejected', 'ovr-core' ), 'icon' => 'cancel',       'accent' => '#B3261E', 'chip_bg' => '#f9e4e2', 'chip_fg' => '#B3261E' ],
 ];
 
 $tabs = [
@@ -70,54 +70,56 @@ $initials = static function ( string $name ): string {
 <div class="wrap ovr-rev">
 
     <style>
-        #wpcontent,#wpbody-content{background:#f7faf9}
+        #wpcontent,#wpbody-content{background:#f0f3f7}
         #wpcontent{padding-left:0}
-        .ovr-rev{--p:#004c4c;--pc:#006666;--opc:#93e1e0;--sec:#006c4a;--secc:#74f7be;--ter:#735c00;--terc:#cca72f;--err:#ba1a1a;--errc:#ffdad6;--surf:#fff;--sv:#3f4948;--ov:#bec9c8;--on:#181c1c;font-family:'Inter',system-ui,sans-serif;max-width:none;margin:20px 0 56px;padding:0 40px;color:var(--on)}
+        .ovr-rev{--p:#000961;--p-hover:#000740;--pc:#000961;--p-light:#e8eaf3;--blue:#00A2E8;--blue-light:#e5f5fe;--gold:#DEAF0C;--gold-dark:#b8920a;--gold-light:#fef5d6;--sec:#2E7D32;--sec-dark:#1f5d23;--secc:#e4f4e4;--ter:#b8920a;--terc:#DEAF0C;--err:#B3261E;--errc:#f9e4e2;--surf:#fff;--sv:#5F6B7A;--ov:#DBDBDB;--on:#1C2430;font-family:'Inter',system-ui,sans-serif;max-width:none;margin:20px 0 56px;padding:0 40px;color:var(--on)}
         .ovr-rev,.ovr-rev *{box-sizing:border-box}
         .ovr-rev .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;line-height:1}
         .ovr-rev .material-symbols-outlined.filled{font-variation-settings:'FILL' 1}
 
         /* Notice */
-        .ovr-rev-notice{display:flex;align-items:center;gap:10px;padding:13px 18px;border-radius:12px;font-size:14px;font-weight:500;margin:0 0 22px}
+        .ovr-rev-notice{display:flex;align-items:center;gap:10px;padding:13px 18px;border-radius:8px;font-size:14px;font-weight:500;margin:0 0 22px}
         .ovr-rev-notice .material-symbols-outlined{font-size:20px}
-        .ovr-rev-notice--success{background:#e3f6ec;border:1px solid #9fe0bd;color:#00513a}
-        .ovr-rev-notice--error{background:#fff5f4;border:1px solid #f4cfca;color:#93000a}
+        .ovr-rev-notice--success{background:var(--secc);border:1px solid #b8d8b8;color:var(--sec)}
+        .ovr-rev-notice--error{background:var(--errc);border:1px solid #e6b8b4;color:var(--err)}
 
         /* Header */
         .ovr-rev-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:6px 0 26px}
-        .ovr-rev-head h1{font-size:32px;font-weight:700;letter-spacing:-.01em;margin:0;padding:0;line-height:1.2;color:var(--on)}
+        .ovr-rev-head h1{font-size:30px;font-weight:700;letter-spacing:-.01em;margin:0;padding:0;line-height:1.2;color:var(--on)}
         .ovr-rev-head p{margin:7px 0 0;color:var(--sv);font-size:15px;max-width:560px}
-        .ovr-rev-head p em{color:var(--p);font-style:italic}
+        .ovr-rev-head p em{color:var(--p);font-style:normal;font-weight:600}
         .ovr-rev-bulk{display:flex;gap:10px;flex-wrap:wrap;margin:0}
-        .ovr-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:9999px;font-size:13px;font-weight:600;text-decoration:none;line-height:1;border:1px solid transparent;cursor:pointer;font-family:inherit}
+        .ovr-btn{display:inline-flex;align-items:center;gap:7px;padding:0 20px;min-height:46px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;line-height:1;border:1px solid transparent;cursor:pointer;font-family:inherit;transition:all .2s}
         .ovr-btn .material-symbols-outlined{font-size:18px}
-        .ovr-btn--primary{background:var(--p);color:#fff}
-        .ovr-btn--primary:hover{background:#003838;color:#fff}
-        .ovr-btn--ghost{background:var(--surf);color:var(--p);border-color:var(--ov)}
-        .ovr-btn--ghost:hover{background:#eef4f4;color:var(--p)}
-        .ovr-btn--danger{background:var(--surf);color:var(--err);border-color:var(--err)}
-        .ovr-btn--danger:hover{background:var(--errc);color:#93000a}
+        .ovr-btn--primary{background:var(--gold);color:var(--p);border-color:var(--gold);box-shadow:0 2px 8px rgba(222,175,12,.25)}
+        .ovr-btn--primary:hover{background:var(--gold-dark);color:var(--p)}
+        .ovr-btn--ghost{background:var(--surf);color:var(--p);border-color:var(--ov);box-shadow:0 1px 3px rgba(0,9,97,.06)}
+        .ovr-btn--ghost:hover{border-color:var(--blue);color:var(--blue)}
+        .ovr-btn--danger{background:var(--surf);color:var(--err);border-color:var(--ov)}
+        .ovr-btn--danger:hover{background:var(--errc);border-color:var(--err);color:var(--err)}
         .ovr-btn:disabled{opacity:.5;cursor:not-allowed}
 
-        /* Tabs */
-        .ovr-rev-tabs{display:flex;gap:26px;border-bottom:1px solid var(--ov);margin:0 0 26px;overflow-x:auto}
-        .ovr-rev-tab{display:inline-flex;align-items:center;gap:8px;padding:0 0 12px;font-size:17px;font-weight:600;color:var(--sv);text-decoration:none;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
-        .ovr-rev-tab:hover{color:var(--p)}
-        .ovr-rev-tab.is-active{color:var(--p);border-bottom-color:var(--p);font-weight:700}
-        .ovr-rev-tab .ovr-rev-badge{background:var(--pc);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:9999px;line-height:1.5}
+        /* Tabs — navy pills (shared OVR admin convention) */
+        .ovr-rev-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 26px}
+        .ovr-rev-tab{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:9999px;font-size:14px;font-weight:600;color:var(--sv);background:var(--surf);border:1px solid var(--ov);text-decoration:none;white-space:nowrap}
+        .ovr-rev-tab:hover{border-color:var(--blue);color:var(--blue)}
+        .ovr-rev-tab.is-active{color:#fff;background:var(--p);border-color:var(--p)}
+        .ovr-rev-tab.is-active:hover{color:#fff}
+        .ovr-rev-tab .ovr-rev-badge{background:var(--gold);color:var(--p);font-size:11px;font-weight:700;padding:2px 9px;border-radius:9999px;line-height:1.5}
+        .ovr-rev-tab.is-active .ovr-rev-badge{background:rgba(255,255,255,.2);color:#fff}
 
         /* Bento grid */
         .ovr-rev-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start}
         .ovr-rev-list{display:flex;flex-direction:column;gap:16px;min-width:0}
 
         /* Review card */
-        .ovr-rc{position:relative;background:var(--surf);border:1px solid #e3e8e7;border-radius:16px;padding:24px 24px 24px 28px;box-shadow:0 4px 24px rgba(0,0,0,.02);transition:box-shadow .25s;overflow:hidden}
-        .ovr-rc:hover{box-shadow:0 8px 32px rgba(0,0,0,.06)}
+        .ovr-rc{position:relative;background:var(--surf);border:1px solid var(--ov);border-radius:12px;padding:24px 24px 24px 28px;box-shadow:0 4px 12px rgba(0,9,97,.06);transition:box-shadow .25s;overflow:hidden}
+        .ovr-rc:hover{box-shadow:0 8px 32px rgba(0,9,97,.1)}
         .ovr-rc-accent{position:absolute;top:0;left:0;width:4px;height:100%}
         .ovr-rc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
         .ovr-rc-id{display:flex;align-items:center;gap:12px;min-width:0}
         .ovr-rc-check{margin:4px 0 0;width:17px;height:17px;flex-shrink:0;accent-color:var(--p);cursor:pointer}
-        .ovr-rc-av{width:46px;height:46px;border-radius:50%;background:#e0e3e2;color:var(--p);font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .ovr-rc-av{width:46px;height:46px;border-radius:50%;background:var(--p-light);color:var(--p);font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
         .ovr-rc-name{font-size:18px;font-weight:700;margin:0;color:var(--on);line-height:1.2}
         .ovr-rc-meta{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--sv);margin:5px 0 0}
         .ovr-rc-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:9999px;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
@@ -128,44 +130,44 @@ $initials = static function ( string $name ): string {
         .ovr-rc-body{font-size:14px;line-height:1.6;color:var(--sv);margin:0 0 18px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
         .ovr-rc-acts{display:flex;gap:10px;flex-wrap:wrap;margin:0}
         .ovr-rc-acts form{margin:0;display:contents}
-        .ovr-cbtn{flex:1 1 120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;line-height:1;text-decoration:none;border:1px solid transparent;cursor:pointer;font-family:inherit}
+        .ovr-cbtn{flex:1 1 120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;line-height:1;text-decoration:none;border:1px solid transparent;cursor:pointer;font-family:inherit;transition:all .18s}
         .ovr-cbtn .material-symbols-outlined{font-size:17px}
         .ovr-cbtn--edit{background:var(--surf);color:var(--p);border-color:var(--ov)}
-        .ovr-cbtn--edit:hover{background:#eef4f4;color:var(--p)}
+        .ovr-cbtn--edit:hover{border-color:var(--blue);color:var(--blue)}
         .ovr-cbtn--edit.is-active{background:var(--p);color:#fff;border-color:var(--p)}
         .ovr-cbtn--approve{background:var(--sec);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-        .ovr-cbtn--approve:hover{background:#00543a;color:#fff}
+        .ovr-cbtn--approve:hover{background:var(--sec-dark);color:#fff}
         .ovr-cbtn--reject{background:var(--surf);color:var(--err);border-color:var(--err)}
-        .ovr-cbtn--reject:hover{background:var(--errc);color:#93000a}
+        .ovr-cbtn--reject:hover{background:var(--errc);color:var(--err)}
 
         /* Empty state */
-        .ovr-rev-empty{background:var(--surf);border:1px dashed var(--ov);border-radius:16px;padding:64px 24px;text-align:center;color:var(--sv)}
+        .ovr-rev-empty{background:var(--surf);border:1px dashed var(--ov);border-radius:12px;padding:64px 24px;text-align:center;color:var(--sv)}
         .ovr-rev-empty .material-symbols-outlined{font-size:44px;color:var(--ov);display:block;margin:0 auto 12px}
         .ovr-rev-empty h3{font-size:18px;font-weight:600;color:var(--on);margin:0 0 6px}
         .ovr-rev-empty p{margin:0;font-size:14px}
 
         /* Pagination */
         .ovr-rev-pager{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:22px;flex-wrap:wrap}
-        .ovr-rev-pager a,.ovr-rev-pager span{min-width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;padding:0 12px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--ov);color:var(--p);background:var(--surf)}
-        .ovr-rev-pager a:hover{background:#eef4f4}
+        .ovr-rev-pager a,.ovr-rev-pager span{min-width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0 12px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--ov);color:var(--sv);background:var(--surf)}
+        .ovr-rev-pager a:hover{border-color:var(--blue);color:var(--blue)}
         .ovr-rev-pager .is-current{background:var(--p);color:#fff;border-color:var(--p)}
         .ovr-rev-pager .is-disabled{opacity:.4;pointer-events:none}
 
         /* Sidebar */
-        .ovr-rev-side{position:sticky;top:46px;background:var(--surf);border:1px solid #e3e8e7;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:24px}
+        .ovr-rev-side{position:sticky;top:46px;background:var(--surf);border:1px solid var(--ov);border-radius:12px;box-shadow:0 4px 12px rgba(0,9,97,.06);padding:24px}
         .ovr-side-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
         .ovr-side-h h2{font-size:20px;font-weight:700;margin:0;padding:0;color:var(--on)}
-        .ovr-side-del{background:none;border:none;color:var(--sv);cursor:pointer;padding:4px;border-radius:8px;display:inline-flex}
+        .ovr-side-del{background:none;border:none;color:var(--sv);cursor:pointer;padding:4px;border-radius:6px;display:inline-flex}
         .ovr-side-del:hover{color:var(--err);background:var(--errc)}
-        .ovr-side-ctx{background:#f1f4f3;border-radius:12px;padding:14px 16px;margin-bottom:20px}
+        .ovr-side-ctx{background:var(--p-light);border-radius:8px;padding:14px 16px;margin-bottom:20px}
         .ovr-side-ctx-lbl{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--sv);margin:0 0 6px}
         .ovr-side-ctx-lbl .material-symbols-outlined{font-size:18px;color:var(--p)}
         .ovr-side-ctx p{margin:0;font-size:14px;font-weight:600;color:var(--on)}
         .ovr-fld{margin-bottom:18px}
         .ovr-fld>label{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--sv);margin-bottom:8px}
-        .ovr-fld textarea{width:100%;background:#fff;border:1px solid var(--ov);border-radius:10px;padding:12px;font-size:14px;line-height:1.6;color:var(--on);font-family:inherit;resize:vertical;outline:none}
-        .ovr-fld textarea:focus,.ovr-fld input[type=text]:focus{border-color:var(--p);box-shadow:0 0 0 2px rgba(0,76,76,.18)}
-        .ovr-fld input[type=text]{width:100%;background:#fff;border:1px solid var(--ov);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--on);font-family:inherit;outline:none}
+        .ovr-fld textarea{width:100%;background:#fff;border:1px solid var(--ov);border-radius:8px;padding:12px;font-size:14px;line-height:1.6;color:var(--on);font-family:inherit;resize:vertical;outline:none}
+        .ovr-fld textarea:focus,.ovr-fld input[type=text]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,9,97,.12)}
+        .ovr-fld input[type=text]{width:100%;background:#fff;border:1px solid var(--ov);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--on);font-family:inherit;outline:none}
 
         /* No-JS star rating editor (reverse-order trick) */
         .ovr-stars-input{display:inline-flex;flex-direction:row-reverse;justify-content:flex-end}
@@ -181,8 +183,8 @@ $initials = static function ( string $name ): string {
         .ovr-side-toggle{display:flex;gap:10px}
         .ovr-side-toggle button{flex:1;padding:10px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid transparent}
         .ovr-st-approve{background:var(--sec);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-        .ovr-st-approve:hover{background:#00543a}
-        .ovr-st-approve.is-current{outline:2px solid #00543a;outline-offset:2px}
+        .ovr-st-approve:hover{background:var(--sec-dark)}
+        .ovr-st-approve.is-current{outline:2px solid var(--sec-dark);outline-offset:2px}
         .ovr-st-reject{background:var(--surf);color:var(--err);border-color:var(--err)}
         .ovr-st-reject:hover{background:var(--errc)}
         .ovr-st-reject.is-current{outline:2px solid var(--err);outline-offset:2px}

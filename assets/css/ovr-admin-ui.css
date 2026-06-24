@@ -1,0 +1,413 @@
+/**
+ * OVR Shared Admin Design System (.ovr-adm)
+ * =========================================================================
+ * One source of truth for the OVR admin look — the navy / blue / gold scheme
+ * that Paid Services, Payments, Users, Bookings, CRM, Membership and Support
+ * each previously duplicated inline. New/standardized screens wrap their
+ * markup in `.ovr-adm` and use the component classes below so every OVR
+ * admin page shares the identical design language.
+ *
+ * Loaded on every OVR admin page by OVR\Admin\AdminAssets.
+ *
+ * The palette + component values are lifted verbatim from the original
+ * `.ovr-ps` reference so converted screens are pixel-consistent with the
+ * already-shipped screens.
+ */
+
+/* Neutralize the default grey wp-content gutter on OVR admin pages so our
+   full-bleed layout reads edge-to-edge like the reference. Screens opt in
+   by adding `ovr-adm-page` to the <body> is not reliable, so we scope to the
+   wrapper instead and let each screen's own padding handle the inset. */
+.ovr-adm {
+    --navy:#000961;--blue:#00A2E8;--blue-light:#e5f5fe;--navy-light:#e8eaf3;
+    --gold:#DEAF0C;--gold-dark:#b8920a;--gold-light:#fef5d6;
+    --green:#2E7D32;--green-light:#e4f4e4;--red:#B3261E;--red-light:#f9e4e2;
+    --purple:#6A3FB8;--purple-light:#eee6fb;--orange:#C25E00;--orange-light:#fceee0;
+    --gray-border:#DBDBDB;--gray-light:#f2f4f7;--gray-mid:#8b95a5;
+    --ink:#1C2430;--muted:#5F6B7A;--surf:#fff;--bg:#f0f3f7;
+    --shadow-sm:0 1px 3px rgba(0,9,97,.06);--shadow-md:0 4px 12px rgba(0,9,97,.08);
+    --r-sm:6px;--r-md:8px;--r-lg:12px;
+    font-family:'Inter',system-ui,sans-serif;width:100%;max-width:none;margin:0;color:var(--ink);
+}
+.ovr-adm,.ovr-adm *{box-sizing:border-box}
+.ovr-adm .material-symbols-outlined{line-height:1;vertical-align:middle;font-size:22px}
+
+/* Page wrapper inset */
+.ovr-adm-wrap{padding:24px 40px 48px}
+
+/* ---- Page head: title + subtitle + action buttons -------------------- */
+.ovr-adm-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+.ovr-adm-head h1{font-size:30px;font-weight:700;margin:0;line-height:1.2;padding:0}
+.ovr-adm-head p{margin:6px 0 0;font-size:16px;color:var(--muted)}
+.ovr-adm-actions{display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0}
+
+/* ---- Buttons --------------------------------------------------------- */
+.ovr-adm-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 22px;border-radius:var(--r-md);font-size:15px;font-weight:600;text-decoration:none;border:1px solid transparent;cursor:pointer;font-family:inherit;min-height:46px;transition:all .2s;line-height:1}
+.ovr-adm-btn .material-symbols-outlined{font-size:20px}
+.ovr-adm-btn--primary{background:var(--gold);color:var(--navy);border-color:var(--gold);box-shadow:0 2px 8px rgba(222,175,12,.25)}
+.ovr-adm-btn--primary:hover{background:var(--gold-dark);color:var(--navy)}
+.ovr-adm-btn--navy{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ovr-adm-btn--navy:hover{background:#000740;color:#fff}
+.ovr-adm-btn--ghost{background:var(--surf);color:var(--navy);border-color:var(--gray-border);box-shadow:var(--shadow-sm)}
+.ovr-adm-btn--ghost:hover{border-color:var(--blue);color:var(--blue)}
+.ovr-adm-btn--danger{background:var(--surf);color:var(--red);border-color:var(--gray-border)}
+.ovr-adm-btn--danger:hover{background:var(--red-light);border-color:var(--red)}
+.ovr-adm-btn--sm{min-height:38px;padding:0 14px;font-size:14px}
+
+/* ---- Stat cards ------------------------------------------------------ */
+.ovr-adm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.ovr-adm-stat{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--r-lg);padding:22px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-md);position:relative;overflow:hidden}
+.ovr-adm-stat::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;background:var(--navy)}
+.ovr-adm-stat:nth-child(1)::before{background:var(--navy)}.ovr-adm-stat:nth-child(1) .ovr-adm-stat-ic{background:var(--navy-light);color:var(--navy)}
+.ovr-adm-stat:nth-child(2)::before{background:var(--green)}.ovr-adm-stat:nth-child(2) .ovr-adm-stat-ic{background:var(--green-light);color:var(--green)}
+.ovr-adm-stat:nth-child(3)::before{background:var(--blue)}.ovr-adm-stat:nth-child(3) .ovr-adm-stat-ic{background:var(--blue-light);color:var(--blue)}
+.ovr-adm-stat:nth-child(4)::before{background:var(--gold)}.ovr-adm-stat:nth-child(4) .ovr-adm-stat-ic{background:var(--gold-light);color:var(--gold-dark)}
+.ovr-adm-stat:nth-child(5)::before{background:var(--purple)}.ovr-adm-stat:nth-child(5) .ovr-adm-stat-ic{background:var(--purple-light);color:var(--purple)}
+.ovr-adm-stat:nth-child(6)::before{background:var(--orange)}.ovr-adm-stat:nth-child(6) .ovr-adm-stat-ic{background:var(--orange-light);color:var(--orange)}
+.ovr-adm-stat:nth-child(7)::before{background:var(--red)}.ovr-adm-stat:nth-child(7) .ovr-adm-stat-ic{background:var(--red-light);color:var(--red)}
+.ovr-adm-stat-ic{width:50px;height:50px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ovr-adm-stat-ic .material-symbols-outlined{font-size:26px}
+.ovr-adm-stat-v{font-size:30px;font-weight:700;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.ovr-adm-stat-l{font-size:14px;color:var(--muted);margin-top:4px}
+.ovr-adm-stats--3{grid-template-columns:repeat(3,1fr)}
+.ovr-adm-stats--5{grid-template-columns:repeat(5,1fr)}
+
+/* ---- Pill tabs ------------------------------------------------------- */
+.ovr-adm-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.ovr-adm-tab{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9999px;font-size:14px;font-weight:600;text-decoration:none;color:var(--muted);background:var(--surf);border:1px solid var(--gray-border)}
+.ovr-adm-tab:hover{border-color:var(--blue);color:var(--blue)}
+.ovr-adm-tab.is-active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ovr-adm-tab.is-active:hover{color:#fff}
+.ovr-adm-pill{background:rgba(0,0,0,.08);border-radius:9999px;padding:1px 8px;font-size:12px}
+.ovr-adm-tab.is-active .ovr-adm-pill{background:rgba(255,255,255,.2)}
+
+/* ---- Card + toolbar -------------------------------------------------- */
+.ovr-adm-card{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-md)}
+.ovr-adm-card+.ovr-adm-card{margin-top:20px}
+.ovr-adm-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--gray-border);flex-wrap:wrap}
+.ovr-adm-card-head h2{font-size:17px;font-weight:700;margin:0}
+.ovr-adm-card-body{padding:22px}
+.ovr-adm-toolbar{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--gray-border);background:var(--bg);flex-wrap:wrap}
+.ovr-adm-toolbar form{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap}
+.ovr-adm-search{position:relative;flex:1;min-width:200px;max-width:380px}
+.ovr-adm-search .material-symbols-outlined{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--gray-mid);pointer-events:none}
+.ovr-adm-search input{width:100%;background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--r-md);padding:0 16px 0 44px;font-size:15px;font-family:inherit;height:46px;outline:none}
+.ovr-adm-search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,9,97,.12)}
+.ovr-adm-toolbar select,.ovr-adm-select{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--r-md);padding:0 38px 0 14px;font-size:15px;font-family:inherit;height:46px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%235F6B7A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;min-width:150px}
+.ovr-adm-count{font-size:14px;color:var(--gray-mid);font-weight:500;background:var(--surf);padding:6px 14px;border-radius:9999px;border:1px solid var(--gray-border);margin-left:auto}
+
+/* ---- Data table ------------------------------------------------------ */
+.ovr-adm-table{width:100%;border-collapse:collapse}
+.ovr-adm-table th{text-align:left;padding:14px 18px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:#f8f9fb;border-bottom:2px solid var(--gray-border);white-space:nowrap}
+.ovr-adm-table th a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.ovr-adm-table th a:hover{color:var(--blue)}
+.ovr-adm-table th .material-symbols-outlined{font-size:15px;opacity:.4}
+.ovr-adm-table td{padding:16px 18px;font-size:15px;border-bottom:1px solid var(--gray-border);vertical-align:middle;color:var(--ink)}
+.ovr-adm-table tbody tr:last-child td{border-bottom:none}
+.ovr-adm-table tbody tr:hover td{background:rgba(0,162,232,.03)}
+.ovr-adm-name{font-weight:600}
+.ovr-adm-sub{font-size:12px;color:var(--gray-mid)}
+.ovr-adm-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--gray-mid)}
+.ovr-adm-num{font-variant-numeric:tabular-nums}
+.ovr-adm-price{font-weight:700;font-variant-numeric:tabular-nums}
+
+/* ---- Badges + status ------------------------------------------------- */
+.ovr-adm-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--r-sm);font-size:13px;font-weight:600;white-space:nowrap}
+.ovr-adm-badge--navy{background:var(--navy-light);color:var(--navy)}
+.ovr-adm-badge--blue{background:var(--blue-light);color:var(--blue)}
+.ovr-adm-badge--gold{background:var(--gold-light);color:var(--gold-dark)}
+.ovr-adm-badge--green{background:var(--green-light);color:var(--green)}
+.ovr-adm-badge--red{background:var(--red-light);color:var(--red)}
+.ovr-adm-badge--purple{background:var(--purple-light);color:var(--purple)}
+.ovr-adm-badge--gray{background:var(--gray-light);color:var(--muted)}
+.ovr-adm-status{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:9999px;font-size:13px;font-weight:600}
+.ovr-adm-status--on{background:var(--green-light);color:var(--green)}
+.ovr-adm-status--off{background:var(--gray-light);color:var(--muted)}
+.ovr-adm-status--warn{background:var(--gold-light);color:var(--gold-dark)}
+.ovr-adm-status--danger{background:var(--red-light);color:var(--red)}
+
+/* ---- Row action icons ------------------------------------------------ */
+.ovr-adm-cell-actions{display:flex;gap:4px}
+.ovr-adm-act{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:var(--r-sm);border:none;cursor:pointer;background:transparent;color:var(--gray-mid);text-decoration:none;transition:all .18s}
+.ovr-adm-act:hover{background:var(--gray-light);color:var(--ink)}
+.ovr-adm-act--edit:hover{background:var(--blue-light);color:var(--blue)}
+.ovr-adm-act--danger:hover{background:var(--red-light);color:var(--red)}
+.ovr-adm-act--ok:hover{background:var(--green-light);color:var(--green)}
+
+/* ---- Empty state ----------------------------------------------------- */
+.ovr-adm-empty{text-align:center;padding:70px 24px;color:var(--muted)}
+.ovr-adm-empty .material-symbols-outlined{font-size:56px;color:var(--gray-border);margin-bottom:14px;display:block}
+.ovr-adm-empty h3{font-size:18px;font-weight:600;color:var(--ink);margin:0 0 6px}
+.ovr-adm-empty p{margin:0}
+
+/* ---- Pagination ------------------------------------------------------ */
+.ovr-adm-pag{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-top:1px solid var(--gray-border);background:var(--bg);font-size:14px;color:var(--muted);flex-wrap:wrap;gap:12px}
+.ovr-adm-pages{display:flex;gap:4px}
+.ovr-adm-page{display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:40px;border-radius:var(--r-sm);font-weight:500;text-decoration:none;color:var(--muted);border:1px solid var(--gray-border);background:var(--surf);padding:0 10px}
+.ovr-adm-page:hover{border-color:var(--blue);color:var(--blue)}
+.ovr-adm-page--active{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+/* ---- Notices --------------------------------------------------------- */
+.ovr-adm-notice{display:flex;align-items:center;gap:10px;padding:14px 18px;border-radius:var(--r-md);font-size:15px;font-weight:500;margin-bottom:18px}
+.ovr-adm-notice--success{background:var(--green-light);border:1px solid #b8d8b8;color:var(--green)}
+.ovr-adm-notice--error{background:var(--red-light);border:1px solid #e6b8b4;color:var(--red)}
+.ovr-adm-notice--info{background:var(--blue-light);border:1px solid #b8e2f6;color:var(--blue)}
+
+/* ---- Forms ----------------------------------------------------------- */
+.ovr-adm-form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.ovr-adm-field{display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
+.ovr-adm-field--full{grid-column:1 / -1}
+.ovr-adm-label{font-size:14px;font-weight:600;color:var(--ink)}
+.ovr-adm-hint{font-size:13px;color:var(--muted);margin:2px 0 0}
+.ovr-adm-input,.ovr-adm-textarea{width:100%;background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--r-md);padding:0 14px;font-size:15px;font-family:inherit;height:46px;outline:none;color:var(--ink)}
+.ovr-adm-textarea{height:auto;min-height:110px;padding:12px 14px;line-height:1.5;resize:vertical}
+.ovr-adm-input:focus,.ovr-adm-textarea:focus,.ovr-adm-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,9,97,.12)}
+.ovr-adm-check{display:inline-flex;align-items:center;gap:9px;font-size:15px;cursor:pointer}
+.ovr-adm-check input{width:18px;height:18px;accent-color:var(--navy)}
+.ovr-adm-form-foot{display:flex;align-items:center;gap:12px;padding:18px 22px;border-top:1px solid var(--gray-border);background:var(--bg)}
+
+/* Settings-style vertical tab nav reused as a pill row already covered by
+   .ovr-adm-tabs. Two-column content layout for editor screens: */
+.ovr-adm-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.ovr-adm-cols--wide-left{grid-template-columns:1.6fr 1fr}
+
+/* ---- WordPress native table inside our card (transitional) ----------- */
+.ovr-adm-card .wp-list-table{border:none;box-shadow:none;margin:0;background:transparent}
+.ovr-adm-card .wp-list-table thead th{background:#f8f9fb;border-bottom:2px solid var(--gray-border);color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:.04em}
+
+/* ---- Responsive ------------------------------------------------------ */
+@media(max-width:1100px){
+    .ovr-adm-stats,.ovr-adm-stats--5{grid-template-columns:repeat(2,1fr)}
+    .ovr-adm-form-grid,.ovr-adm-cols,.ovr-adm-cols--wide-left{grid-template-columns:1fr}
+}
+@media(max-width:782px){
+    .ovr-adm-wrap{padding:18px 14px 32px}
+    .ovr-adm-actions{width:100%}
+    .ovr-adm-actions .ovr-adm-btn{flex:1}
+    .ovr-adm-search{max-width:none;flex:1 1 100%}
+    .ovr-adm-stats,.ovr-adm-stats--3,.ovr-adm-stats--5{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+    .ovr-adm-stats,.ovr-adm-stats--3,.ovr-adm-stats--5{grid-template-columns:1fr}
+}
+
+/* =========================================================================
+   Native WordPress screen → OVR design schema
+   The CPT list table (edit.php), the post editor (post.php / post-new.php),
+   the Testimonials CPT, and EVERY OVR taxonomy editor (village, property
+   type, amenity, rental type, view, feature) are re-skinned here so they
+   read as part of the OVR product instead of stock grey WordPress.
+
+   Scope: every rule is prefixed with `body[class*="-ovr_"]`, which matches
+   the body classes WP emits on OVR screens — `post-type-ovr_*` (lists +
+   editors; taxonomy screens carry it too) and `taxonomy-ovr_*` — and nothing
+   else. The stylesheet is only enqueued on OVR screens regardless.
+   Local tokens (--o-*) keep the navy / blue / gold scheme self-contained.
+   ========================================================================= */
+body[class*="-ovr_"]{
+    --o-navy:#000961;--o-navy-dark:#000740;--o-navy-light:#e8eaf3;
+    --o-blue:#00A2E8;--o-blue-light:#e5f5fe;
+    --o-gold:#DEAF0C;--o-gold-dark:#b8920a;--o-gold-light:#fef5d6;
+    --o-green:#2E7D32;--o-red:#B3261E;--o-red-light:#f9e4e2;
+    --o-border:#DBDBDB;--o-ink:#1C2430;--o-muted:#5F6B7A;--o-mid:#8b95a5;
+    --o-surf:#fff;--o-bg:#f0f3f7;
+    --o-r-sm:6px;--o-r-md:8px;--o-r-lg:12px;
+    --o-sh-sm:0 1px 3px rgba(0,9,97,.06);--o-sh-md:0 4px 12px rgba(0,9,97,.08);
+}
+
+/* ---- Canvas + base font --------------------------------------------- */
+body[class*="-ovr_"] #wpcontent,
+body[class*="-ovr_"] #wpbody-content{background:var(--o-bg)}
+body[class*="-ovr_"] #wpbody-content{font-family:'Inter',system-ui,sans-serif;color:var(--o-ink);padding-bottom:40px}
+body[class*="-ovr_"] #wpbody-content p,
+body[class*="-ovr_"] #wpbody-content label,
+body[class*="-ovr_"] #wpbody-content td,
+body[class*="-ovr_"] #wpbody-content th,
+body[class*="-ovr_"] #wpbody-content a{font-family:'Inter',system-ui,sans-serif}
+
+/* ---- Page title + "Add New" ----------------------------------------- */
+body[class*="-ovr_"] .wrap > h1,
+body[class*="-ovr_"] .wrap > h1.wp-heading-inline{
+    font-family:'Inter',system-ui,sans-serif;font-weight:700;color:var(--o-ink);font-size:28px;line-height:1.2;
+}
+body[class*="-ovr_"] .wrap .page-title-action{
+    background:var(--o-gold);border:1px solid var(--o-gold);color:var(--o-navy);font-weight:600;
+    border-radius:var(--o-r-md);padding:7px 16px;font-size:13.5px;box-shadow:0 2px 8px rgba(222,175,12,.25);
+    transition:all .2s;top:-3px;
+}
+body[class*="-ovr_"] .wrap .page-title-action:hover,
+body[class*="-ovr_"] .wrap .page-title-action:focus{
+    background:var(--o-gold-dark);border-color:var(--o-gold-dark);color:var(--o-navy);
+    box-shadow:0 4px 14px rgba(222,175,12,.35);outline:none;
+}
+
+/* ---- Buttons (native screens only — custom OVR pages keep their own
+   gold submit_button styling, e.g. Settings → "Save Changes") ---------- */
+body.edit-php[class*="-ovr_"] .button,
+body.edit-tags-php[class*="-ovr_"] .button,
+body.post-php[class*="-ovr_"] .button,
+body.post-new-php[class*="-ovr_"] .button{
+    border-radius:var(--o-r-md);border:1px solid var(--o-border);background:var(--o-surf);
+    color:var(--o-navy);font-weight:600;font-family:inherit;
+}
+body.edit-php[class*="-ovr_"] .button:hover,
+body.edit-tags-php[class*="-ovr_"] .button:hover,
+body.post-php[class*="-ovr_"] .button:hover,
+body.post-new-php[class*="-ovr_"] .button:hover{border-color:var(--o-blue);color:var(--o-blue);background:var(--o-surf)}
+body.edit-php[class*="-ovr_"] .button-primary,
+body.edit-tags-php[class*="-ovr_"] .button-primary,
+body.post-php[class*="-ovr_"] .button-primary,
+body.post-new-php[class*="-ovr_"] .button-primary{
+    background:var(--o-navy);border-color:var(--o-navy);color:#fff;border-radius:var(--o-r-md);
+    font-weight:600;text-shadow:none;box-shadow:none;
+}
+body.edit-php[class*="-ovr_"] .button-primary:hover,
+body.edit-tags-php[class*="-ovr_"] .button-primary:hover,
+body.post-php[class*="-ovr_"] .button-primary:hover,
+body.post-new-php[class*="-ovr_"] .button-primary:hover{background:var(--o-navy-dark);border-color:var(--o-navy-dark);color:#fff;box-shadow:none}
+
+/* The list / taxonomy / editor structural rules below are scoped to the
+   native screen body classes (edit-php, edit-tags-php, post-php,
+   post-new-php). These never appear on the custom OVR admin submenu pages
+   (Settings, Reviews, CRM, Audit Log, …) — which also carry
+   `post-type-ovr_property` and embed their own WP_List_Tables inside
+   `.ovr-adm` cards — so the rules can't bleed onto those bespoke screens. */
+
+/* ---- Status filter row (All | Published | …) ------------------------ */
+body.edit-php[class*="-ovr_"] .subsubsub,
+body.edit-tags-php[class*="-ovr_"] .subsubsub{
+    display:inline-flex;gap:2px;margin:8px 0 14px;padding:6px 12px;font-size:13px;
+    background:var(--o-surf);border:1px solid var(--o-border);border-radius:9999px;box-shadow:var(--o-sh-sm);
+}
+body.edit-php[class*="-ovr_"] .subsubsub li,
+body.edit-tags-php[class*="-ovr_"] .subsubsub li{color:var(--o-mid)}
+body.edit-php[class*="-ovr_"] .subsubsub a,
+body.edit-tags-php[class*="-ovr_"] .subsubsub a{color:var(--o-muted);text-decoration:none;font-weight:600;padding:2px 8px;border-radius:9999px}
+body.edit-php[class*="-ovr_"] .subsubsub a:hover,
+body.edit-tags-php[class*="-ovr_"] .subsubsub a:hover{color:var(--o-blue)}
+body.edit-php[class*="-ovr_"] .subsubsub a.current,
+body.edit-tags-php[class*="-ovr_"] .subsubsub a.current{color:#fff;background:var(--o-navy)}
+body.edit-php[class*="-ovr_"] .subsubsub a.current .count,
+body.edit-tags-php[class*="-ovr_"] .subsubsub a.current .count{color:rgba(255,255,255,.75)}
+
+/* ---- Search box ----------------------------------------------------- */
+body.edit-php[class*="-ovr_"] .search-box input[type=search],
+body.edit-tags-php[class*="-ovr_"] .search-box input[type=search]{
+    border:1px solid var(--o-border);border-radius:var(--o-r-md);height:40px;font-family:inherit;
+    font-size:14px;color:var(--o-ink);padding:0 14px;box-shadow:none;
+}
+body.edit-php[class*="-ovr_"] .search-box input[type=search]:focus,
+body.edit-tags-php[class*="-ovr_"] .search-box input[type=search]:focus{border-color:var(--o-blue);box-shadow:0 0 0 3px rgba(0,9,97,.12);outline:none}
+
+/* ---- tablenav: bulk actions, filters, pagination -------------------- */
+body.edit-php[class*="-ovr_"] .tablenav select,
+body.edit-tags-php[class*="-ovr_"] .tablenav select{height:38px;border-radius:var(--o-r-md);border-color:var(--o-border);font-family:inherit}
+body.edit-php[class*="-ovr_"] .tablenav-pages a.page-numbers,
+body.edit-php[class*="-ovr_"] .tablenav-pages .button,
+body.edit-php[class*="-ovr_"] .tablenav-pages span.current,
+body.edit-tags-php[class*="-ovr_"] .tablenav-pages a.page-numbers,
+body.edit-tags-php[class*="-ovr_"] .tablenav-pages .button,
+body.edit-tags-php[class*="-ovr_"] .tablenav-pages span.current{
+    border:1px solid var(--o-border);border-radius:var(--o-r-sm);background:var(--o-surf);color:var(--o-muted);
+}
+body.edit-php[class*="-ovr_"] .tablenav-pages a:hover,
+body.edit-tags-php[class*="-ovr_"] .tablenav-pages a:hover{border-color:var(--o-blue);color:var(--o-blue)}
+
+/* ---- List table → card (native edit.php / edit-tags.php only) ------- */
+body.edit-php[class*="-ovr_"] .wp-list-table,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table{
+    background:var(--o-surf);border:1px solid var(--o-border);border-radius:var(--o-r-lg);
+    border-spacing:0;overflow:hidden;box-shadow:var(--o-sh-md);
+}
+body.edit-php[class*="-ovr_"] .wp-list-table thead th,
+body.edit-php[class*="-ovr_"] .wp-list-table thead td,
+body.edit-php[class*="-ovr_"] .wp-list-table tfoot th,
+body.edit-php[class*="-ovr_"] .wp-list-table tfoot td,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table thead th,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table thead td,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tfoot th,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tfoot td{
+    background:#f8f9fb;border-bottom:2px solid var(--o-border);text-transform:uppercase;
+    font-size:11px;letter-spacing:.04em;font-weight:700;color:var(--o-muted);padding-top:13px;padding-bottom:13px;
+}
+body.edit-php[class*="-ovr_"] .wp-list-table thead th a,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table thead th a{color:var(--o-muted)}
+body.edit-php[class*="-ovr_"] .wp-list-table thead th a:hover,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table thead th a:hover{color:var(--o-blue)}
+body.edit-php[class*="-ovr_"] .wp-list-table tbody td,
+body.edit-php[class*="-ovr_"] .wp-list-table tbody th,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tbody td,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tbody th{
+    border-bottom:1px solid var(--o-border);color:var(--o-ink);font-size:14px;padding-top:14px;padding-bottom:14px;
+}
+body.edit-php[class*="-ovr_"] .wp-list-table tbody tr:last-child td,
+body.edit-php[class*="-ovr_"] .wp-list-table tbody tr:last-child th,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tbody tr:last-child td,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tbody tr:last-child th{border-bottom:none}
+body.edit-php[class*="-ovr_"] .wp-list-table tbody tr:hover,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table tbody tr:hover{background:rgba(0,162,232,.035)}
+body.edit-php[class*="-ovr_"] .wp-list-table a.row-title,
+body.edit-php[class*="-ovr_"] .wp-list-table .column-name strong a,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table a.row-title,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table .column-name strong a{color:var(--o-navy);font-weight:700}
+body.edit-php[class*="-ovr_"] .wp-list-table .row-actions a,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table .row-actions a{color:var(--o-blue)}
+body.edit-php[class*="-ovr_"] .wp-list-table .row-actions .trash a,
+body.edit-php[class*="-ovr_"] .wp-list-table .row-actions .delete a,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table .row-actions .trash a,
+body.edit-tags-php[class*="-ovr_"] .wp-list-table .row-actions .delete a{color:var(--o-red)}
+
+/* ---- Taxonomy editors: two-column add-term + list ------------------- */
+body.edit-tags-php[class*="-ovr_"] #col-container{margin-top:6px}
+body.edit-tags-php[class*="-ovr_"] #col-left .col-wrap{
+    background:var(--o-surf);border:1px solid var(--o-border);border-radius:var(--o-r-lg);
+    padding:22px 24px;box-shadow:var(--o-sh-md);
+}
+body.edit-tags-php[class*="-ovr_"] #col-left .form-wrap h2,
+body.edit-tags-php[class*="-ovr_"] #col-left h2{
+    font-family:'Inter',system-ui,sans-serif;font-size:18px;font-weight:700;color:var(--o-ink);margin:0 0 6px;
+}
+body.edit-tags-php[class*="-ovr_"] .form-field label,
+body.edit-tags-php[class*="-ovr_"] .form-wrap label{font-weight:600;color:var(--o-ink)}
+body.edit-tags-php[class*="-ovr_"] .form-field input[type=text],
+body.edit-tags-php[class*="-ovr_"] .form-field input[type=url],
+body.edit-tags-php[class*="-ovr_"] .form-field textarea,
+body.edit-tags-php[class*="-ovr_"] .form-field select{
+    border:1px solid var(--o-border);border-radius:var(--o-r-md);font-family:inherit;font-size:14px;
+    color:var(--o-ink);padding:9px 12px;background:var(--o-surf);
+}
+body.edit-tags-php[class*="-ovr_"] .form-field input:focus,
+body.edit-tags-php[class*="-ovr_"] .form-field textarea:focus,
+body.edit-tags-php[class*="-ovr_"] .form-field select:focus{border-color:var(--o-blue);box-shadow:0 0 0 3px rgba(0,9,97,.12);outline:none}
+body.edit-tags-php[class*="-ovr_"] .form-field p.description{color:var(--o-muted)}
+
+/* ---- Post editor chrome (title, postboxes, publish) ----------------- */
+body.post-php[class*="-ovr_"] #titlediv #title,
+body.post-new-php[class*="-ovr_"] #titlediv #title{
+    border:1px solid var(--o-border);border-radius:var(--o-r-md);font-family:inherit;font-size:20px;
+    padding:12px 14px;color:var(--o-ink);box-shadow:var(--o-sh-sm);
+}
+body.post-php[class*="-ovr_"] #titlediv #title:focus,
+body.post-new-php[class*="-ovr_"] #titlediv #title:focus{border-color:var(--o-blue);box-shadow:0 0 0 3px rgba(0,9,97,.12)}
+body.post-php[class*="-ovr_"] .postbox,
+body.post-new-php[class*="-ovr_"] .postbox,
+body.post-php[class*="-ovr_"] #submitdiv,
+body.post-new-php[class*="-ovr_"] #submitdiv{
+    border:1px solid var(--o-border);border-radius:var(--o-r-lg);box-shadow:var(--o-sh-sm);overflow:hidden;
+}
+body.post-php[class*="-ovr_"] .postbox > .postbox-header h2,
+body.post-new-php[class*="-ovr_"] .postbox > .postbox-header h2{font-family:inherit;font-weight:600;color:var(--o-ink)}
+body.post-php[class*="-ovr_"] #publishing-action #publish,
+body.post-new-php[class*="-ovr_"] #publishing-action #publish,
+body.post-php[class*="-ovr_"] #publish.button-primary,
+body.post-new-php[class*="-ovr_"] #publish.button-primary{
+    background:var(--o-gold);border-color:var(--o-gold);color:var(--o-navy);font-weight:700;
+    border-radius:var(--o-r-md);box-shadow:0 2px 8px rgba(222,175,12,.25);text-shadow:none;
+}
+body.post-php[class*="-ovr_"] #publishing-action #publish:hover,
+body.post-new-php[class*="-ovr_"] #publishing-action #publish:hover{background:var(--o-gold-dark);border-color:var(--o-gold-dark);color:var(--o-navy)}
+
+/* ---- Notices -------------------------------------------------------- */
+body[class*="-ovr_"] .notice,
+body[class*="-ovr_"] div.updated,
+body[class*="-ovr_"] div.error{border-radius:var(--o-r-md)}

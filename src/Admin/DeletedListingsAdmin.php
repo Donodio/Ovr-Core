@@ -92,86 +92,122 @@ class DeletedListingsAdmin {
         $retention = self::retention_days();
         $notice    = isset( $_GET['ovr_trash'] ) ? sanitize_key( wp_unslash( $_GET['ovr_trash'] ) ) : '';
         $page_url  = $this->page_url();
+        $now       = time();
+
+        $trash_count = count( $trashed );
+        $due_count   = 0;
+        foreach ( $trashed as $p ) {
+            $tt = (int) get_post_meta( $p->ID, '_wp_trash_meta_time', true );
+            if ( $tt && ( $tt + $retention * DAY_IN_SECONDS ) <= $now ) {
+                $due_count++;
+            }
+        }
         ?>
-        <div class="wrap">
-            <h1 style="margin-bottom:6px"><?php esc_html_e( 'Deleted Listings', 'ovr-core' ); ?></h1>
-            <p class="description" style="margin-top:0">
-                <?php
-                /* translators: %d: retention days */
-                printf( esc_html__( 'Soft-deleted listings are recoverable here. They are permanently removed automatically %d days after deletion.', 'ovr-core' ), (int) $retention );
-                ?>
-            </p>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Deleted Listings', 'ovr-core' ); ?></h1>
+                        <p>
+                            <?php
+                            /* translators: %d: retention days */
+                            printf( esc_html__( 'Soft-deleted listings are recoverable here. They are permanently removed automatically %d days after deletion.', 'ovr-core' ), (int) $retention );
+                            ?>
+                        </p>
+                    </div>
+                </div>
 
-            <?php if ( 'restored' === $notice ) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Listing restored.', 'ovr-core' ); ?></p></div>
-            <?php elseif ( 'purged' === $notice ) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Listing permanently deleted.', 'ovr-core' ); ?></p></div>
-            <?php endif; ?>
-
-            <table class="wp-list-table widefat fixed striped" style="margin-top:14px">
-                <thead>
-                    <tr>
-                        <th><?php esc_html_e( 'ID', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Listing Name', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Owner', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Deleted', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Auto-removal', 'ovr-core' ); ?></th>
-                        <th><?php esc_html_e( 'Actions', 'ovr-core' ); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php if ( empty( $trashed ) ) : ?>
-                    <tr><td colspan="6"><?php esc_html_e( 'No deleted listings.', 'ovr-core' ); ?></td></tr>
-                <?php else : ?>
-                    <?php foreach ( $trashed as $p ) :
-                        $trash_time = (int) get_post_meta( $p->ID, '_wp_trash_meta_time', true );
-                        $owner      = get_userdata( (int) $p->post_author );
-                        $purge_ts   = $trash_time ? $trash_time + $retention * DAY_IN_SECONDS : 0;
-                        $now        = time();
-
-                        $restore_url = wp_nonce_url(
-                            admin_url( 'admin-post.php?action=ovr_listing_restore&post=' . $p->ID ),
-                            'ovr_listing_restore_' . $p->ID
-                        );
-                        $purge_url = wp_nonce_url(
-                            admin_url( 'admin-post.php?action=ovr_listing_purge&post=' . $p->ID ),
-                            'ovr_listing_purge_' . $p->ID
-                        );
-                    ?>
-                        <tr>
-                            <td>#<?php echo (int) $p->ID; ?></td>
-                            <td><strong><?php echo esc_html( $p->post_title ?: __( '(untitled)', 'ovr-core' ) ); ?></strong></td>
-                            <td><?php echo esc_html( $owner ? $owner->display_name : '—' ); ?></td>
-                            <td>
-                                <?php echo $trash_time ? esc_html( date_i18n( 'M j, Y', $trash_time ) ) : '—'; ?>
-                            </td>
-                            <td>
-                                <?php
-                                if ( $purge_ts ) {
-                                    if ( $purge_ts <= $now ) {
-                                        esc_html_e( 'Due (next cleanup)', 'ovr-core' );
-                                    } else {
-                                        /* translators: %s: human time diff */
-                                        printf( esc_html__( 'in %s', 'ovr-core' ), esc_html( human_time_diff( $now, $purge_ts ) ) );
-                                    }
-                                } else {
-                                    echo '—';
-                                }
-                                ?>
-                            </td>
-                            <td>
-                                <a href="<?php echo esc_url( $restore_url ); ?>" class="button button-secondary"><?php esc_html_e( 'Restore', 'ovr-core' ); ?></a>
-                                <a href="<?php echo esc_url( $purge_url ); ?>" class="button button-link-delete"
-                                   style="color:#b32d2e"
-                                   onclick="return confirm('<?php echo esc_js( __( 'Permanently delete this listing? This cannot be undone.', 'ovr-core' ) ); ?>');">
-                                    <?php esc_html_e( 'Delete Permanently', 'ovr-core' ); ?>
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
+                <?php if ( 'restored' === $notice ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--success"><span class="material-symbols-outlined">check_circle</span><span><?php esc_html_e( 'Listing restored.', 'ovr-core' ); ?></span></div>
+                <?php elseif ( 'purged' === $notice ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--success"><span class="material-symbols-outlined">check_circle</span><span><?php esc_html_e( 'Listing permanently deleted.', 'ovr-core' ); ?></span></div>
                 <?php endif; ?>
-                </tbody>
-            </table>
+
+                <div class="ovr-adm-stats ovr-adm-stats--3">
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">delete</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo esc_html( number_format_i18n( $trash_count ) ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'In Trash', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">schedule</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo esc_html( number_format_i18n( $due_count ) ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Due for Cleanup', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">event_repeat</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo esc_html( number_format_i18n( $retention ) ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Retention (days)', 'ovr-core' ); ?></div></div>
+                    </div>
+                </div>
+
+                <div class="ovr-adm-card">
+                <?php if ( empty( $trashed ) ) : ?>
+                    <div class="ovr-adm-empty">
+                        <span class="material-symbols-outlined">recycling</span>
+                        <h3><?php esc_html_e( 'No deleted listings', 'ovr-core' ); ?></h3>
+                        <p><?php esc_html_e( 'Trashed listings will appear here for review and recovery.', 'ovr-core' ); ?></p>
+                    </div>
+                <?php else : ?>
+                    <table class="ovr-adm-table">
+                        <thead>
+                            <tr>
+                                <th><?php esc_html_e( 'ID', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Listing Name', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Owner', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Deleted', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Auto-removal', 'ovr-core' ); ?></th>
+                                <th><?php esc_html_e( 'Actions', 'ovr-core' ); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ( $trashed as $p ) :
+                            $trash_time = (int) get_post_meta( $p->ID, '_wp_trash_meta_time', true );
+                            $owner      = get_userdata( (int) $p->post_author );
+                            $purge_ts   = $trash_time ? $trash_time + $retention * DAY_IN_SECONDS : 0;
+
+                            $restore_url = wp_nonce_url(
+                                admin_url( 'admin-post.php?action=ovr_listing_restore&post=' . $p->ID ),
+                                'ovr_listing_restore_' . $p->ID
+                            );
+                            $purge_url = wp_nonce_url(
+                                admin_url( 'admin-post.php?action=ovr_listing_purge&post=' . $p->ID ),
+                                'ovr_listing_purge_' . $p->ID
+                            );
+                        ?>
+                            <tr>
+                                <td class="ovr-adm-mono">#<?php echo (int) $p->ID; ?></td>
+                                <td><div class="ovr-adm-name"><?php echo esc_html( $p->post_title ?: __( '(untitled)', 'ovr-core' ) ); ?></div></td>
+                                <td><?php echo esc_html( $owner ? $owner->display_name : '—' ); ?></td>
+                                <td><?php echo $trash_time ? esc_html( date_i18n( 'M j, Y', $trash_time ) ) : '—'; ?></td>
+                                <td>
+                                    <?php
+                                    if ( $purge_ts ) {
+                                        if ( $purge_ts <= $now ) {
+                                            echo '<span class="ovr-adm-status ovr-adm-status--danger">' . esc_html__( 'Due (next cleanup)', 'ovr-core' ) . '</span>';
+                                        } else {
+                                            echo '<span class="ovr-adm-status ovr-adm-status--warn">';
+                                            /* translators: %s: human time diff */
+                                            printf( esc_html__( 'in %s', 'ovr-core' ), esc_html( human_time_diff( $now, $purge_ts ) ) );
+                                            echo '</span>';
+                                        }
+                                    } else {
+                                        echo '—';
+                                    }
+                                    ?>
+                                </td>
+                                <td>
+                                    <div class="ovr-adm-cell-actions">
+                                        <a href="<?php echo esc_url( $restore_url ); ?>" class="ovr-adm-act ovr-adm-act--ok" title="<?php esc_attr_e( 'Restore', 'ovr-core' ); ?>"><span class="material-symbols-outlined">restore_from_trash</span></a>
+                                        <a href="<?php echo esc_url( $purge_url ); ?>" class="ovr-adm-act ovr-adm-act--danger" title="<?php esc_attr_e( 'Delete Permanently', 'ovr-core' ); ?>"
+                                           onclick="return confirm('<?php echo esc_js( __( 'Permanently delete this listing? This cannot be undone.', 'ovr-core' ) ); ?>');"><span class="material-symbols-outlined">delete_forever</span></a>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+                </div>
+            </div>
         </div>
         <?php
     }

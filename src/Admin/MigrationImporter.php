@@ -125,23 +125,36 @@ class MigrationImporter {
     private function render_upload(): void {
         $err = sanitize_key( wp_unslash( $_GET['err'] ?? '' ) );
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Import Listings (CSV)', 'ovr-core' ); ?></h1>
-            <p class="description" style="max-width:720px">
-                <?php esc_html_e( 'Upload a CSV export of your listings. The first row must be column headers. On the next screen you map each column to a listing field, preview a dry run, then import. Image columns may contain public image URLs, which are downloaded into the Media Library.', 'ovr-core' ); ?>
-            </p>
-            <?php if ( 'parse' === $err ) : ?>
-                <div class="notice notice-error"><p><?php esc_html_e( 'Could not read that file as CSV. Make sure it is a .csv with a header row.', 'ovr-core' ); ?></p></div>
-            <?php elseif ( 'upload' === $err ) : ?>
-                <div class="notice notice-error"><p><?php esc_html_e( 'Upload failed. Please choose a .csv file.', 'ovr-core' ); ?></p></div>
-            <?php endif; ?>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Import Listings (CSV)', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'Upload a CSV export, map columns to listing fields, then import.', 'ovr-core' ); ?></p>
+                    </div>
+                </div>
 
-            <form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px">
-                <input type="hidden" name="action" value="ovr_import_upload">
-                <?php wp_nonce_field( 'ovr_import_upload' ); ?>
-                <input type="file" name="csv" accept=".csv,text/csv" required>
-                <?php submit_button( __( 'Upload & Continue', 'ovr-core' ) ); ?>
-            </form>
+                <?php if ( 'parse' === $err ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--error"><span class="material-symbols-outlined">error</span><span><?php esc_html_e( 'Could not read that file as CSV. Make sure it is a .csv with a header row.', 'ovr-core' ); ?></span></div>
+                <?php elseif ( 'upload' === $err ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--error"><span class="material-symbols-outlined">error</span><span><?php esc_html_e( 'Upload failed. Please choose a .csv file.', 'ovr-core' ); ?></span></div>
+                <?php endif; ?>
+
+                <div class="ovr-adm-card">
+                    <div class="ovr-adm-card-body">
+                        <p style="margin-top:0;max-width:720px;color:var(--muted)">
+                            <?php esc_html_e( 'Upload a CSV export of your listings. The first row must be column headers. On the next screen you map each column to a listing field, preview a dry run, then import. Image columns may contain public image URLs, which are downloaded into the Media Library.', 'ovr-core' ); ?>
+                        </p>
+                        <form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                            <input type="hidden" name="action" value="ovr_import_upload">
+                            <?php wp_nonce_field( 'ovr_import_upload' ); ?>
+                            <input type="file" name="csv" accept=".csv,text/csv" required>
+                            <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">upload_file</span><?php esc_html_e( 'Upload & Continue', 'ovr-core' ); ?></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
         <?php
     }
@@ -153,79 +166,90 @@ class MigrationImporter {
         $auto     = $this->auto_map( $header );
         $statuses = [ 'publish' => __( 'Published', 'ovr-core' ), 'draft' => __( 'Draft', 'ovr-core' ) ];
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Import Listings — Map Columns', 'ovr-core' ); ?></h1>
-            <p>
-                <?php printf( esc_html__( 'File: %1$s · %2$s data rows detected.', 'ovr-core' ), '<strong>' . esc_html( (string) ( $data['filename'] ?? 'upload.csv' ) ) . '</strong>', '<strong>' . number_format_i18n( count( $rows ) ) . '</strong>' ); ?>
-                · <a href="<?php echo esc_url( add_query_arg( 'reset', '1', $this->page_url() ) ); ?>"><?php esc_html_e( 'Start over', 'ovr-core' ); ?></a>
-            </p>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Import Listings — Map Columns', 'ovr-core' ); ?></h1>
+                        <p><?php printf( esc_html__( 'File: %1$s · %2$s data rows detected.', 'ovr-core' ), '<strong>' . esc_html( (string) ( $data['filename'] ?? 'upload.csv' ) ) . '</strong>', '<strong>' . number_format_i18n( count( $rows ) ) . '</strong>' ); ?></p>
+                    </div>
+                    <div class="ovr-adm-actions">
+                        <a href="<?php echo esc_url( add_query_arg( 'reset', '1', $this->page_url() ) ); ?>" class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">restart_alt</span><?php esc_html_e( 'Start over', 'ovr-core' ); ?></a>
+                    </div>
+                </div>
 
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                <input type="hidden" name="action" value="ovr_import_run">
-                <?php wp_nonce_field( 'ovr_import_run' ); ?>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                    <input type="hidden" name="action" value="ovr_import_run">
+                    <?php wp_nonce_field( 'ovr_import_run' ); ?>
 
-                <table class="wp-list-table widefat fixed striped" style="max-width:900px">
-                    <thead><tr>
-                        <th style="width:34%"><?php esc_html_e( 'CSV Column', 'ovr-core' ); ?></th>
-                        <th style="width:30%"><?php esc_html_e( 'Sample', 'ovr-core' ); ?></th>
-                        <th style="width:36%"><?php esc_html_e( 'Maps to', 'ovr-core' ); ?></th>
-                    </tr></thead>
-                    <tbody>
-                    <?php foreach ( $header as $i => $col ) :
-                        $sample = '';
-                        foreach ( $rows as $r ) {
-                            if ( isset( $r[ $i ] ) && '' !== trim( (string) $r[ $i ] ) ) { $sample = (string) $r[ $i ]; break; }
-                        }
-                    ?>
-                        <tr>
-                            <td><strong><?php echo esc_html( (string) $col ); ?></strong></td>
-                            <td><span style="color:#646970"><?php echo esc_html( mb_strimwidth( $sample, 0, 50, '…' ) ); ?></span></td>
-                            <td>
-                                <select name="map[<?php echo (int) $i; ?>]">
-                                    <option value=""><?php esc_html_e( '— Ignore —', 'ovr-core' ); ?></option>
-                                    <?php foreach ( $targets as $group => $fields ) : ?>
-                                        <optgroup label="<?php echo esc_attr( $group ); ?>">
-                                            <?php foreach ( $fields as $key => $label ) : ?>
-                                                <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $auto[ $i ] ?? '', $key ); ?>><?php echo esc_html( $label ); ?></option>
+                    <div class="ovr-adm-card">
+                        <table class="ovr-adm-table">
+                            <thead><tr>
+                                <th style="width:34%"><?php esc_html_e( 'CSV Column', 'ovr-core' ); ?></th>
+                                <th style="width:30%"><?php esc_html_e( 'Sample', 'ovr-core' ); ?></th>
+                                <th style="width:36%"><?php esc_html_e( 'Maps to', 'ovr-core' ); ?></th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ( $header as $i => $col ) :
+                                $sample = '';
+                                foreach ( $rows as $r ) {
+                                    if ( isset( $r[ $i ] ) && '' !== trim( (string) $r[ $i ] ) ) { $sample = (string) $r[ $i ]; break; }
+                                }
+                            ?>
+                                <tr>
+                                    <td><div class="ovr-adm-name"><?php echo esc_html( (string) $col ); ?></div></td>
+                                    <td><span class="ovr-adm-sub"><?php echo esc_html( mb_strimwidth( $sample, 0, 50, '…' ) ); ?></span></td>
+                                    <td>
+                                        <select name="map[<?php echo (int) $i; ?>]" class="ovr-adm-select">
+                                            <option value=""><?php esc_html_e( '— Ignore —', 'ovr-core' ); ?></option>
+                                            <?php foreach ( $targets as $group => $fields ) : ?>
+                                                <optgroup label="<?php echo esc_attr( $group ); ?>">
+                                                    <?php foreach ( $fields as $key => $label ) : ?>
+                                                        <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $auto[ $i ] ?? '', $key ); ?>><?php echo esc_html( $label ); ?></option>
+                                                    <?php endforeach; ?>
+                                                </optgroup>
                                             <?php endforeach; ?>
-                                        </optgroup>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+                                        </select>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
 
-                <h2><?php esc_html_e( 'Options', 'ovr-core' ); ?></h2>
-                <table class="form-table" style="max-width:760px">
-                    <tr>
-                        <th><?php esc_html_e( 'Default owner', 'ovr-core' ); ?></th>
-                        <td><?php
-                            wp_dropdown_users( [ 'name' => 'default_owner', 'show_option_none' => __( '— Current admin —', 'ovr-core' ), 'option_none_value' => 0 ] );
-                        ?><p class="description"><?php esc_html_e( 'Used when no Owner email column is mapped or an email is not found.', 'ovr-core' ); ?></p></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Post status', 'ovr-core' ); ?></th>
-                        <td><select name="post_status"><?php foreach ( $statuses as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>"><?php echo esc_html( $l ); ?></option><?php endforeach; ?></select></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Match existing by Title', 'ovr-core' ); ?></th>
-                        <td><label><input type="checkbox" name="dedupe_title" value="1"> <?php esc_html_e( 'Update an existing listing instead of creating a duplicate when the title matches.', 'ovr-core' ); ?></label></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Import images', 'ovr-core' ); ?></th>
-                        <td><label><input type="checkbox" name="import_images" value="1" checked> <?php esc_html_e( 'Download featured / gallery image URLs into the Media Library (slower).', 'ovr-core' ); ?></label></td>
-                    </tr>
-                </table>
+                    <div class="ovr-adm-card">
+                        <div class="ovr-adm-card-head">
+                            <h2><?php esc_html_e( 'Options', 'ovr-core' ); ?></h2>
+                        </div>
+                        <div class="ovr-adm-card-body">
+                            <div class="ovr-adm-form-grid">
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label"><?php esc_html_e( 'Default owner', 'ovr-core' ); ?></label>
+                                    <?php wp_dropdown_users( [ 'name' => 'default_owner', 'show_option_none' => __( '— Current admin —', 'ovr-core' ), 'option_none_value' => 0, 'class' => 'ovr-adm-select' ] ); ?>
+                                    <p class="ovr-adm-hint"><?php esc_html_e( 'Used when no Owner email column is mapped or an email is not found.', 'ovr-core' ); ?></p>
+                                </div>
+                                <div class="ovr-adm-field">
+                                    <label class="ovr-adm-label" for="ovr-imp-status"><?php esc_html_e( 'Post status', 'ovr-core' ); ?></label>
+                                    <select id="ovr-imp-status" name="post_status" class="ovr-adm-select"><?php foreach ( $statuses as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>"><?php echo esc_html( $l ); ?></option><?php endforeach; ?></select>
+                                </div>
+                                <div class="ovr-adm-field ovr-adm-field--full">
+                                    <label class="ovr-adm-check"><input type="checkbox" name="dedupe_title" value="1"> <?php esc_html_e( 'Update an existing listing instead of creating a duplicate when the title matches.', 'ovr-core' ); ?></label>
+                                </div>
+                                <div class="ovr-adm-field ovr-adm-field--full">
+                                    <label class="ovr-adm-check"><input type="checkbox" name="import_images" value="1" checked> <?php esc_html_e( 'Download featured / gallery image URLs into the Media Library (slower).', 'ovr-core' ); ?></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ovr-adm-form-foot">
+                            <button type="submit" name="do" value="dryrun" class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">visibility</span><?php esc_html_e( 'Dry Run (preview)', 'ovr-core' ); ?></button>
+                            <button type="submit" name="do" value="import" class="ovr-adm-btn ovr-adm-btn--primary" onclick="return confirm('<?php echo esc_js( __( 'Import these listings now?', 'ovr-core' ) ); ?>')"><span class="material-symbols-outlined">publish</span><?php esc_html_e( 'Run Import', 'ovr-core' ); ?></button>
+                        </div>
+                    </div>
+                </form>
 
-                <p>
-                    <button type="submit" name="do" value="dryrun" class="button"><?php esc_html_e( 'Dry Run (preview)', 'ovr-core' ); ?></button>
-                    <button type="submit" name="do" value="import" class="button button-primary" onclick="return confirm('<?php echo esc_js( __( 'Import these listings now?', 'ovr-core' ) ); ?>')"><?php esc_html_e( 'Run Import', 'ovr-core' ); ?></button>
-                </p>
-            </form>
-
-            <?php $this->maybe_render_results(); ?>
+                <?php $this->maybe_render_results(); ?>
+            </div>
         </div>
         <?php
     }
@@ -240,24 +264,35 @@ class MigrationImporter {
         delete_transient( $key );
         $is_dry = ! empty( $res['dry'] );
         ?>
-        <hr>
-        <h2><?php echo $is_dry ? esc_html__( 'Dry Run Preview', 'ovr-core' ) : esc_html__( 'Import Results', 'ovr-core' ); ?></h2>
-        <p>
-            <?php printf(
-                esc_html__( '%1$s created · %2$s updated · %3$s skipped', 'ovr-core' ),
-                '<strong>' . (int) $res['created'] . '</strong>',
-                '<strong>' . (int) $res['updated'] . '</strong>',
-                '<strong>' . (int) $res['skipped'] . '</strong>'
-            ); ?>
-            <?php if ( $is_dry ) : ?><em><?php esc_html_e( '(nothing was written — this is a preview)', 'ovr-core' ); ?></em><?php endif; ?>
-        </p>
-        <?php if ( ! empty( $res['messages'] ) ) : ?>
-            <ul style="max-height:280px;overflow:auto;background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:12px 12px 12px 28px;max-width:900px">
-                <?php foreach ( (array) $res['messages'] as $m ) : ?>
-                    <li><?php echo esc_html( (string) $m ); ?></li>
-                <?php endforeach; ?>
-            </ul>
-        <?php endif; ?>
+        <div class="ovr-adm-card">
+            <div class="ovr-adm-card-head">
+                <h2><?php echo $is_dry ? esc_html__( 'Dry Run Preview', 'ovr-core' ) : esc_html__( 'Import Results', 'ovr-core' ); ?></h2>
+                <?php if ( $is_dry ) : ?><span class="ovr-adm-badge ovr-adm-badge--blue"><?php esc_html_e( 'Preview — nothing was written', 'ovr-core' ); ?></span><?php endif; ?>
+            </div>
+            <div class="ovr-adm-card-body">
+                <div class="ovr-adm-stats ovr-adm-stats--3">
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">add_circle</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo (int) $res['created']; ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Created', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">sync</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo (int) $res['updated']; ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Updated', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">block</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo (int) $res['skipped']; ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Skipped', 'ovr-core' ); ?></div></div>
+                    </div>
+                </div>
+                <?php if ( ! empty( $res['messages'] ) ) : ?>
+                    <ul style="max-height:280px;overflow:auto;background:var(--bg);border:1px solid var(--gray-border);border-radius:var(--r-md);padding:12px 12px 12px 28px;margin:18px 0 0;font-size:14px;line-height:1.6">
+                        <?php foreach ( (array) $res['messages'] as $m ) : ?>
+                            <li><?php echo esc_html( (string) $m ); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+        </div>
         <?php
     }
 

@@ -42,15 +42,15 @@ $tones = [
     <style>
         /* Match the WP admin canvas to the design's off-white background and
            drop the default left gutter so the dashboard can run full width. */
-        #wpcontent,#wpbody-content{background:#f7faf9}
+        #wpcontent,#wpbody-content{background:#f0f3f7}
         #wpcontent{padding-left:0}
-        .ovr-dash{--p:#004c4c;--pc:#006666;--opc:#93e1e0;--sec:#006c4a;--secc:#74f7be;--ter:#735c00;--terc:#cca72f;--err:#ba1a1a;--errc:#ffdad6;--surf:#fff;--sv:#3f4948;--ov:#bec9c8;--on:#181c1c;font-family:'Inter',system-ui,sans-serif;max-width:none;margin:20px 0 56px;padding:0 40px;color:var(--on)}
+        .ovr-dash{--p:#000961;--pc:#000740;--opc:#cfeefd;--blue:#00A2E8;--blue-light:#e5f5fe;--sec:#2E7D32;--secc:#e4f4e4;--ter:#b8920a;--terc:#DEAF0C;--err:#B3261E;--errc:#f9e4e2;--surf:#fff;--sv:#5F6B7A;--ov:#DBDBDB;--on:#1C2430;font-family:'Inter',system-ui,sans-serif;max-width:none;margin:20px 0 56px;padding:0 40px;color:var(--on)}
         .ovr-dash,.ovr-dash *{box-sizing:border-box}
         .ovr-dash .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}
         .ovr-dash .fill-icon{font-variation-settings:'FILL' 1}
 
         .ovr-dh{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:6px 0 28px}
-        .ovr-dh h1{font-size:34px;font-weight:700;letter-spacing:-.02em;margin:0;padding:0;color:var(--on);line-height:1.15}
+        .ovr-dh h1{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:0;padding:0;color:var(--on);line-height:1.2}
         .ovr-dh p{margin:6px 0 0;color:var(--sv);font-size:15px}
         .ovr-dh-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
         .ovr-dh-search{display:inline-flex;align-items:center;gap:6px;background:var(--surf);border:1px solid var(--ov);border-radius:9999px;padding:6px 14px}

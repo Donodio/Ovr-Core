@@ -10,28 +10,28 @@
  */
 
 :root {
-    --ovr-a-primary:       #006666;
-    --ovr-a-primary-dark:  #004c4c;
-    --ovr-a-primary-light: #93e1e0;
-    --ovr-a-accent:        #006c4a;
-    --ovr-a-accent-light:  #74f7be;
-    --ovr-a-gold:          #cca72f;
-    --ovr-a-gold-light:    #ffe088;
-    --ovr-a-bg:            #f7faf9;
+    --ovr-a-primary:       #000961;
+    --ovr-a-primary-dark:  #000740;
+    --ovr-a-primary-light: #e8eaf3;
+    --ovr-a-accent:        #2E7D32;
+    --ovr-a-accent-light:  #e4f4e4;
+    --ovr-a-gold:          #DEAF0C;
+    --ovr-a-gold-light:    #fef5d6;
+    --ovr-a-bg:            #f0f3f7;
     --ovr-a-surface:       #ffffff;
-    --ovr-a-surface-low:   #f1f4f3;
-    --ovr-a-surface-mid:   #ebeeee;
-    --ovr-a-text:          #181c1c;
-    --ovr-a-text-soft:     #3f4948;
-    --ovr-a-outline:       #bec9c8;
-    --ovr-a-outline-strong:#6f7979;
-    --ovr-a-error:         #ba1a1a;
-    --ovr-a-error-bg:      #ffdad6;
+    --ovr-a-surface-low:   #f2f4f7;
+    --ovr-a-surface-mid:   #e8eaf3;
+    --ovr-a-text:          #1C2430;
+    --ovr-a-text-soft:     #5F6B7A;
+    --ovr-a-outline:       #DBDBDB;
+    --ovr-a-outline-strong:#8b95a5;
+    --ovr-a-error:         #B3261E;
+    --ovr-a-error-bg:      #f9e4e2;
     --ovr-a-radius-sm:     6px;
     --ovr-a-radius-md:     10px;
     --ovr-a-radius-lg:     14px;
-    --ovr-a-shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.06);
-    --ovr-a-shadow-md:     0 4px 12px rgba(0, 0, 0, 0.08);
+    --ovr-a-shadow-sm:     0 1px 3px rgba(0, 9, 97, 0.06);
+    --ovr-a-shadow-md:     0 4px 12px rgba(0, 9, 97, 0.08);
     --ovr-a-trans:         200ms ease;
 }
 
@@ -412,7 +412,7 @@
     left: 6px;
     padding: 3px 8px;
     background: var(--ovr-a-gold);
-    color: #241a00;
+    color: #000961;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.05em;
@@ -535,9 +535,9 @@
     text-transform: uppercase;
 }
 
-.ovr-status-pill--active   { background: var(--ovr-a-accent-light); color: #00714e; }
-.ovr-status-pill--inactive { background: var(--ovr-a-error-bg);     color: #93000a; }
-.ovr-status-pill--featured { background: var(--ovr-a-gold-light);   color: #241a00; }
+.ovr-status-pill--active   { background: var(--ovr-a-accent-light); color: #1f5d23; }
+.ovr-status-pill--inactive { background: var(--ovr-a-error-bg);     color: #B3261E; }
+.ovr-status-pill--featured { background: var(--ovr-a-gold-light);   color: #000961; }
 .ovr-status-pill--bumped   { background: var(--ovr-a-primary-light); color: var(--ovr-a-primary-dark); }
 
 /* ==========================================================================

@@ -287,7 +287,8 @@ class Settings {
                 </div>
             </div>
 
-            <div class="ovr-settings-tabs">
+            <div class="ovr-settings-layout">
+            <nav class="ovr-settings-nav" aria-label="<?php esc_attr_e( 'Settings sections', 'ovr-core' ); ?>">
                 <?php
                 $tab_icons = [
                     'general'       => 'settings',
@@ -318,7 +319,7 @@ class Settings {
                         <?php echo esc_html( $label ); ?>
                     </a>
                 <?php endforeach; ?>
-            </div>
+            </nav>
 
             <form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>">
                 <?php settings_fields( 'ovr_settings_group' ); ?>
@@ -353,6 +354,7 @@ class Settings {
                     </div>
                 </div>
             </form>
+            </div>
         </div>
         <?php
     }
@@ -364,22 +366,23 @@ class Settings {
         }
         ?>
         <style>
-            #wpcontent,#wpbody-content{background:#f7faf9}
+            #wpcontent,#wpbody-content{background:#f0f3f7}
             #wpcontent{padding-left:0}
-            .ovr-settings{--p:#004c4c;--p-hover:#003b3b;--p-light:#e0f0ee;--p-glow:rgba(0,76,76,.12);--navy-light:#e8eaf3;--blue:#00A2E8;--blue-light:#e5f5fe;--gold:#DEAF0C;--gold-light:#fef5d6;--red:#B3261E;--red-light:#f9e4e2;--gray-border:#DBDBDB;--gray-light:#f2f4f7;--gray-mid:#8b95a5;--ink:#1C2430;--muted:#5F6B7A;--surf:#FFFFFF;--bg:#f5f7fa;--shadow-sm:0 1px 3px rgba(0,76,76,.06),0 1px 2px rgba(0,76,76,.04);--shadow-md:0 4px 12px rgba(0,76,76,.08),0 2px 4px rgba(0,76,76,.04);--shadow-lg:0 8px 32px rgba(0,76,76,.1),0 4px 12px rgba(0,76,76,.06);--radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-xl:16px;font-family:'OVR Atkinson','Atkinson Hyperlegible Next',system-ui,sans-serif;width:100%;max-width:none;margin:0;padding:24px 28px 48px;color:var(--ink);-webkit-font-smoothing:antialiased}
+            .ovr-settings{--p:#000961;--p-hover:#000740;--p-light:#e8eaf3;--p-glow:rgba(0,9,97,.12);--navy:#000961;--navy-dark:#000740;--navy-light:#e8eaf3;--blue:#00A2E8;--blue-light:#e5f5fe;--gold:#DEAF0C;--gold-dark:#b8920a;--gold-light:#fef5d6;--green:#2E7D32;--green-light:#e4f4e4;--red:#B3261E;--red-light:#f9e4e2;--gray-border:#DBDBDB;--gray-light:#f2f4f7;--gray-mid:#8b95a5;--ink:#1C2430;--muted:#5F6B7A;--surf:#FFFFFF;--bg:#f0f3f7;--shadow-sm:0 1px 3px rgba(0,9,97,.06),0 1px 2px rgba(0,9,97,.04);--shadow-md:0 4px 12px rgba(0,9,97,.08),0 2px 4px rgba(0,9,97,.04);--shadow-lg:0 8px 32px rgba(0,9,97,.1),0 4px 12px rgba(0,9,97,.06);--radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-xl:16px;font-family:'OVR Atkinson','Atkinson Hyperlegible Next',system-ui,sans-serif;width:100%;max-width:none;margin:0;padding:24px 28px 48px;color:var(--ink);-webkit-font-smoothing:antialiased}
             .ovr-settings,.ovr-settings *{box-sizing:border-box}
             .ovr-settings .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;line-height:1;vertical-align:middle;font-size:22px}
             .ovr-settings-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:24px}
             .ovr-settings-head h1{font-size:30px;font-weight:700;letter-spacing:-.01em;margin:0;padding:0;line-height:1.2;color:var(--ink)}
             .ovr-settings-head p{margin:6px 0 0;font-size:16px;color:var(--muted)}
-            .ovr-settings-tabs{overflow:hidden;margin-bottom:28px;background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--radius-lg);padding:5px;box-shadow:var(--shadow-sm)}
-            .ovr-settings-tabs a{float:left;display:flex;align-items:center;gap:7px;padding:0 22px;border-radius:var(--radius-md);font-size:15px;font-weight:600;text-decoration:none;color:var(--muted);height:42px;line-height:1;margin-left:6px}
-            .ovr-settings-tabs a:first-child{margin-left:0}
-            .ovr-settings-tabs a:active{transform:none}
-            .ovr-settings-tabs a:hover{color:var(--p);background:var(--p-light)}
-            .ovr-settings-tabs a.ovr-settings-tab--active{background:var(--p);color:#fff;box-shadow:0 2px 8px var(--p-glow)}
-            .ovr-settings-tabs a.ovr-settings-tab--active:hover{background:var(--p-hover)}
-            .ovr-settings-tabs a .material-symbols-outlined{font-size:19px}
+            .ovr-settings-layout{display:grid;grid-template-columns:248px minmax(0,1fr);gap:24px;align-items:start}
+            .ovr-settings-main{min-width:0}
+            .ovr-settings-nav{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--radius-lg);padding:8px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:2px;position:sticky;top:46px}
+            .ovr-settings-nav a{display:flex;align-items:center;gap:12px;padding:0 16px;border-radius:var(--radius-md);font-size:14.5px;font-weight:600;text-decoration:none;color:var(--muted);height:44px;line-height:1;white-space:nowrap}
+            .ovr-settings-nav a:active{transform:none}
+            .ovr-settings-nav a:hover{color:var(--p);background:var(--p-light)}
+            .ovr-settings-nav a.ovr-settings-tab--active{background:var(--p);color:#fff;box-shadow:0 2px 8px var(--p-glow)}
+            .ovr-settings-nav a.ovr-settings-tab--active:hover{background:var(--p-hover);color:#fff}
+            .ovr-settings-nav a .material-symbols-outlined{font-size:20px;flex-shrink:0}
             .ovr-settings-card{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-md);margin-bottom:24px;position:relative}
             .ovr-settings-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:var(--p);z-index:1}
             .ovr-settings-card-body{padding:24px 28px}
@@ -400,8 +403,8 @@ class Settings {
             .ovr-settings input[type=checkbox]:focus{border-color:var(--p);box-shadow:0 0 0 3px var(--p-glow)}
             .ovr-settings input[type=checkbox]:checked:focus{border-color:var(--p)}
             .ovr-settings-submit{padding:20px 28px;border-top:1px solid var(--gray-border);background:var(--bg)}
-            .ovr-settings-submit .button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 28px;border-radius:var(--radius-md);font-size:15px;font-weight:600;font-family:inherit;line-height:1;height:48px;min-height:48px;cursor:pointer;background:var(--p);color:#fff;border:1px solid var(--p);box-shadow:0 2px 8px rgba(0,76,76,.2);text-decoration:none;letter-spacing:.01em}
-            .ovr-settings-submit .button-primary:hover{background:var(--p-hover);border-color:var(--p-hover);box-shadow:0 4px 16px rgba(0,76,76,.3);transform:translateY(-1px)}
+            .ovr-settings-submit .button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 28px;border-radius:var(--radius-md);font-size:15px;font-weight:600;font-family:inherit;line-height:1;height:48px;min-height:48px;cursor:pointer;background:var(--gold);color:var(--navy);border:1px solid var(--gold);box-shadow:0 2px 8px rgba(222,175,12,.25);text-decoration:none;letter-spacing:.01em}
+            .ovr-settings-submit .button-primary:hover{background:var(--gold-dark);border-color:var(--gold-dark);color:var(--navy);box-shadow:0 4px 16px rgba(222,175,12,.35);transform:translateY(-1px)}
             .ovr-settings-submit .button-primary:active{transform:translateY(0)}
             .ovr-settings-section-title{padding:16px 28px 5px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
             .ovr-settings-env-toggle{display:inline-flex;gap:0;border:1px solid var(--gray-border);border-radius:var(--radius-md);overflow:hidden;font-size:14px;font-weight:600;box-shadow:var(--shadow-sm)}
@@ -415,7 +418,7 @@ class Settings {
             .ovr-settings .updated.notice,.ovr-settings .error.notice,.ovr-settings .notice{display:block;margin:0 0 20px;padding:14px 18px;border-radius:var(--radius-md);font-size:15px}
             .ovr-settings .updated.notice{border-color:var(--p);background:var(--p-light);color:var(--p)}
             .ovr-settings .updated.notice p{margin:0}
-            .ovr-settings .notice-warning{border-color:var(--gold);background:var(--gold-light);color:#7a6208}
+            .ovr-settings .notice-warning{border-color:var(--gold);background:var(--gold-light);color:var(--gold-dark)}
             .ovr-settings .notice-error{border-color:var(--red);background:var(--red-light);color:var(--red)}
             @media (max-width:1100px){
                 .ovr-settings{padding:20px 18px 36px}
@@ -423,6 +426,9 @@ class Settings {
                 .ovr-settings-table th{width:180px;padding:14px 20px}
                 .ovr-settings-table td{padding:14px 20px}
                 .ovr-settings-card-body{padding:20px}
+                .ovr-settings-layout{grid-template-columns:1fr;gap:18px}
+                .ovr-settings-nav{position:static;top:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:4px}
+                .ovr-settings-nav a{flex-shrink:0}
             }
             @media (max-width:782px){
                 .ovr-settings-head h1{font-size:24px}
@@ -1268,7 +1274,8 @@ class Settings {
                 </div>
             </div>
 
-            <div class="ovr-settings-tabs">
+            <div class="ovr-settings-layout">
+            <nav class="ovr-settings-nav" aria-label="<?php esc_attr_e( 'Settings sections', 'ovr-core' ); ?>">
                 <?php
                 $tab_icons = [ 'general' => 'settings', 'compliance' => 'gavel', 'documentation' => 'menu_book', 'email' => 'mail', 'payments' => 'payments', 'billing' => 'receipt_long', 'subscriptions' => 'subscriptions', 'reputation' => 'star', 'roles' => 'admin_panel_settings', 'fleet' => 'dashboard', 'integration' => 'sync' ];
                 foreach ( $tabs as $key => $label ) :
@@ -1278,8 +1285,9 @@ class Settings {
                         <span class="material-symbols-outlined"><?php echo esc_attr( $tab_icons[ $key ] ?? 'tune' ); ?></span><?php echo esc_html( $label ); ?>
                     </a>
                 <?php endforeach; ?>
-            </div>
+            </nav>
 
+            <div class="ovr-settings-main">
             <?php if ( ! empty( $_GET['roles_saved'] ) ) : ?>
                 <div class="updated notice"><p><?php esc_html_e( 'Role permissions updated.', 'ovr-core' ); ?></p></div>
             <?php endif; ?>
@@ -1324,6 +1332,8 @@ class Settings {
                     </div>
                 </div>
             </form>
+            </div>
+            </div>
         </div>
         <?php
     }

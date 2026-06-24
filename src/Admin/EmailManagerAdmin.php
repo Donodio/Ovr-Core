@@ -66,41 +66,60 @@ class EmailManagerAdmin {
         $templates = EmailTemplates::all();
         $notice    = isset( $_GET['ovr_email'] ) ? sanitize_key( wp_unslash( $_GET['ovr_email'] ) ) : '';
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Email Templates', 'ovr-core' ); ?></h1>
-            <p class="description"><?php esc_html_e( 'Edit the subject, content and recipients of every automated email. Disable any you don\'t want sent.', 'ovr-core' ); ?></p>
-            <?php if ( 'saved' === $notice ) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Template saved.', 'ovr-core' ); ?></p></div>
-            <?php elseif ( 'tested' === $notice ) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Test email sent.', 'ovr-core' ); ?></p></div>
-            <?php elseif ( 'test_failed' === $notice ) : ?>
-                <div class="notice notice-error is-dismissible"><p><?php esc_html_e( 'Test email could not be sent — check the address and your mail configuration.', 'ovr-core' ); ?></p></div>
-            <?php endif; ?>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php esc_html_e( 'Emails', 'ovr-core' ); ?></h1>
+                        <p><?php esc_html_e( 'Edit the subject, content and recipients of every automated email. Disable any you don\'t want sent.', 'ovr-core' ); ?></p>
+                    </div>
+                </div>
 
-            <table class="wp-list-table widefat fixed striped" style="margin-top:14px">
-                <thead><tr>
-                    <th><?php esc_html_e( 'Template', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Subject', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Recipient', 'ovr-core' ); ?></th>
-                    <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
-                    <th></th>
-                </tr></thead>
-                <tbody>
-                <?php foreach ( $templates as $t ) :
-                    $edit_url = add_query_arg( 'edit', $t['template_key'], $this->page_url() );
-                ?>
-                    <tr>
-                        <td><strong><?php echo esc_html( $t['name'] ); ?></strong><br><code style="font-size:11px"><?php echo esc_html( $t['template_key'] ); ?></code></td>
-                        <td><?php echo esc_html( $t['subject'] ); ?></td>
-                        <td><?php echo esc_html( ucfirst( $t['recipient'] ) ); ?></td>
-                        <td><?php echo $t['is_enabled']
-                            ? '<span style="color:#2e7d32;font-weight:600">' . esc_html__( 'Enabled', 'ovr-core' ) . '</span>'
-                            : '<span style="color:#b3261e;font-weight:600">' . esc_html__( 'Disabled', 'ovr-core' ) . '</span>'; ?></td>
-                        <td><a class="button" href="<?php echo esc_url( $edit_url ); ?>"><?php esc_html_e( 'Edit', 'ovr-core' ); ?></a></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                <?php if ( 'saved' === $notice ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--success"><span class="material-symbols-outlined">check_circle</span><span><?php esc_html_e( 'Template saved.', 'ovr-core' ); ?></span></div>
+                <?php elseif ( 'tested' === $notice ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--success"><span class="material-symbols-outlined">check_circle</span><span><?php esc_html_e( 'Test email sent.', 'ovr-core' ); ?></span></div>
+                <?php elseif ( 'test_failed' === $notice ) : ?>
+                    <div class="ovr-adm-notice ovr-adm-notice--error"><span class="material-symbols-outlined">error</span><span><?php esc_html_e( 'Test email could not be sent — check the address and your mail configuration.', 'ovr-core' ); ?></span></div>
+                <?php endif; ?>
+
+                <div class="ovr-adm-card">
+                    <table class="ovr-adm-table">
+                        <thead><tr>
+                            <th><?php esc_html_e( 'Template', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Subject', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Recipient', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Actions', 'ovr-core' ); ?></th>
+                        </tr></thead>
+                        <tbody>
+                        <?php foreach ( $templates as $t ) :
+                            $edit_url = add_query_arg( 'edit', $t['template_key'], $this->page_url() );
+                        ?>
+                            <tr>
+                                <td>
+                                    <div class="ovr-adm-name"><?php echo esc_html( $t['name'] ); ?></div>
+                                    <div class="ovr-adm-mono"><?php echo esc_html( $t['template_key'] ); ?></div>
+                                </td>
+                                <td><?php echo esc_html( $t['subject'] ); ?></td>
+                                <td><?php echo esc_html( ucfirst( $t['recipient'] ) ); ?></td>
+                                <td>
+                                    <?php if ( $t['is_enabled'] ) : ?>
+                                        <span class="ovr-adm-status ovr-adm-status--on"><span class="material-symbols-outlined">check_circle</span><?php esc_html_e( 'Enabled', 'ovr-core' ); ?></span>
+                                    <?php else : ?>
+                                        <span class="ovr-adm-status ovr-adm-status--off"><span class="material-symbols-outlined">do_not_disturb_on</span><?php esc_html_e( 'Disabled', 'ovr-core' ); ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <a class="ovr-adm-btn ovr-adm-btn--ghost ovr-adm-btn--sm" href="<?php echo esc_url( $edit_url ); ?>"><span class="material-symbols-outlined">edit</span><?php esc_html_e( 'Edit', 'ovr-core' ); ?></a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         <?php
     }
@@ -108,70 +127,102 @@ class EmailManagerAdmin {
     private function render_editor( string $key ): void {
         $tpl = EmailTemplates::get( $key );
         if ( ! $tpl ) {
-            echo '<div class="wrap"><p>' . esc_html__( 'Unknown template.', 'ovr-core' ) . '</p></div>';
+            echo '<div class="wrap ovr-adm"><div class="ovr-adm-wrap"><div class="ovr-adm-notice ovr-adm-notice--error"><span class="material-symbols-outlined">error</span><span>' . esc_html__( 'Unknown template.', 'ovr-core' ) . '</span></div></div></div>';
             return;
         }
         $vars    = EmailTemplates::variables_for( $key );
         $preview = Mailer::render( $key, $this->sample_vars( $vars ) );
         ?>
-        <div class="wrap">
-            <h1><?php echo esc_html( $tpl['name'] ); ?></h1>
-            <p><a href="<?php echo esc_url( $this->page_url() ); ?>">&larr; <?php esc_html_e( 'All templates', 'ovr-core' ); ?></a></p>
+        <div class="wrap ovr-adm">
+            <style>#wpcontent{padding-left:0}#wpbody-content{padding-bottom:0}</style>
+            <div class="ovr-adm-wrap">
+                <div class="ovr-adm-head">
+                    <div>
+                        <h1><?php echo esc_html( $tpl['name'] ); ?></h1>
+                        <p><?php esc_html_e( 'Edit the subject, body and delivery of this automated email.', 'ovr-core' ); ?></p>
+                    </div>
+                    <div class="ovr-adm-actions">
+                        <a href="<?php echo esc_url( $this->page_url() ); ?>" class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">arrow_back</span><?php esc_html_e( 'All templates', 'ovr-core' ); ?></a>
+                    </div>
+                </div>
 
-            <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
-                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="flex:1 1 480px;min-width:320px">
-                    <input type="hidden" name="action" value="ovr_email_save">
-                    <input type="hidden" name="template_key" value="<?php echo esc_attr( $key ); ?>">
-                    <?php wp_nonce_field( 'ovr_email_save_' . $key ); ?>
+                <div class="ovr-adm-cols ovr-adm-cols--wide-left">
+                    <div class="ovr-adm-card">
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                            <input type="hidden" name="action" value="ovr_email_save">
+                            <input type="hidden" name="template_key" value="<?php echo esc_attr( $key ); ?>">
+                            <?php wp_nonce_field( 'ovr_email_save_' . $key ); ?>
 
-                    <table class="form-table">
-                        <tr><th><label><?php esc_html_e( 'Enabled', 'ovr-core' ); ?></label></th>
-                            <td><label><input type="checkbox" name="is_enabled" value="1" <?php checked( $tpl['is_enabled'] ); ?>> <?php esc_html_e( 'Send this email', 'ovr-core' ); ?></label></td></tr>
-                        <tr><th><label for="ovr-em-subj"><?php esc_html_e( 'Subject', 'ovr-core' ); ?></label></th>
-                            <td><input id="ovr-em-subj" name="subject" type="text" class="large-text" value="<?php echo esc_attr( $tpl['subject'] ); ?>"></td></tr>
-                        <tr><th><label for="ovr-em-rcpt"><?php esc_html_e( 'Recipient', 'ovr-core' ); ?></label></th>
-                            <td>
-                                <select id="ovr-em-rcpt" name="recipient">
-                                    <?php foreach ( EmailTemplates::RECIPIENTS as $r ) : ?>
-                                        <option value="<?php echo esc_attr( $r ); ?>" <?php selected( $tpl['recipient'], $r ); ?>><?php echo esc_html( ucfirst( $r ) ); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <input name="custom_email" type="text" class="regular-text" placeholder="<?php esc_attr_e( 'custom@example.com (for Custom)', 'ovr-core' ); ?>" value="<?php echo esc_attr( $tpl['custom_email'] ); ?>">
-                            </td></tr>
-                        <tr><th><label for="ovr-em-html"><?php esc_html_e( 'HTML Body', 'ovr-core' ); ?></label></th>
-                            <td><textarea id="ovr-em-html" name="body_html" rows="12" class="large-text code"><?php echo esc_textarea( (string) $tpl['body_html'] ); ?></textarea></td></tr>
-                        <tr><th><label for="ovr-em-text"><?php esc_html_e( 'Plain Text (optional)', 'ovr-core' ); ?></label></th>
-                            <td><textarea id="ovr-em-text" name="body_text" rows="5" class="large-text code"><?php echo esc_textarea( (string) $tpl['body_text'] ); ?></textarea>
-                                <p class="description"><?php esc_html_e( 'Leave blank to auto-generate from the HTML.', 'ovr-core' ); ?></p></td></tr>
-                        <tr><th><?php esc_html_e( 'Variables', 'ovr-core' ); ?></th>
-                            <td>
-                                <?php foreach ( $vars as $v ) : ?>
-                                    <code style="display:inline-block;margin:2px 4px 2px 0;background:#f0f0f1;padding:2px 6px;border-radius:4px">{{<?php echo esc_html( $v ); ?>}}</code>
-                                <?php endforeach; ?>
-                                <p class="description"><?php esc_html_e( 'Insert these tokens in the subject or body; they are replaced when the email sends.', 'ovr-core' ); ?></p>
-                            </td></tr>
-                    </table>
-                    <?php submit_button( __( 'Save Template', 'ovr-core' ) ); ?>
-                </form>
-
-                <div style="flex:1 1 360px;min-width:300px">
-                    <h2><?php esc_html_e( 'Preview', 'ovr-core' ); ?></h2>
-                    <p class="description"><?php esc_html_e( 'Rendered with sample data.', 'ovr-core' ); ?></p>
-                    <div style="border:1px solid #dcdcde;border-radius:8px;overflow:hidden;background:#fff">
-                        <div style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;color:#555"><strong><?php esc_html_e( 'Subject:', 'ovr-core' ); ?></strong> <?php echo esc_html( $preview['subject'] ?? '' ); ?></div>
-                        <iframe title="preview" style="width:100%;height:360px;border:0" srcdoc="<?php echo esc_attr( $preview['html'] ?? '' ); ?>"></iframe>
+                            <div class="ovr-adm-card-body">
+                                <div class="ovr-adm-form-grid">
+                                    <div class="ovr-adm-field ovr-adm-field--full">
+                                        <label class="ovr-adm-check"><input type="checkbox" name="is_enabled" value="1" <?php checked( $tpl['is_enabled'] ); ?>> <?php esc_html_e( 'Send this email', 'ovr-core' ); ?></label>
+                                    </div>
+                                    <div class="ovr-adm-field ovr-adm-field--full">
+                                        <label class="ovr-adm-label" for="ovr-em-subj"><?php esc_html_e( 'Subject', 'ovr-core' ); ?></label>
+                                        <input id="ovr-em-subj" name="subject" type="text" class="ovr-adm-input" value="<?php echo esc_attr( $tpl['subject'] ); ?>">
+                                    </div>
+                                    <div class="ovr-adm-field">
+                                        <label class="ovr-adm-label" for="ovr-em-rcpt"><?php esc_html_e( 'Recipient', 'ovr-core' ); ?></label>
+                                        <select id="ovr-em-rcpt" name="recipient" class="ovr-adm-select">
+                                            <?php foreach ( EmailTemplates::RECIPIENTS as $r ) : ?>
+                                                <option value="<?php echo esc_attr( $r ); ?>" <?php selected( $tpl['recipient'], $r ); ?>><?php echo esc_html( ucfirst( $r ) ); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="ovr-adm-field">
+                                        <label class="ovr-adm-label" for="ovr-em-custom"><?php esc_html_e( 'Custom email', 'ovr-core' ); ?></label>
+                                        <input id="ovr-em-custom" name="custom_email" type="text" class="ovr-adm-input" placeholder="<?php esc_attr_e( 'custom@example.com (for Custom)', 'ovr-core' ); ?>" value="<?php echo esc_attr( $tpl['custom_email'] ); ?>">
+                                    </div>
+                                    <div class="ovr-adm-field ovr-adm-field--full">
+                                        <label class="ovr-adm-label" for="ovr-em-html"><?php esc_html_e( 'HTML Body', 'ovr-core' ); ?></label>
+                                        <textarea id="ovr-em-html" name="body_html" rows="12" class="ovr-adm-textarea code"><?php echo esc_textarea( (string) $tpl['body_html'] ); ?></textarea>
+                                    </div>
+                                    <div class="ovr-adm-field ovr-adm-field--full">
+                                        <label class="ovr-adm-label" for="ovr-em-text"><?php esc_html_e( 'Plain Text (optional)', 'ovr-core' ); ?></label>
+                                        <textarea id="ovr-em-text" name="body_text" rows="5" class="ovr-adm-textarea code"><?php echo esc_textarea( (string) $tpl['body_text'] ); ?></textarea>
+                                        <p class="ovr-adm-hint"><?php esc_html_e( 'Leave blank to auto-generate from the HTML.', 'ovr-core' ); ?></p>
+                                    </div>
+                                    <div class="ovr-adm-field ovr-adm-field--full">
+                                        <label class="ovr-adm-label"><?php esc_html_e( 'Variables', 'ovr-core' ); ?></label>
+                                        <div class="ovr-adm-card" style="box-shadow:none;padding:12px 14px">
+                                            <?php foreach ( $vars as $v ) : ?>
+                                                <code class="ovr-adm-mono" style="display:inline-block;margin:2px 4px 2px 0;background:var(--gray-light);padding:3px 7px;border-radius:var(--r-sm);font-size:13px">{{<?php echo esc_html( $v ); ?>}}</code>
+                                            <?php endforeach; ?>
+                                            <p class="ovr-adm-hint"><?php esc_html_e( 'Insert these tokens in the subject or body; they are replaced when the email sends.', 'ovr-core' ); ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="ovr-adm-form-foot">
+                                <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">save</span><?php esc_html_e( 'Save Template', 'ovr-core' ); ?></button>
+                            </div>
+                        </form>
                     </div>
 
-                    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px;display:flex;gap:8px;align-items:flex-end">
-                        <input type="hidden" name="action" value="ovr_email_test">
-                        <input type="hidden" name="template_key" value="<?php echo esc_attr( $key ); ?>">
-                        <?php wp_nonce_field( 'ovr_email_test_' . $key ); ?>
-                        <label style="display:flex;flex-direction:column;font-size:12px;font-weight:600;gap:3px;flex:1">
-                            <?php esc_html_e( 'Send a test to', 'ovr-core' ); ?>
-                            <input name="test_email" type="email" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>" required>
-                        </label>
-                        <button class="button"><?php esc_html_e( 'Send Test', 'ovr-core' ); ?></button>
-                    </form>
+                    <div class="ovr-adm-card">
+                        <div class="ovr-adm-card-head">
+                            <h2><?php esc_html_e( 'Preview', 'ovr-core' ); ?></h2>
+                        </div>
+                        <div class="ovr-adm-card-body">
+                            <p class="ovr-adm-hint" style="margin-top:0"><?php esc_html_e( 'Rendered with sample data.', 'ovr-core' ); ?></p>
+                            <div style="border:1px solid var(--gray-border);border-radius:var(--r-md);overflow:hidden;background:#fff">
+                                <div style="padding:8px 12px;border-bottom:1px solid var(--gray-border);font-size:12px;color:var(--muted)"><strong><?php esc_html_e( 'Subject:', 'ovr-core' ); ?></strong> <?php echo esc_html( $preview['subject'] ?? '' ); ?></div>
+                                <iframe title="preview" style="width:100%;height:360px;border:0;display:block" srcdoc="<?php echo esc_attr( $preview['html'] ?? '' ); ?>"></iframe>
+                            </div>
+
+                            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:16px;display:flex;gap:10px;align-items:flex-end">
+                                <input type="hidden" name="action" value="ovr_email_test">
+                                <input type="hidden" name="template_key" value="<?php echo esc_attr( $key ); ?>">
+                                <?php wp_nonce_field( 'ovr_email_test_' . $key ); ?>
+                                <div class="ovr-adm-field" style="flex:1;margin-bottom:0">
+                                    <label class="ovr-adm-label" for="ovr-em-test"><?php esc_html_e( 'Send a test to', 'ovr-core' ); ?></label>
+                                    <input id="ovr-em-test" name="test_email" type="email" class="ovr-adm-input" value="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>" required>
+                                </div>
+                                <button class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">send</span><?php esc_html_e( 'Send Test', 'ovr-core' ); ?></button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
