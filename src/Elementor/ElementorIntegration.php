@@ -57,6 +57,7 @@ class ElementorIntegration {
     public function register_widgets( $widgets_manager ): void {
         // Include widget files.
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/PropertyCardWidget.php';
+        require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/HomepageSliderWidget.php';
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/SearchBarWidget.php';
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/PricingTableWidget.php';
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/HeroSliderWidget.php';
@@ -66,6 +67,7 @@ class ElementorIntegration {
 
         // Register widgets.
         $widgets_manager->register( new Widgets\PropertyCardWidget() );
+        $widgets_manager->register( new Widgets\HomepageSliderWidget() );
         $widgets_manager->register( new Widgets\SearchBarWidget() );
         $widgets_manager->register( new Widgets\PricingTableWidget() );
         $widgets_manager->register( new Widgets\HeroSliderWidget() );

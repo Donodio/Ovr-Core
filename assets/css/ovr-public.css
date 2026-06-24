@@ -580,16 +580,111 @@
    ========================================================================== */
 
 .ovr-topnav {
-    position: fixed;
+    /* Sticky (not fixed) so the header stays in the document flow and the
+       page content below it is never hidden underneath. It still pins to
+       the top of the viewport while scrolling. */
+    position: sticky;
     top: 0;
     left: 0;
     width: 100%;
     z-index: 1000;
-    background: rgba(247, 250, 249, 0.8);
+    background: rgba(247, 250, 249, 0.92);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     box-shadow: var(--ovr-shadow-sm);
     height: 80px;
+}
+
+.ovr-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+}
+
+.ovr-brand-logo {
+    height: 36px;
+    width: auto;
+    display: block;
+}
+
+.ovr-brand-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ovr-primary);
+}
+
+/* Logged-in avatar link */
+.ovr-nav-user {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 50%;
+    overflow: hidden;
+    line-height: 0;
+}
+
+.ovr-nav-avatar {
+    border-radius: 50%;
+    display: block;
+}
+
+/* Owner Login text CTA */
+.ovr-nav-link-cta {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ovr-primary);
+    white-space: nowrap;
+}
+
+.ovr-nav-link-cta:hover {
+    text-decoration: underline;
+}
+
+/* Mobile menu toggle — hidden on desktop, shown under 1024px.
+   Scoped under .ovr-nav-actions so this hide beats the generic
+   .ovr-nav-icon-btn { display: flex } rule that appears later in the file. */
+.ovr-nav-actions .ovr-mobile-toggle {
+    display: none;
+}
+
+/* Mobile drawer — hidden by default; revealed via .is-open on the header */
+.ovr-mobile-drawer {
+    display: none;
+    border-top: 1px solid rgba(190, 201, 200, 0.4);
+    background: var(--ovr-surface, #f7faf9);
+    box-shadow: var(--ovr-shadow-md);
+}
+
+.ovr-topnav.is-open .ovr-mobile-drawer {
+    display: block;
+}
+
+.ovr-mobile-drawer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px var(--ovr-gutter);
+    max-width: var(--ovr-container-max);
+    margin: 0 auto;
+}
+
+.ovr-mobile-link {
+    padding: 12px 8px;
+    font-size: 16px;
+    color: var(--ovr-on-surface);
+    border-radius: var(--ovr-radius-md, 8px);
+}
+
+.ovr-mobile-link:hover,
+.ovr-mobile-link.active {
+    background: rgba(230, 233, 232, 0.6);
+    color: var(--ovr-primary);
+}
+
+.ovr-mobile-divider {
+    height: 1px;
+    background: rgba(190, 201, 200, 0.4);
+    margin: 8px 0;
 }
 
 .ovr-topnav-inner {
@@ -1178,7 +1273,12 @@
     .ovr-grid-3 { grid-template-columns: repeat(2, 1fr); }
     .ovr-h1 { font-size: 36px; }
     .ovr-h2 { font-size: 28px; }
+
+    /* Collapse the desktop nav + auth CTAs into the burger-driven drawer. */
     .ovr-nav-links { display: none; }
+    .ovr-nav-actions .ovr-mobile-toggle { display: inline-flex; }
+    .ovr-nav-actions .ovr-nav-link-cta,
+    .ovr-nav-actions > .ovr-btn { display: none; }
 }
 
 @media (max-width: 768px) {
@@ -1550,6 +1650,422 @@
 .ovr-villages-slider::-webkit-scrollbar {
     display: none;
 }
+
+/* ==========================================================================
+   Homepage Hero (OVR Homepage Slider widget)
+   Two columns: ~70% hero slider + ~30% search panel.
+   Slider = one property per slide, full-bleed background image, content
+   aligned bottom-left. Transform-based track; arrows + dots + autoplay
+   (JS in ovr-public.js). Heights driven by Elementor controls.
+   ========================================================================== */
+.ovr-hps-row {
+    display: flex;
+    align-items: stretch;
+    gap: 24px;
+    width: 100%;
+}
+
+.ovr-hps-col-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* When a search panel is present, the slider takes 70% by default (overridable
+   by the Slider Width control) and the panel fills the rest. */
+.ovr-hps-row[data-search="1"] .ovr-hps-col-main {
+    flex: 0 0 70%;
+    max-width: 70%;
+}
+
+.ovr-hps-col-side {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: stretch;
+}
+
+.ovr-hps-slider {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    border-radius: 16px;
+    box-shadow: var(--ovr-shadow-md, 0 8px 30px rgba(0,0,0,.18));
+}
+
+.ovr-hps-viewport { overflow: hidden; width: 100%; height: 100%; }
+
+.ovr-hps-track {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    transition: transform .55s cubic-bezier(.4, 0, .2, 1);
+    will-change: transform;
+}
+
+.ovr-hps-slide {
+    position: relative;
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+}
+
+/* Bottom-up gradient so overlaid text stays legible. --ovr-shade is the
+   Overlay color control; falls back to a translucent black. */
+.ovr-hps-shade {
+    position: absolute;
+    inset: 0;
+    --ovr-shade: rgba(0,0,0,.78);
+    background: linear-gradient(to top, var(--ovr-shade) 0%, rgba(0,0,0,.28) 42%, rgba(0,0,0,0) 70%);
+}
+
+/* Content sits in the lower-left, occupying roughly the bottom third — not
+   flush against the very edge. */
+.ovr-hps-content {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: 2;
+    width: 100%;
+    max-width: 60%;
+    padding: 0 6% 7%;
+    color: #fff;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.ovr-hps-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--ovr-featured-gold, #e0a92e);
+    color: #1a1a1a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    padding: 4px 11px;
+    border-radius: 999px;
+    margin-bottom: 12px;
+}
+.ovr-hps-badge .material-symbols-outlined { font-size: 15px; }
+
+/* Reduced from the old "jumbo" size — clean, contained. Override via the
+   Title typography control. */
+.ovr-hps-title {
+    margin: 0 0 6px;
+    font-size: clamp(20px, 2vw, 30px);
+    line-height: 1.18;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 10px rgba(0,0,0,.35);
+}
+
+.ovr-hps-location,
+.ovr-hps-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: rgba(255,255,255,.92);
+}
+.ovr-hps-meta { gap: 18px; flex-wrap: wrap; }
+.ovr-hps-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.ovr-hps-location .material-symbols-outlined,
+.ovr-hps-meta .material-symbols-outlined { font-size: 18px; }
+
+.ovr-hps-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+/* Scoped under .ovr-hps-slider so white text beats the generic
+   `.ovr-wrap a { color: var(--ovr-primary) }` link rule. */
+.ovr-hps-slider .ovr-hps-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ovr-primary, #006666);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px 26px;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: background .2s, transform .2s;
+}
+.ovr-hps-slider .ovr-hps-btn:hover {
+    background: var(--ovr-primary-dark, #004c4c);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.ovr-hps-price {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 8px rgba(0,0,0,.4);
+}
+
+/* Arrows */
+.ovr-hps-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,.92);
+    color: #1a1a1a;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25);
+    cursor: pointer;
+    transition: background .2s, transform .2s;
+}
+.ovr-hps-nav:hover { background: #fff; transform: translateY(-50%) scale(1.06); }
+.ovr-hps-nav .material-symbols-outlined { font-size: 28px; }
+.ovr-hps-prev { left: 18px; }
+.ovr-hps-next { right: 18px; }
+
+/* Dots */
+.ovr-hps-dots {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+    z-index: 5;
+    display: flex;
+    gap: 8px;
+}
+.ovr-hps-dot {
+    width: 9px;
+    height: 9px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,.5);
+    cursor: pointer;
+    transition: background .2s, width .2s;
+}
+.ovr-hps-dot.is-active { background: #fff; width: 24px; border-radius: 999px; }
+
+/* Full-screen height mode (slide grows the row; panel stretches to match) */
+.ovr-hps--fullscreen .ovr-hps-slide { min-height: 100vh !important; }
+
+/* ── Search panel (30%) ── */
+.ovr-hps-search {
+    width: 100%;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: var(--ovr-shadow-md, 0 8px 30px rgba(0,0,0,.12));
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.ovr-hps-search-title {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #101828;
+}
+.ovr-hps-search-sub {
+    margin: 0 0 20px;
+    font-size: 14px;
+    color: var(--ovr-on-surface-variant, #667085);
+}
+
+/* Fields flow in a wrapping row; each field's width is set per-field by the
+   Field Widths controls (.ovr-hps-f-* → flex-basis). Like Elementor columns. */
+.ovr-hps-search-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+/* Default field width = full row; the half-width defaults (dates, beds/baths)
+   pair up. Elementor width controls override these per field. */
+.ovr-hps-search-field,
+.ovr-hps-search-check { flex: 0 0 100%; max-width: 100%; min-width: 0; }
+.ovr-hps-f-checkin,
+.ovr-hps-f-checkout,
+.ovr-hps-f-beds,
+.ovr-hps-f-baths { flex: 0 0 calc(50% - 7px); max-width: calc(50% - 7px); }
+
+/* The subheading and submit button always span the full row. */
+.ovr-hps-search-optional,
+.ovr-hps-search-submit { flex: 0 0 100%; }
+
+/* "Optional" subheading separating the secondary filters. */
+.ovr-hps-search-optional {
+    margin: 6px 0 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ovr-on-surface-variant, #98a2b3);
+    border-top: 1px solid var(--ovr-border-gray, #eaecf0);
+    padding-top: 12px;
+}
+
+/* Pets-allowed checkbox row. */
+.ovr-hps-search-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #181c1c;
+    cursor: pointer;
+    padding: 4px 2px;
+}
+.ovr-hps-search-check input { width: 18px; height: 18px; accent-color: var(--ovr-primary, #006666); cursor: pointer; }
+.ovr-hps-search-check .material-symbols-outlined { font-size: 20px; color: var(--ovr-on-surface-variant, #667085); }
+
+.ovr-hps-search-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--ovr-border-gray, #d6dede);
+    border-radius: 10px;
+    padding: 0 12px;
+    background: #fff;
+    transition: border-color .2s, box-shadow .2s;
+}
+.ovr-hps-search-field:focus-within {
+    border-color: var(--ovr-primary, #006666);
+    box-shadow: 0 0 0 3px rgba(0,102,102,.12);
+}
+.ovr-hps-search-field .material-symbols-outlined {
+    font-size: 20px;
+    color: var(--ovr-on-surface-variant, #667085);
+}
+/* Reset native + theme control styling so the panel renders identically on
+   any theme (themes commonly restyle select/input/button heights, borders,
+   backgrounds and fonts). */
+.ovr-hps-search-field input,
+.ovr-hps-search-field select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    padding: 11px 0;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #181c1c;
+    box-sizing: border-box;
+}
+/* Custom caret for selects (native arrow removed by appearance:none). */
+.ovr-hps-search-field select {
+    padding-right: 18px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 16px;
+}
+.ovr-hps-search-field input::placeholder { color: var(--ovr-on-surface-variant, #98a2b3); opacity: 1; }
+
+.ovr-hps-search-submit {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    display: inline-block;
+    width: 100%;
+    margin-top: 4px;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    cursor: pointer;
+    background: var(--ovr-primary, #006666);
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: normal;
+    text-transform: none;
+    text-decoration: none;
+    text-align: center;
+    padding: 14px 20px;
+    border-radius: 10px;
+    box-sizing: border-box;
+    transition: background .2s, transform .2s;
+}
+.ovr-hps-search-submit:hover { background: var(--ovr-primary-dark, #004c4c); transform: translateY(-1px); }
+
+/* ── Responsive ──
+   Below 1024 the two columns stack. The !important overrides Elementor's
+   generated per-element width CSS (Slider Width control), which otherwise
+   keeps the slider at its desktop % and squishes it on phones. */
+@media (max-width: 1024px) {
+    .ovr-hps-row { flex-direction: column !important; }
+    .ovr-hps-row .ovr-hps-col-main,
+    .ovr-hps-row[data-search="1"] .ovr-hps-col-main,
+    .ovr-hps-row .ovr-hps-col-side {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .ovr-hps-content { max-width: 100%; }
+}
+
+@media (max-width: 768px) {
+    .ovr-hps-slide { min-height: 400px; }
+    .ovr-hps-content { max-width: 100%; padding: 0 22px 26px; }
+    .ovr-hps-title { font-size: clamp(20px, 6vw, 28px); }
+    /* Arrows would overlap the overlaid text on a narrow slide — on touch
+       devices navigate by swipe + dots instead. */
+    .ovr-hps-nav { display: none; }
+    .ovr-hps-dots { left: 50%; right: auto; transform: translateX(-50%); bottom: 12px; }
+    .ovr-hps--fullscreen .ovr-hps-slide { min-height: 80vh !important; }
+}
+
+/* Small phones: every field goes full-width so nothing is cramped or
+   misaligned. !important beats the per-field Width controls. */
+@media (max-width: 540px) {
+    .ovr-hps-search-form > .ovr-hps-search-field,
+    .ovr-hps-search-form > .ovr-hps-search-check,
+    .ovr-hps-f-section,
+    .ovr-hps-f-checkin,
+    .ovr-hps-f-checkout,
+    .ovr-hps-f-ptype,
+    .ovr-hps-f-term,
+    .ovr-hps-f-village,
+    .ovr-hps-f-address,
+    .ovr-hps-f-beds,
+    .ovr-hps-f-baths,
+    .ovr-hps-f-pets {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+    .ovr-hps-slide { min-height: 360px; }
+}
+
 
 .ovr-villages-grid {
     display: grid;
@@ -3758,3 +4274,249 @@
 .ovr-card-video-flag{position:absolute;top:10px;left:10px;width:34px;height:34px;border-radius:9999px;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none}
 .ovr-card-video-flag .material-symbols-outlined{font-size:22px}
 .ovr-ss-card-media,.ovr-card-image{position:relative}
+
+/* ==========================================================================
+   Villages Archive (/villages/)
+   ========================================================================== */
+.ovr-villages-page { background: var(--ovr-surface); }
+
+/* Hero */
+.ovr-villages-hero {
+    position: relative;
+    padding: 88px 24px 96px;
+    text-align: center;
+    color: #fff;
+    background:
+        radial-gradient(1200px 480px at 50% -10%, rgba(0, 100, 146, 0.55), transparent 60%),
+        linear-gradient(135deg, #010b62 0%, #02197f 45%, #014a73 100%);
+    overflow: hidden;
+}
+
+.ovr-villages-hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.ovr-villages-hero-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.ovr-villages-eyebrow {
+    margin: 0 0 14px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--ovr-tertiary-fixed);
+}
+
+.ovr-villages-title {
+    margin: 0;
+    font-size: clamp(34px, 5vw, 52px);
+    line-height: 1.05;
+    font-weight: 700;
+    color: #fff;
+}
+
+.ovr-villages-lede {
+    max-width: 560px;
+    margin: 18px auto 0;
+    font-size: 17px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.ovr-villages-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 28px;
+    margin-top: 34px;
+    padding: 16px 30px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(6px);
+}
+
+.ovr-villages-stat { display: flex; flex-direction: column; align-items: center; }
+.ovr-villages-stat-num { font-size: 26px; font-weight: 700; line-height: 1; color: #fff; }
+.ovr-villages-stat-label { margin-top: 4px; font-size: 12.5px; letter-spacing: 0.04em; color: rgba(255, 255, 255, 0.75); }
+.ovr-villages-stat-sep { width: 1px; height: 36px; background: rgba(255, 255, 255, 0.25); }
+
+/* Body */
+.ovr-villages-body { padding-top: 64px; padding-bottom: 80px; }
+
+.ovr-villages-group { margin-bottom: 56px; }
+.ovr-villages-group:last-child { margin-bottom: 0; }
+
+.ovr-villages-group-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin: 0 0 24px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--ovr-surface-dim);
+}
+
+.ovr-villages-group-title {
+    position: relative;
+    margin: 0;
+    padding-left: 16px;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--ovr-on-surface);
+}
+
+.ovr-villages-group-title::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 24px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--ovr-secondary), var(--ovr-primary));
+}
+
+.ovr-villages-group-meta {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ovr-on-surface-variant);
+}
+
+.ovr-villages-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--ovr-gutter);
+}
+
+.ovr-village-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--ovr-surface-container-lowest);
+    border: 1px solid rgba(190, 201, 200, 0.45);
+    border-radius: var(--ovr-radius-xl);
+    box-shadow: var(--ovr-shadow-sm);
+    text-decoration: none;
+    color: var(--ovr-on-surface);
+    transition: transform var(--ovr-transition), box-shadow var(--ovr-transition), border-color var(--ovr-transition);
+}
+
+.ovr-village-card:hover {
+    box-shadow: var(--ovr-shadow-lg);
+    transform: translateY(-4px);
+    border-color: var(--ovr-secondary);
+}
+
+.ovr-village-card-top {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 18px 18px 22px;
+    background: linear-gradient(135deg, #010b62 0%, #013a78 100%);
+    overflow: hidden;
+}
+
+.ovr-village-card-top::after {
+    content: "";
+    position: absolute;
+    right: -30px;
+    bottom: -50px;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.ovr-village-card-icon {
+    position: relative;
+    z-index: 1;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    font-size: 26px;
+}
+
+.ovr-village-card-badge {
+    position: relative;
+    z-index: 1;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1b1b20;
+    background: var(--ovr-tertiary-container);
+    white-space: nowrap;
+}
+
+.ovr-village-card-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    gap: 14px;
+    padding: 18px 20px 20px;
+}
+
+.ovr-village-card-name {
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--ovr-on-surface);
+}
+
+.ovr-village-card-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: auto;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ovr-secondary);
+}
+
+.ovr-village-card-arrow {
+    font-size: 19px;
+    transition: transform var(--ovr-transition);
+}
+
+.ovr-village-card:hover .ovr-village-card-arrow { transform: translateX(4px); }
+
+/* Empty state */
+.ovr-villages-empty { text-align: center; padding: 80px 24px; }
+.ovr-villages-empty .material-symbols-outlined { font-size: 64px; color: var(--ovr-outline-variant); }
+.ovr-villages-empty h3 { margin: 16px 0 8px; }
+.ovr-villages-empty p { color: var(--ovr-on-surface-variant); }
+.ovr-villages-empty .ovr-btn { margin-top: 16px; }
+
+/* Footer "coming soon" placeholder links */
+.ovr-footer-soon { cursor: default; opacity: 0.85; }
+
+@media (max-width: 1024px) {
+    .ovr-villages-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .ovr-villages-hero { padding: 64px 20px 72px; }
+    .ovr-villages-body { padding-top: 48px; }
+}
+
+@media (max-width: 600px) {
+    .ovr-villages-grid { grid-template-columns: 1fr; }
+    .ovr-villages-stats { gap: 18px; padding: 14px 22px; }
+    .ovr-villages-group-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+}

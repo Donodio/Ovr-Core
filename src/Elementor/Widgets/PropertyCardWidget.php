@@ -68,6 +68,22 @@ class PropertyCardWidget extends Widget_Base {
             ],
         ] );
 
+        // Source: where the listings come from. "Homepage Slider" is driven by
+        // the per-listing Homepage Slider boost (see UpgradeActivator) — the same
+        // boost a landlord buys + pays for. Falls back to newest so the rail is
+        // never empty during a demo or between boosts.
+        $this->add_control( 'source', [
+            'label'   => esc_html__( 'Source', 'ovr-core' ),
+            'type'    => Controls_Manager::SELECT,
+            'default' => 'standard',
+            'options' => [
+                'standard' => esc_html__( 'Standard query (filters below)', 'ovr-core' ),
+                'featured' => esc_html__( 'Featured boost only', 'ovr-core' ),
+                'slider'   => esc_html__( 'Homepage Slider boost', 'ovr-core' ),
+            ],
+            'description' => esc_html__( 'Homepage Slider shows listings with an active, paid Homepage Slider boost (newest published as fallback).', 'ovr-core' ),
+        ] );
+
         $this->add_control( 'featured_only', [
             'label'        => esc_html__( 'Featured Only', 'ovr-core' ),
             'type'         => Controls_Manager::SWITCHER,
@@ -75,6 +91,7 @@ class PropertyCardWidget extends Widget_Base {
             'label_off'    => esc_html__( 'No', 'ovr-core' ),
             'return_value' => 'yes',
             'default'      => '',
+            'condition'    => [ 'source' => 'standard' ],
         ] );
 
         // Village filter.
@@ -218,21 +235,35 @@ class PropertyCardWidget extends Widget_Base {
     protected function render(): void {
         $settings = $this->get_settings_for_display();
 
-        $filters = [
-            'per_page'      => absint( $settings['posts_per_page'] ),
-            'featured_only' => 'yes' === $settings['featured_only'],
-            'sort'          => $settings['sort'],
-        ];
+        $count  = absint( $settings['posts_per_page'] );
+        $source = $settings['source'] ?? 'standard';
 
-        if ( ! empty( $settings['village'] ) ) {
-            $filters['village'] = [ $settings['village'] ];
+        if ( 'slider' === $source ) {
+            // Homepage Slider boost set (manual override → active boosts →
+            // featured fallback, all inside get_slider). If that resolves to
+            // nothing, fall back to newest published so the rail still shows
+            // listings for the demo / between boosts.
+            $query = PropertyQuery::get_slider( $count );
+            if ( ! $query->have_posts() ) {
+                $query = PropertyQuery::query( [ 'per_page' => $count, 'sort' => 'newest' ] );
+            }
+        } else {
+            $filters = [
+                'per_page'      => $count,
+                'featured_only' => ( 'featured' === $source ) || 'yes' === $settings['featured_only'],
+                'sort'          => $settings['sort'],
+            ];
+
+            if ( ! empty( $settings['village'] ) ) {
+                $filters['village'] = [ $settings['village'] ];
+            }
+
+            if ( ! empty( $settings['property_type'] ) ) {
+                $filters['property_type'] = [ $settings['property_type'] ];
+            }
+
+            $query = PropertyQuery::query( $filters );
         }
-
-        if ( ! empty( $settings['property_type'] ) ) {
-            $filters['property_type'] = [ $settings['property_type'] ];
-        }
-
-        $query = PropertyQuery::query( $filters );
 
         if ( ! $query->have_posts() ) {
             echo '<div class="ovr-wrap" style="text-align:center;padding:40px">';

@@ -221,6 +221,16 @@ class PropertyQuery {
             ];
         }
 
+        // Rental term filter — the ovr_rental_type taxonomy (Long/Short-Term).
+        $rental_terms = $clean_slugs( $filters['rental_type'] ?? [] );
+        if ( $rental_terms ) {
+            $args['tax_query'][] = [
+                'taxonomy' => 'ovr_rental_type',
+                'field'    => 'slug',
+                'terms'    => $rental_terms,
+            ];
+        }
+
         // Amenities filter.
         $amenity_terms = $clean_slugs( $filters['amenities'] ?? [] );
         if ( $amenity_terms ) {
@@ -261,6 +271,25 @@ class PropertyQuery {
                 'value'   => absint( $filters['bedrooms'] ),
                 'compare' => '>=',
                 'type'    => 'NUMERIC',
+            ];
+        }
+
+        // Bathrooms filter (stored as a decimal, e.g. 2.5).
+        if ( ! empty( $filters['bathrooms'] ) ) {
+            $args['meta_query'][] = [
+                'key'     => '_ovr_bathrooms',
+                'value'   => floatval( $filters['bathrooms'] ),
+                'compare' => '>=',
+                'type'    => 'DECIMAL(10,1)',
+            ];
+        }
+
+        // Street-address search — substring match on the listing address meta.
+        if ( ! empty( $filters['address'] ) ) {
+            $args['meta_query'][] = [
+                'key'     => '_ovr_address',
+                'value'   => sanitize_text_field( (string) $filters['address'] ),
+                'compare' => 'LIKE',
             ];
         }
 

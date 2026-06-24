@@ -177,10 +177,15 @@ class SearchHandler {
             // Village Section is the ovr_village taxonomy slug (curated facet).
             'village_section' => isset( $_GET['village_section'] ) ? $clean_slugs( $_GET['village_section'] ) : [],
             'property_type' => isset( $_GET['property_type'] ) ? $clean_slugs( $_GET['property_type'] ) : [],
+            // Rental term — the ovr_rental_type taxonomy (Long-Term / Short-Term).
+            'rental_type'   => isset( $_GET['rental_type'] ) ? $clean_slugs( $_GET['rental_type'] ) : [],
             'amenities'     => isset( $_GET['amenities'] )     ? $clean_slugs( $_GET['amenities'] )     : [],
             'views'         => isset( $_GET['views'] )         ? $clean_slugs( $_GET['views'] )         : [],
             'features'      => isset( $_GET['features'] )      ? $clean_slugs( $_GET['features'] )      : [],
             'bedrooms'      => absint( $_GET['bedrooms'] ?? 0 ),
+            'bathrooms'     => floatval( $_GET['bathrooms'] ?? 0 ),
+            // Free-text street-address search (matched against the _ovr_address meta).
+            'address'       => sanitize_text_field( wp_unslash( $_GET['address'] ?? '' ) ),
             'price_min'     => floatval( $_GET['price_min'] ?? 0 ),
             'price_max'     => floatval( $_GET['price_max'] ?? 0 ),
             'guests'        => absint( $_GET['guests'] ?? 0 ),

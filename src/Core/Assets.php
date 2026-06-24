@@ -51,29 +51,35 @@ class Assets {
      * @since 1.0.0
      */
     public function enqueue_public_styles(): void {
-        // Google Fonts: Atkinson Hyperlegible Next, matching the Stitch redesign.
-        wp_enqueue_style(
+        // Register the core front-end handles first so they are always known to
+        // WordPress/Elementor. Elementor widgets declare these via
+        // get_style_depends(), which only resolves if the handle is registered —
+        // this keeps the slider (and other widgets) styled on sites with
+        // "optimized asset loading" or asset-stripping cache plugins, where the
+        // unconditional enqueue below could be removed.
+        wp_register_style(
             'ovr-google-fonts',
             'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap',
             [],
             OVR_VERSION
         );
-
-        // Material Symbols for icons.
-        wp_enqueue_style(
+        wp_register_style(
             'ovr-material-symbols',
             'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap',
             [],
             OVR_VERSION
         );
-
-        // Main public stylesheet.
-        wp_enqueue_style(
+        wp_register_style(
             'ovr-public',
             OVR_PLUGIN_URL . 'assets/css/ovr-public.css',
             [],
             OVR_VERSION
         );
+
+        // Enqueue them site-wide (the common case).
+        wp_enqueue_style( 'ovr-google-fonts' );
+        wp_enqueue_style( 'ovr-material-symbols' );
+        wp_enqueue_style( 'ovr-public' );
 
         // Auth pages stylesheet (conditional).
         if ( $this->is_auth_page() ) {
