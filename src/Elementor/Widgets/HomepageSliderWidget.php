@@ -763,6 +763,12 @@ class HomepageSliderWidget extends Widget_Base {
     }
 
     protected function render(): void {
+        // Print the critical layout CSS inline (once per page). This guarantees
+        // the slider is an actual slider with the panel on the right even if the
+        // external stylesheet is cache-stale, purged by a "remove unused CSS"
+        // optimizer, or fails to load — the failure mode we kept hitting on live.
+        self::print_critical_css();
+
         $settings = $this->get_settings_for_display();
         $count    = absint( $settings['count'] ) ?: 8;
 
@@ -1036,6 +1042,64 @@ class HomepageSliderWidget extends Widget_Base {
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Print the slider's critical structural CSS inline, once per request.
+     *
+     * Decorative styling still lives in ovr-public.css (with var() fallbacks);
+     * this covers only the layout that makes it recognisably a working slider
+     * with a right-hand search panel, so the widget can never render as a raw
+     * unstyled stack regardless of asset caching/optimization on the host site.
+     */
+    private static function print_critical_css(): void {
+        static $printed = false;
+        if ( $printed ) {
+            return;
+        }
+        $printed = true;
+
+        $css = <<<CSS
+.ovr-hps-row{display:flex;align-items:stretch;gap:24px;width:100%}
+.ovr-hps-col-main{flex:1 1 auto;min-width:0}
+.ovr-hps-row[data-search="1"] .ovr-hps-col-main{flex:0 0 70%;max-width:70%}
+.ovr-hps-col-side{flex:1 1 0;min-width:0;display:flex;align-items:stretch}
+.ovr-hps-slider{position:relative;width:100%;height:100%;min-height:100%;overflow:hidden;border-radius:16px}
+.ovr-hps-viewport{overflow:hidden;width:100%;height:100%}
+.ovr-hps-track{display:flex;width:100%;height:100%;transition:transform .55s cubic-bezier(.4,0,.2,1)}
+.ovr-hps-slide{position:relative;flex:0 0 100%;width:100%;height:100%;min-height:480px;overflow:hidden;background-size:cover;background-position:center center;background-repeat:no-repeat}
+.ovr-hps-shade{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.78) 0%,rgba(0,0,0,.28) 42%,rgba(0,0,0,0) 70%)}
+.ovr-hps-content{position:absolute;left:0;bottom:0;z-index:2;width:100%;max-width:60%;padding:0 6% 7%;color:#fff;display:flex;flex-direction:column;align-items:flex-start;text-align:left}
+.ovr-hps-title{margin:0 0 6px;font-size:clamp(20px,2vw,30px);line-height:1.18;font-weight:700;color:#fff}
+.ovr-hps-location,.ovr-hps-meta{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:15px;color:rgba(255,255,255,.92)}
+.ovr-hps-meta{gap:18px;flex-wrap:wrap}
+.ovr-hps-meta span{display:inline-flex;align-items:center;gap:6px}
+.ovr-hps-actions{display:flex;align-items:center;gap:18px;margin-top:16px;flex-wrap:wrap}
+.ovr-hps-slider .ovr-hps-btn{display:inline-flex;align-items:center;justify-content:center;background:var(--ovr-primary,#006666);color:#fff;font-weight:600;padding:12px 26px;border-radius:10px;text-decoration:none}
+.ovr-hps-price{font-weight:700;color:#fff}
+.ovr-hps-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:5;display:flex;align-items:center;justify-content:center;width:48px;height:48px;border:none;border-radius:50%;background:rgba(255,255,255,.92);cursor:pointer}
+.ovr-hps-prev{left:18px}.ovr-hps-next{right:18px}
+.ovr-hps-dots{position:absolute;bottom:16px;right:24px;z-index:5;display:flex;gap:8px}
+.ovr-hps-dot{width:9px;height:9px;padding:0;border:none;border-radius:50%;background:rgba(255,255,255,.5);cursor:pointer}
+.ovr-hps-dot.is-active{background:#fff;width:24px;border-radius:999px}
+.ovr-hps-search{width:100%;background:#fff;border-radius:16px;padding:28px 24px;display:flex;flex-direction:column;justify-content:center}
+.ovr-hps-search-title{margin:0 0 4px;font-size:22px;font-weight:700;color:#101828}
+.ovr-hps-search-sub{margin:0 0 20px;font-size:14px}
+.ovr-hps-search-form{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px}
+.ovr-hps-search-field,.ovr-hps-search-check{flex:0 0 100%;max-width:100%;min-width:0}
+.ovr-hps-f-checkin,.ovr-hps-f-checkout,.ovr-hps-f-beds,.ovr-hps-f-baths{flex:0 0 calc(50% - 7px);max-width:calc(50% - 7px)}
+.ovr-hps-search-optional,.ovr-hps-search-submit{flex:0 0 100%}
+.ovr-hps-search-optional{margin:6px 0 0;font-size:12px;font-weight:700;text-transform:uppercase;border-top:1px solid #eaecf0;padding-top:12px}
+.ovr-hps-search-check{display:flex;align-items:center;gap:8px}
+.ovr-hps-search-field{display:flex;align-items:center;gap:8px;border:1px solid var(--ovr-border-gray,#d6dede);border-radius:10px;padding:0 12px;background:#fff}
+.ovr-hps-search-field input,.ovr-hps-search-field select{-webkit-appearance:none;appearance:none;flex:1;min-width:0;width:100%;border:none;outline:none;background:transparent;padding:11px 0;font-family:inherit;font-size:14px;color:#181c1c}
+.ovr-hps-search-submit{-webkit-appearance:none;appearance:none;width:100%;border:none;cursor:pointer;background:var(--ovr-primary,#006666);color:#fff;font-weight:600;padding:14px 20px;border-radius:10px}
+@media (max-width:1024px){.ovr-hps-row{flex-direction:column !important}.ovr-hps-row .ovr-hps-col-main,.ovr-hps-row[data-search="1"] .ovr-hps-col-main,.ovr-hps-row .ovr-hps-col-side{flex:1 1 auto !important;width:100% !important;max-width:100% !important}}
+@media (max-width:768px){.ovr-hps-nav{display:none}.ovr-hps-dots{left:50%;right:auto;transform:translateX(-50%)}}
+@media (max-width:540px){.ovr-hps-search-form>.ovr-hps-search-field,.ovr-hps-search-form>.ovr-hps-search-check,.ovr-hps-f-checkin,.ovr-hps-f-checkout,.ovr-hps-f-beds,.ovr-hps-f-baths{flex:0 0 100% !important;max-width:100% !important}}
+CSS;
+
+        echo "\n<style id='ovr-hps-critical'>" . $css . "</style>\n"; // phpcs:ignore WordPress.Security.EscapeOutput
     }
 
     /**
