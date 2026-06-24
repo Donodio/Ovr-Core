@@ -17,7 +17,6 @@ $slider_cards = $slider_cards ?? [];
 $search_url    = Pages::get_page_url( 'ovr_page_search' );
 $register_url  = Pages::get_page_url( 'ovr_page_register' );
 $featured_url  = Pages::get_page_url( 'ovr_page_featured' );
-$login_url     = wp_login_url();
 
 $hero_image = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNBGqlk9yFUDZZCmqhdgUmDQ8MM2PjBSYgtB2niQK5_3kPGTdyf-daWGpU2a_F57FJVx9B4yIi0ZuWZabo_6ZeN9F0dzCmLvfI-97LMX6YfP3h6bZYgjUuhlyEstHWzBLtGDl7jJ3vqOUMfS3OjAZjxT9bULgywWWO1GKT4uQXy-mqyl3xN9kpnylhFyaBF4smSQZ1yzWcmq6S0o--_wXcub5jBBd5Eu6BpaDgZmgiUjFXkb82IF83Qc62pDQtTIiXDGv5Wx0MTDo';
 
@@ -72,40 +71,7 @@ $featured_cards = [
 ];
 ?>
 <div class="antialiased min-h-screen flex flex-col bg-soft-page-white text-on-surface font-body-md">
-    <header class="bg-surface border-b border-border-gray sticky top-0 z-50">
-        <div class="flex justify-between items-center w-full px-margin-desktop h-tap-target-min max-w-container-max-width mx-auto">
-            <div class="flex items-center gap-6">
-                <a class="ovr-brand flex items-center gap-2 text-card-title font-card-title font-bold text-primary" href="<?php echo esc_url( home_url( '/' ) ); ?>">
-                    <?php
-                    $ovr_logo_id = get_theme_mod( 'custom_logo' );
-                    if ( $ovr_logo_id ) {
-                        echo wp_get_attachment_image(
-                            $ovr_logo_id,
-                            'full',
-                            false,
-                            [
-                                'class' => 'ovr-brand-logo',
-                                'style' => 'height:36px;width:auto;display:block',
-                                'alt'   => esc_attr__( 'Our Village Rentals', 'ovr-core' ),
-                            ]
-                        );
-                    }
-                    ?>
-                    <span><?php esc_html_e( 'OVR Homepage', 'ovr-core' ); ?></span>
-                </a>
-                <nav class="hidden md:flex items-center gap-6" aria-label="<?php esc_attr_e( 'Primary navigation', 'ovr-core' ); ?>">
-                    <a class="text-primary font-bold border-b-2 border-primary pb-1 text-label-md font-label-md" href="<?php echo esc_url( $search_url ); ?>"><?php esc_html_e( 'Search Rentals', 'ovr-core' ); ?></a>
-                    <a class="text-on-surface-variant font-body-lg text-label-md font-label-md hover:text-secondary hover:bg-surface-container-low transition-colors rounded px-2 py-1" href="<?php echo esc_url( home_url( '/map/' ) ); ?>"><?php esc_html_e( 'Map', 'ovr-core' ); ?></a>
-                    <a class="text-on-surface-variant font-body-lg text-label-md font-label-md hover:text-secondary hover:bg-surface-container-low transition-colors rounded px-2 py-1" href="<?php echo esc_url( home_url( '/villages-info/' ) ); ?>"><?php esc_html_e( 'Villages Info', 'ovr-core' ); ?></a>
-                    <a class="text-on-surface-variant font-body-lg text-label-md font-label-md hover:text-secondary hover:bg-surface-container-low transition-colors rounded px-2 py-1" href="<?php echo esc_url( home_url( '/ovr-info/' ) ); ?>"><?php esc_html_e( 'OVR Info', 'ovr-core' ); ?></a>
-                </nav>
-            </div>
-            <div class="flex items-center gap-4">
-                <a class="hidden md:block text-label-md font-label-md text-primary-container bg-surface border border-primary-container px-4 py-2 rounded h-tap-target-min hover:bg-surface-container-low transition-colors" href="<?php echo esc_url( $login_url ); ?>"><?php esc_html_e( 'Login', 'ovr-core' ); ?></a>
-                <a class="text-label-md font-label-md text-white bg-primary-container px-4 py-2 rounded h-tap-target-min hover:opacity-90 transition-opacity shadow-sm" href="<?php echo esc_url( $register_url ); ?>"><?php esc_html_e( 'Advertise', 'ovr-core' ); ?></a>
-            </div>
-        </div>
-    </header>
+    <?php // The single site-wide header is rendered by OVR\Frontend\Header on wp_body_open, above this shortcode's output — no inline header here. ?>
 
     <main class="flex-grow">
         <section class="relative w-full h-[600px] flex items-center justify-center overflow-hidden bg-primary-container">
@@ -213,28 +179,7 @@ $featured_cards = [
             </div>
         </section>
     </main>
-
-    <footer class="bg-surface-container-high border-t border-border-gray mt-auto">
-        <div class="flex flex-col md:flex-row justify-between items-start w-full p-margin-desktop gap-gutter max-w-container-max-width mx-auto">
-            <div class="mb-6 md:mb-0 max-w-lg">
-                <h2 class="text-card-title font-card-title text-primary mb-2"><?php esc_html_e( 'Our Village Rentals', 'ovr-core' ); ?></h2>
-                <p class="text-metadata font-metadata text-on-surface">© <?php echo esc_html( gmdate( 'Y' ) ); ?> <?php esc_html_e( 'Our Village Rentals. Serving landlords and renters since 2013. Licensed and Bonded. Disclaimer: OVR is an independent listing service and not affiliated with any specific developer or municipality.', 'ovr-core' ); ?></p>
-            </div>
-            <nav class="flex flex-col md:flex-row gap-4 md:gap-8" aria-label="<?php esc_attr_e( 'Footer navigation', 'ovr-core' ); ?>">
-                <div class="flex flex-col gap-2">
-                    <a class="text-body-md font-body-md text-on-surface hover:text-secondary hover:underline transition-all" href="<?php echo esc_url( home_url( '/about-us/' ) ); ?>"><?php esc_html_e( 'About Us', 'ovr-core' ); ?></a>
-                    <a class="text-body-md font-body-md text-on-surface hover:text-secondary hover:underline transition-all" href="<?php echo esc_url( home_url( '/faqs/' ) ); ?>"><?php esc_html_e( 'FAQs', 'ovr-core' ); ?></a>
-                </div>
-                <div class="flex flex-col gap-2">
-                    <a class="text-body-md font-body-md text-on-surface hover:text-secondary hover:underline transition-all" href="<?php echo esc_url( home_url( '/privacy-policy/' ) ); ?>"><?php esc_html_e( 'Privacy Policy', 'ovr-core' ); ?></a>
-                    <a class="text-body-md font-body-md text-on-surface hover:text-secondary hover:underline transition-all" href="<?php echo esc_url( home_url( '/terms-of-service/' ) ); ?>"><?php esc_html_e( 'Terms of Service', 'ovr-core' ); ?></a>
-                </div>
-                <div class="flex flex-col gap-2">
-                    <a class="text-body-md font-body-md text-on-surface hover:text-secondary hover:underline transition-all font-semibold" href="<?php echo esc_url( home_url( '/contact-support/' ) ); ?>"><?php esc_html_e( 'Contact Support', 'ovr-core' ); ?></a>
-                </div>
-            </nav>
-        </div>
-    </footer>
+    <?php // The single site-wide footer is rendered by the theme's footer.php via get_footer() below this shortcode's output — no inline footer here. ?>
 </div>
 <style>
     .hide-scrollbar::-webkit-scrollbar { display: none; }

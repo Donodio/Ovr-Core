@@ -18,6 +18,7 @@ use OVR\Frontend\MapPage;
 use OVR\Frontend\SearchResults;
 use OVR\Frontend\FeaturedListings;
 use OVR\Frontend\VillagePage;
+use OVR\Frontend\VillagesArchive;
 use OVR\Frontend\Onboarding;
 use OVR\Frontend\SubscriptionSelect;
 use OVR\Frontend\Checkout;
@@ -48,6 +49,7 @@ class ShortcodeManager {
         add_shortcode( 'ovr_map', [ $this, 'shortcode_map' ] );
         add_shortcode( 'ovr_featured_listings', [ $this, 'shortcode_featured' ] );
         add_shortcode( 'ovr_village_page', [ $this, 'shortcode_village' ] );
+        add_shortcode( 'ovr_villages', [ $this, 'shortcode_villages_archive' ] );
         add_shortcode( 'ovr_pricing_plans', [ $this, 'shortcode_pricing' ] );
         add_shortcode( 'ovr_checkout', [ $this, 'shortcode_checkout' ] );
         add_shortcode( 'ovr_payment_success', [ $this, 'shortcode_payment_success' ] );
@@ -105,6 +107,10 @@ class ShortcodeManager {
     public function shortcode_village( array $atts = [] ): string {
         $atts = shortcode_atts( [ 'slug' => '' ], $atts, 'ovr_village_page' );
         return VillagePage::render( sanitize_key( $atts['slug'] ) );
+    }
+
+    public function shortcode_villages_archive(): string {
+        return VillagesArchive::render();
     }
 
     public function shortcode_pricing( $atts = [] ): string {

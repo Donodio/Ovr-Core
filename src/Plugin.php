@@ -43,7 +43,9 @@ use OVR\Frontend\SearchResults;
 use OVR\Frontend\SingleProperty;
 use OVR\Frontend\FeaturedListings;
 use OVR\Frontend\VillagePage;
+use OVR\Frontend\VillagesArchive;
 use OVR\Frontend\Onboarding;
+use OVR\Frontend\Header;
 use OVR\Frontend\Navigation;
 use OVR\Frontend\Dashboard;
 use OVR\Frontend\ListingForm;
@@ -418,14 +420,17 @@ class Plugin {
         $this->modules['single_property']   = new SingleProperty();
         $this->modules['featured_listings'] = new FeaturedListings();
         $this->modules['village_page']      = new VillagePage();
+        $this->modules['villages_archive']  = new VillagesArchive();
         $this->modules['onboarding']        = new Onboarding();
+        $this->modules['site_header']       = new Header();
         $this->modules['navigation']        = new Navigation();
         $this->modules['dashboard']         = new Dashboard();
         $this->modules['listing_form']      = new ListingForm();
 
         foreach ( [
             'homepage', 'search_results', 'single_property',
-            'featured_listings', 'village_page', 'onboarding', 'navigation',
+            'featured_listings', 'village_page', 'villages_archive',
+            'onboarding', 'site_header', 'navigation',
             'dashboard', 'listing_form',
         ] as $key ) {
             $this->modules[ $key ]->init();

@@ -2,7 +2,12 @@
 /**
  * Footer Component.
  *
- * Site-wide footer with brand, link columns, and copyright.
+ * @deprecated The single site-wide footer now lives in the active theme at
+ *             themes/ovr-villages/footer.php and is rendered via get_footer().
+ *             This component is no longer included anywhere and its links
+ *             point at pages that do not exist. Kept only to avoid breaking
+ *             any third-party template that still references it. Do not wire
+ *             this back into the page chrome.
  *
  * @package OVR
  */

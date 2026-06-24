@@ -21,13 +21,20 @@ $admin_home_url = $admin_home_url ?? admin_url();
 
 $current_user = wp_get_current_user();
 $is_logged_in = is_user_logged_in();
+$logo_html    = $logo_html ?? '';
+$site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Village Rentals', 'ovr-core' ) );
 ?>
 <header class="ovr-topnav" role="banner">
     <div class="ovr-topnav-inner">
 
         <!-- Brand -->
         <a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="ovr-brand">
-            <?php echo esc_html( get_bloginfo( 'name' ) ?: __( 'Our Village Rentals', 'ovr-core' ) ); ?>
+            <?php
+            if ( $logo_html ) {
+                echo $logo_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built by wp_get_attachment_image().
+            }
+            ?>
+            <span class="ovr-brand-name"><?php echo esc_html( $site_name ); ?></span>
         </a>
 
         <!-- Primary Navigation -->
@@ -47,30 +54,25 @@ $is_logged_in = is_user_logged_in();
             </button>
 
             <?php if ( $is_logged_in ) : ?>
-                <?php if ( $is_admin_user ) : ?>
-                    <a href="<?php echo esc_url( $admin_home_url ); ?>" class="ovr-nav-link-cta" title="<?php esc_attr_e( 'WordPress admin', 'ovr-core' ); ?>">
-                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:4px">admin_panel_settings</span>
-                        <?php esc_html_e( 'Site Admin', 'ovr-core' ); ?>
-                    </a>
-                <?php endif; ?>
                 <button type="button" class="ovr-nav-icon-btn" aria-label="<?php esc_attr_e( 'Favorites', 'ovr-core' ); ?>">
                     <span class="material-symbols-outlined">favorite</span>
                 </button>
 
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_dashboard' ) ); ?>"
-                   class="ovr-nav-user" title="<?php echo esc_attr( $current_user->display_name ); ?>">
-                    <?php echo get_avatar( $current_user->ID, 36, '', '', [ 'class' => 'ovr-nav-avatar' ] ); ?>
+                   class="ovr-btn ovr-btn-primary ovr-btn-pill" style="padding:10px 20px;font-size:14px">
+                    <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:4px">dashboard</span>
+                    <?php esc_html_e( 'Dashboard', 'ovr-core' ); ?>
                 </a>
 
                 <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>"
-                   class="ovr-btn ovr-btn-outline ovr-btn-pill" style="padding:8px 18px;font-size:14px">
+                   class="ovr-btn ovr-btn-outline ovr-btn-pill" style="padding:10px 20px;font-size:14px">
                     <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
                 </a>
             <?php else : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_login' ) ); ?>"
                    class="ovr-nav-link-cta">
                     <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:4px">login</span>
-                    <?php esc_html_e( 'Owner Login', 'ovr-core' ); ?>
+                    <?php esc_html_e( 'Log In', 'ovr-core' ); ?>
                 </a>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_register' ) ); ?>"
                    class="ovr-btn ovr-btn-primary ovr-btn-pill" style="padding:10px 20px;font-size:14px">
@@ -101,17 +103,12 @@ $is_logged_in = is_user_logged_in();
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_dashboard' ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Dashboard', 'ovr-core' ); ?>
                 </a>
-                <?php if ( $is_admin_user ) : ?>
-                    <a href="<?php echo esc_url( $admin_home_url ); ?>" class="ovr-mobile-link">
-                        <?php esc_html_e( 'Site Admin', 'ovr-core' ); ?>
-                    </a>
-                <?php endif; ?>
                 <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
                 </a>
             <?php else : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_login' ) ); ?>" class="ovr-mobile-link">
-                    <?php esc_html_e( 'Owner Login', 'ovr-core' ); ?>
+                    <?php esc_html_e( 'Log In', 'ovr-core' ); ?>
                 </a>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_register' ) ); ?>" class="ovr-btn ovr-btn-primary ovr-btn-full" style="margin-top:12px">
                     <?php esc_html_e( 'List Your Property', 'ovr-core' ); ?>
