@@ -254,6 +254,7 @@ class Plugin {
         $this->modules['admin_reviews']         = new ReviewsAdmin();
         $this->modules['admin_paid_services']   = new PaidServicesAdmin();
         $this->modules['admin_users']           = new UsersAdmin();
+        $this->modules['admin_lookup_taxonomies'] = new \OVR\Admin\LookupTaxonomies();
         $this->modules['admin_payments']        = new PaymentsAdmin();
         $this->modules['admin_bookings']         = new BookingsAdmin();
         $this->modules['admin_crm']              = new CrmAdmin();

@@ -133,6 +133,17 @@ use OVR\Subscription\UserSubscription;
         .ovr-u-action-btn .material-symbols-outlined{font-size:21px}
         .ovr-u-action-btn--listings:hover{background:var(--green-light,#e3f4ea);color:var(--green,#006c4a)}
         .ovr-u-action-btn--edit:hover{background:var(--blue-light);color:var(--blue)}
+        .ovr-u-user-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+        .ovr-u-verif{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+        .ovr-u-verif .material-symbols-outlined{font-size:17px}
+        .ovr-u-verif--verified_homeowner,.ovr-u-verif--registered_pm{background:#e6f4ea;color:#1e7e34;border-color:#bfe3c8}
+        .ovr-u-verif--not_verified{background:var(--gray-light);color:var(--muted);border-color:var(--gray-border)}
+        .ovr-u-phone{font-size:14px;color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums;white-space:nowrap}
+        .ovr-u-phone:hover{color:var(--blue);text-decoration:underline}
+        .ovr-u-muted{color:var(--muted)}
+        .ovr-u-balance{font-size:14px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+        .ovr-u-balance.is-positive{color:#1e7e34}
+        .ovr-u-action-btn--loginas:hover{background:#fff4e5;color:#b5670a}
         .ovr-u-action-btn--suspend:hover{background:var(--gold-light);color:var(--gold-dark)}
         .ovr-u-action-btn--danger:hover{background:var(--red-light);color:var(--red)}
 
@@ -276,6 +287,21 @@ use OVR\Subscription\UserSubscription;
                             <option value="inactive" <?php selected( $status ?? '', 'inactive' ); ?>><?php esc_html_e( 'Inactive', 'ovr-core' ); ?></option>
                         </select>
                     </div>
+                    <div class="ovr-u-filter">
+                        <select name="type">
+                            <option value=""><?php esc_html_e( 'Any Type', 'ovr-core' ); ?></option>
+                            <option value="landlord" <?php selected( $type ?? '', 'landlord' ); ?>><?php esc_html_e( 'Landlords', 'ovr-core' ); ?></option>
+                            <option value="subscriber" <?php selected( $type ?? '', 'subscriber' ); ?>><?php esc_html_e( 'Subscribers', 'ovr-core' ); ?></option>
+                        </select>
+                    </div>
+                    <div class="ovr-u-filter">
+                        <select name="verification">
+                            <option value=""><?php esc_html_e( 'Any Verification', 'ovr-core' ); ?></option>
+                            <?php foreach ( \OVR\Core\Verification::statuses() as $vkey => $vlabel ) : ?>
+                                <option value="<?php echo esc_attr( $vkey ); ?>" <?php selected( $verification ?? '', $vkey ); ?>><?php echo esc_html( $vlabel ); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <button type="submit" class="ovr-u-btn ovr-u-btn--subtle">
                         <span class="material-symbols-outlined">search</span>
                         <?php esc_html_e( 'Search', 'ovr-core' ); ?>
@@ -297,6 +323,7 @@ use OVR\Subscription\UserSubscription;
                     <thead>
                         <tr>
                             <th><?php esc_html_e( 'User', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Verification', 'ovr-core' ); ?></th>
                             <th>
                                 <a href="<?php echo esc_url( add_query_arg( [ 'orderby' => 'subscription', 'order' => 'DESC' === $order ? 'ASC' : 'DESC' ], $page_url ) ); ?>">
                                     <?php esc_html_e( 'Subscription', 'ovr-core' ); ?>
@@ -304,6 +331,8 @@ use OVR\Subscription\UserSubscription;
                                 </a>
                             </th>
                             <th><?php esc_html_e( 'Listings', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Phone', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Balance', 'ovr-core' ); ?></th>
                             <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
                             <th>
                                 <a href="<?php echo esc_url( add_query_arg( [ 'orderby' => 'registered', 'order' => 'DESC' === $order ? 'ASC' : 'DESC' ], $page_url ) ); ?>">
@@ -330,6 +359,13 @@ use OVR\Subscription\UserSubscription;
                             );
                             $plan_max       = $plan_data['max_listings'] ?? null;
                             $listing_pct    = $plan_max && $plan_max > 0 ? min( 100, round( ( $listing_count / $plan_max ) * 100 ) ) : null;
+                            $verif_status   = \OVR\Core\Verification::get( (int) $user->ID );
+                            $phone          = (string) get_user_meta( (int) $user->ID, 'ovr_phone', true );
+                            $balance        = (float) get_user_meta( (int) $user->ID, \OVR\Payment\Wallet::META_BALANCE, true );
+                            $login_as_url   = wp_nonce_url(
+                                add_query_arg( [ 'action' => 'ovr_login_as_user', 'user_id' => (int) $user->ID ], $toggle_url ),
+                                'ovr_login_as_user'
+                            );
                         ?>
                             <tr>
                                 <td>
@@ -340,8 +376,15 @@ use OVR\Subscription\UserSubscription;
                                         <div class="ovr-u-user-info">
                                             <span class="ovr-u-user-name"><?php echo esc_html( $user->display_name ); ?></span>
                                             <span class="ovr-u-user-email"><?php echo esc_html( $user->user_email ); ?></span>
+                                            <span class="ovr-u-user-meta">#<?php echo (int) $user->ID; ?> · <?php echo esc_html( $user->user_login ); ?></span>
                                         </div>
                                     </div>
+                                </td>
+                                <td>
+                                    <span class="ovr-u-verif ovr-u-verif--<?php echo esc_attr( $verif_status ); ?>" title="<?php echo esc_attr( \OVR\Core\Verification::label( $verif_status ) ); ?>">
+                                        <span class="material-symbols-outlined"><?php echo esc_html( \OVR\Core\Verification::icon( $verif_status ) ); ?></span>
+                                        <?php echo esc_html( \OVR\Core\Verification::label( $verif_status ) ); ?>
+                                    </span>
                                 </td>
                                 <td>
                                     <?php if ( $plan_data ) : ?>
@@ -386,6 +429,16 @@ use OVR\Subscription\UserSubscription;
                                     </div>
                                 </td>
                                 <td>
+                                    <?php if ( $phone ) : ?>
+                                        <a class="ovr-u-phone" href="tel:<?php echo esc_attr( preg_replace( '/[^0-9+]/', '', $phone ) ); ?>"><?php echo esc_html( $phone ); ?></a>
+                                    <?php else : ?>
+                                        <span class="ovr-u-muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="ovr-u-balance<?php echo $balance > 0 ? ' is-positive' : ''; ?>"><?php echo esc_html( '$' . number_format_i18n( $balance, 2 ) ); ?></span>
+                                </td>
+                                <td>
                                     <div style="display:flex;flex-direction:column;gap:7px">
                                         <span class="ovr-u-badge ovr-u-badge--<?php echo 'active' === $status ? 'active' : 'inactive'; ?>">
                                             <span class="material-symbols-outlined"><?php echo 'active' === $status ? 'check_circle' : 'cancel'; ?></span>
@@ -420,6 +473,11 @@ use OVR\Subscription\UserSubscription;
                                         <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--edit" title="<?php esc_attr_e( 'Edit profile', 'ovr-core' ); ?>">
                                             <span class="material-symbols-outlined">edit</span>
                                         </a>
+                                        <?php if ( current_user_can( 'manage_options' ) && (int) $user->ID !== get_current_user_id() ) : ?>
+                                            <a href="<?php echo esc_url( $login_as_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--loginas" title="<?php esc_attr_e( 'Log in as this user', 'ovr-core' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Switch to this user\'s account? You can switch back from the admin bar.', 'ovr-core' ) ); ?>');">
+                                                <span class="material-symbols-outlined">login</span>
+                                            </a>
+                                        <?php endif; ?>
                                         <a href="<?php echo esc_url( $toggle_url_f ); ?>" class="ovr-u-action-btn ovr-u-action-btn--suspend" title="<?php echo 'active' === $status ? esc_attr__( 'Suspend account', 'ovr-core' ) : esc_attr__( 'Reactivate account', 'ovr-core' ); ?>">
                                             <span class="material-symbols-outlined"><?php echo 'active' === $status ? 'pause_circle' : 'play_circle'; ?></span>
                                         </a>

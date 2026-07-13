@@ -78,38 +78,22 @@ class SearchFilters {
      * Get amenities for filter.
      */
     public static function get_amenities(): array {
-        $terms = get_terms( [
-            'taxonomy'   => 'ovr_amenity',
-            'hide_empty' => true,
-            'orderby'    => 'count',
-            'order'      => 'DESC',
-        ] );
-        return ! is_wp_error( $terms ) ? $terms : [];
+        // §12: only enabled amenities, in the admin-defined order.
+        return \OVR\Admin\LookupTaxonomies::enabled_terms( 'ovr_amenity', [ 'hide_empty' => true ] );
     }
 
     /**
      * Get views for filter.
      */
     public static function get_views(): array {
-        $terms = get_terms( [
-            'taxonomy'   => 'ovr_view',
-            'hide_empty' => false,
-            'orderby'    => 'name',
-        ] );
-        return ! is_wp_error( $terms ) ? $terms : [];
+        return \OVR\Admin\LookupTaxonomies::enabled_terms( 'ovr_view' );
     }
 
     /**
      * Get features for filter.
      */
     public static function get_features(): array {
-        $terms = get_terms( [
-            'taxonomy'   => 'ovr_feature',
-            'hide_empty' => false,
-            'orderby'    => 'count',
-            'order'      => 'DESC',
-        ] );
-        return ! is_wp_error( $terms ) ? $terms : [];
+        return \OVR\Admin\LookupTaxonomies::enabled_terms( 'ovr_feature' );
     }
 
     /**

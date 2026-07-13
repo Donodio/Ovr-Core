@@ -13,6 +13,7 @@
 namespace OVR\Admin;
 
 use OVR\Core\TemplateLoader;
+use OVR\Core\Verification;
 use OVR\Subscription\Plans;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
@@ -25,9 +26,16 @@ class UsersAdmin {
     /** Admin-only user meta introduced for Mark feedback P6.5. */
     public const META_PRICE_OVERRIDE = 'ovr_subscription_price_override';
 
+    /** HMAC-signed cookie remembering the admin behind a "Log in as user" session. */
+    public const SWITCH_COOKIE = 'ovr_switch_back';
+
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
         add_action( 'admin_post_ovr_user_toggle_status', [ $this, 'handle_toggle_status' ] );
+        // §9: admin impersonation ("Log in as user") + switch-back affordance.
+        add_action( 'admin_post_ovr_login_as_user', [ $this, 'handle_login_as' ] );
+        add_action( 'admin_post_ovr_switch_back',   [ $this, 'handle_switch_back' ] );
+        add_action( 'admin_bar_menu', [ $this, 'switch_back_admin_bar' ], 999 );
         // P6.2: CSV export must run before any admin HTML is sent.
         add_action( 'admin_init', [ $this, 'maybe_export_csv' ] );
         // P6.5: admin-only fields on the user profile editor.
@@ -57,6 +65,8 @@ class UsersAdmin {
         $role    = sanitize_key( wp_unslash( $_GET['role'] ?? '' ) );
         $sub     = sanitize_key( wp_unslash( $_GET['subscription'] ?? '' ) );
         $status  = sanitize_key( wp_unslash( $_GET['status'] ?? '' ) );
+        $verif   = sanitize_key( wp_unslash( $_GET['verification'] ?? '' ) );
+        $type    = sanitize_key( wp_unslash( $_GET['type'] ?? '' ) );
         $paged   = max( 1, (int) ( $_GET['paged'] ?? 1 ) );
         $orderby = sanitize_key( wp_unslash( $_GET['orderby'] ?? 'registered' ) );
         $order   = strtoupper( sanitize_key( wp_unslash( $_GET['order'] ?? 'DESC' ) ) );
@@ -77,19 +87,43 @@ class UsersAdmin {
             $args['search']         = '*' . $search . '*';
             $args['search_columns'] = [ 'user_login', 'user_nicename', 'user_email', 'display_name' ];
         }
-        // P6.3: simplified role filter — Administrators vs. Users (everyone
-        // else). WordPress has many internal roles, but for OVR only these two
-        // distinctions matter.
+        // Role (Administrator vs. User) and Account Type (Landlord vs. Subscriber)
+        // filters, resolved together into role__in / role__not_in so they combine.
+        $role_in     = [];
+        $role_not_in = [];
         if ( 'administrator' === $role ) {
-            $args['role'] = 'administrator';
+            $role_in[] = 'administrator';
         } elseif ( 'user' === $role ) {
-            $args['role__not_in'] = [ 'administrator' ];
+            $role_not_in[] = 'administrator';
+        }
+        if ( 'landlord' === $type ) {
+            $role_in[] = 'ovr_landlord';
+        } elseif ( 'subscriber' === $type ) {
+            $role_not_in[] = 'ovr_landlord';
+            $role_not_in[] = 'administrator';
+        }
+        if ( $role_in ) {
+            $args['role__in'] = array_values( array_unique( $role_in ) );
+        }
+        if ( $role_not_in ) {
+            $args['role__not_in'] = array_values( array_unique( $role_not_in ) );
         }
 
         // Subscription type + account status filters (Phase 11), combinable.
         $meta_query = [];
         if ( $sub ) {
             $meta_query[] = [ 'key' => 'ovr_subscription_plan', 'value' => $sub ];
+        }
+        // Verification status filter. "Not verified" also matches users with no
+        // verification meta yet (the default state).
+        if ( 'not_verified' === $verif ) {
+            $meta_query[] = [
+                'relation' => 'OR',
+                [ 'key' => Verification::META_KEY, 'value' => 'not_verified' ],
+                [ 'key' => Verification::META_KEY, 'compare' => 'NOT EXISTS' ],
+            ];
+        } elseif ( $verif ) {
+            $meta_query[] = [ 'key' => Verification::META_KEY, 'value' => $verif ];
         }
         if ( 'inactive' === $status ) {
             $meta_query[] = [ 'key' => 'ovr_account_status', 'value' => 'inactive' ];
@@ -120,6 +154,8 @@ class UsersAdmin {
             'role'        => $role,
             'subscription'=> $sub,
             'status'      => $status,
+            'verification'=> $verif,
+            'type'        => $type,
             'paged'       => $paged,
             'max_pages'   => $max_pages,
             'total'       => $total,
@@ -390,6 +426,120 @@ class UsersAdmin {
 
         wp_safe_redirect( $this->page_url() . '&msg=status_updated' );
         exit;
+    }
+
+    /**
+     * §9: Log in as another user. Only full administrators may impersonate; the
+     * original admin id is stored in an HMAC-signed cookie so they can switch
+     * back from the admin bar. The action is recorded to the audit log.
+     */
+    public function handle_login_as(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You are not allowed to do this.', 'ovr-core' ) );
+        }
+        check_admin_referer( 'ovr_login_as_user' );
+
+        $target = (int) ( $_GET['user_id'] ?? 0 );
+        $user   = $target ? get_userdata( $target ) : null;
+        if ( ! $user ) {
+            wp_die( esc_html__( 'User not found.', 'ovr-core' ) );
+        }
+        $orig = get_current_user_id();
+        if ( $target === $orig ) {
+            wp_safe_redirect( $this->page_url() );
+            exit;
+        }
+
+        \OVR\Core\AuditLog::record( 'admin.login_as', 'user', $target, [ 'from' => $orig ] );
+
+        $this->set_switch_cookie( $orig );
+        wp_clear_auth_cookie();
+        wp_set_current_user( $target );
+        wp_set_auth_cookie( $target );
+
+        wp_safe_redirect( home_url( '/' ) );
+        exit;
+    }
+
+    /**
+     * §9: return to the original admin account after a "Log in as user" session.
+     */
+    public function handle_switch_back(): void {
+        check_admin_referer( 'ovr_switch_back' );
+        $orig = $this->read_switch_cookie();
+        $this->clear_switch_cookie();
+
+        if ( $orig && get_userdata( $orig ) ) {
+            wp_clear_auth_cookie();
+            wp_set_current_user( $orig );
+            wp_set_auth_cookie( $orig );
+            wp_safe_redirect( $this->page_url() );
+            exit;
+        }
+        wp_safe_redirect( home_url( '/' ) );
+        exit;
+    }
+
+    /**
+     * §9: admin-bar node offering a way back to the original admin account while
+     * impersonating a user.
+     */
+    public function switch_back_admin_bar( $bar ): void {
+        $orig = $this->read_switch_cookie();
+        if ( ! $orig ) {
+            return;
+        }
+        $orig_user = get_userdata( $orig );
+        $bar->add_node( [
+            'id'    => 'ovr-switch-back',
+            'title' => sprintf(
+                /* translators: %s: admin display name */
+                __( '↩ Back to %s', 'ovr-core' ),
+                $orig_user ? $orig_user->display_name : __( 'admin', 'ovr-core' )
+            ),
+            'href'  => wp_nonce_url( admin_url( 'admin-post.php?action=ovr_switch_back' ), 'ovr_switch_back' ),
+            'meta'  => [ 'title' => __( 'Return to your administrator account', 'ovr-core' ) ],
+        ] );
+    }
+
+    private function set_switch_cookie( int $orig ): void {
+        $value = $orig . '|' . hash_hmac( 'sha256', (string) $orig, wp_salt( 'auth' ) );
+        setcookie(
+            self::SWITCH_COOKIE,
+            $value,
+            0,
+            defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+            defined( 'COOKIE_DOMAIN' ) ? (string) COOKIE_DOMAIN : '',
+            is_ssl(),
+            true
+        );
+        $_COOKIE[ self::SWITCH_COOKIE ] = $value;
+    }
+
+    private function read_switch_cookie(): int {
+        $raw = isset( $_COOKIE[ self::SWITCH_COOKIE ] ) ? (string) wp_unslash( $_COOKIE[ self::SWITCH_COOKIE ] ) : '';
+        if ( '' === $raw || false === strpos( $raw, '|' ) ) {
+            return 0;
+        }
+        [ $orig, $sig ] = explode( '|', $raw, 2 );
+        $expected = hash_hmac( 'sha256', (string) (int) $orig, wp_salt( 'auth' ) );
+        if ( ! hash_equals( $expected, (string) $sig ) ) {
+            return 0;
+        }
+        return (int) $orig;
+    }
+
+    private function clear_switch_cookie(): void {
+        setcookie(
+            self::SWITCH_COOKIE,
+            '',
+            time() - 3600,
+            defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+            defined( 'COOKIE_DOMAIN' ) ? (string) COOKIE_DOMAIN : '',
+            is_ssl(),
+            true
+        );
+        unset( $_COOKIE[ self::SWITCH_COOKIE ] );
     }
 
     private function read_notice(): ?array {

@@ -35,6 +35,11 @@ $sel = static function ( string $tax ) use ( $pid, $is_edit ): array {
 };
 
 $terms = static function ( string $tax ): array {
+    // Amenities/Features/Views honour the admin-defined Enabled toggle + Order
+    // (§12); other taxonomies fall back to a plain alphabetical fetch.
+    if ( in_array( $tax, \OVR\Admin\LookupTaxonomies::TAXONOMIES, true ) ) {
+        return \OVR\Admin\LookupTaxonomies::enabled_terms( $tax );
+    }
     $t = get_terms( [ 'taxonomy' => $tax, 'hide_empty' => false ] );
     return is_wp_error( $t ) ? [] : $t;
 };
