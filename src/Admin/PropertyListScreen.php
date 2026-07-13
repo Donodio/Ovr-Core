@@ -216,7 +216,7 @@ class PropertyListScreen {
                 $owner_plan = $plan['name'] ?? \OVR\Subscription\UserSubscription::get_plan_slug( (int) $post->post_author );
             }
 
-            fputcsv( $output, [
+            fputcsv( $output, self::csv_safe_row( [
                 $pid,
                 get_post_meta( $pid, '_ovr_admin_status', true ) ?: 'approved',
                 get_post_meta( $pid, '_ovr_base_price', true ),
@@ -229,11 +229,26 @@ class PropertyListScreen {
                 $post->post_modified,
                 implode( ', ', $svc_names ),
                 (int) get_post_meta( $pid, '_ovr_view_count', true ),
-            ] );
+            ] ) );
         }
 
         fclose( $output );
         exit;
+    }
+
+    /**
+     * Neutralise CSV/formula injection: prefix a cell that starts with a
+     * spreadsheet formula trigger (= + - @, tab, CR) with an apostrophe so it
+     * renders as literal text in Excel/Sheets. fputcsv handles the rest.
+     *
+     * @param array<int, int|string> $row
+     * @return array<int, int|string>
+     */
+    private static function csv_safe_row( array $row ): array {
+        return array_map( static function ( $v ) {
+            $s = (string) $v;
+            return ( '' !== $s && strpbrk( $s[0], "=+-@\t\r" ) !== false ) ? "'" . $s : $v;
+        }, $row );
     }
 
     public function enqueue( string $hook ): void {

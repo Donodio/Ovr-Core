@@ -247,7 +247,7 @@ class UsersAdmin {
             $phone     = (string) get_user_meta( (int) $u->ID, 'ovr_phone', true );
             $balance   = (float) get_user_meta( (int) $u->ID, \OVR\Payment\Wallet::META_BALANCE, true );
 
-            fputcsv( $out, [
+            fputcsv( $out, self::csv_safe_row( [
                 (int) $u->ID,
                 $u->display_name,
                 $u->user_email,
@@ -255,10 +255,26 @@ class UsersAdmin {
                 $plan_name,
                 number_format( $balance, 2, '.', '' ),
                 $u->user_registered,
-            ] );
+            ] ) );
         }
         fclose( $out );
         exit;
+    }
+
+    /**
+     * Neutralise CSV/formula injection: a cell whose first character is one that
+     * a spreadsheet treats as a formula (= + - @, tab, CR) is prefixed with an
+     * apostrophe so Excel/Sheets render it as literal text. fputcsv already
+     * handles comma/quote/newline quoting.
+     *
+     * @param array<int, int|string> $row
+     * @return array<int, int|string>
+     */
+    private static function csv_safe_row( array $row ): array {
+        return array_map( static function ( $v ) {
+            $s = (string) $v;
+            return ( '' !== $s && strpbrk( $s[0], "=+-@\t\r" ) !== false ) ? "'" . $s : $v;
+        }, $row );
     }
 
     /**
