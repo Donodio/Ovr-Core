@@ -639,19 +639,19 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         <div class="ld-fm-avail-row">
                             <div class="ld-fm-field">
                                 <label class="ld-fm-label"><?php esc_html_e( 'From', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="date" name="avail[<?php echo (int) $i; ?>][start_date]" value="<?php echo esc_attr( (string) $start ); ?>">
+                                <input class="ld-fm-input" type="date" name="avail[<?php echo esc_attr( $i ); ?>][start_date]" value="<?php echo esc_attr( (string) $start ); ?>">
                             </div>
                             <div class="ld-fm-field">
                                 <label class="ld-fm-label"><?php esc_html_e( 'To', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="date" name="avail[<?php echo (int) $i; ?>][end_date]" value="<?php echo esc_attr( (string) $end ); ?>">
+                                <input class="ld-fm-input" type="date" name="avail[<?php echo esc_attr( $i ); ?>][end_date]" value="<?php echo esc_attr( (string) $end ); ?>">
                             </div>
                             <div class="ld-fm-field">
                                 <label class="ld-fm-label"><?php esc_html_e( 'Renter Name', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="text" name="avail[<?php echo (int) $i; ?>][renter_name]" value="<?php echo esc_attr( (string) $renter ); ?>" placeholder="<?php esc_attr_e( 'e.g. John Smith', 'ovr-core' ); ?>" maxlength="120">
+                                <input class="ld-fm-input" type="text" name="avail[<?php echo esc_attr( $i ); ?>][renter_name]" value="<?php echo esc_attr( (string) $renter ); ?>" placeholder="<?php esc_attr_e( 'e.g. John Smith', 'ovr-core' ); ?>" maxlength="120">
                             </div>
                             <div class="ld-fm-field ld-fm-avail-showfield">
                                 <label class="ld-fm-check">
-                                    <input type="checkbox" name="avail[<?php echo (int) $i; ?>][show_as_available]" value="1" <?php checked( (int) $show_avail, 1 ); ?>>
+                                    <input type="checkbox" name="avail[<?php echo esc_attr( $i ); ?>][show_as_available]" value="1" <?php checked( (int) $show_avail, 1 ); ?>>
                                     <span><?php esc_html_e( 'Show as available', 'ovr-core' ); ?></span>
                                 </label>
                             </div>
@@ -750,23 +750,23 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                                 <div class="ld-fm-price-handle" title="<?php esc_attr_e( 'Drag to reorder', 'ovr-core' ); ?>" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'Month or Season Name - Year', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="text" name="pricing[<?php echo (int) $i; ?>][season_name]" value="<?php echo esc_attr( (string) ( $r['period'] ?? '' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g. Peak Season 2026, January 2027', 'ovr-core' ); ?>">
+                                    <input class="ld-fm-input" type="text" name="pricing[<?php echo esc_attr( $i ); ?>][season_name]" value="<?php echo esc_attr( (string) ( $r['period'] ?? '' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g. Peak Season 2026, January 2027', 'ovr-core' ); ?>">
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'From', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="date" name="pricing[<?php echo (int) $i; ?>][start_date]" value="<?php echo esc_attr( (string) ( $r['from'] ?? '' ) ); ?>">
+                                    <input class="ld-fm-input" type="date" name="pricing[<?php echo esc_attr( $i ); ?>][start_date]" value="<?php echo esc_attr( (string) ( $r['from'] ?? '' ) ); ?>">
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'To', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="date" name="pricing[<?php echo (int) $i; ?>][end_date]" value="<?php echo esc_attr( (string) ( $r['to'] ?? '' ) ); ?>">
+                                    <input class="ld-fm-input" type="date" name="pricing[<?php echo esc_attr( $i ); ?>][end_date]" value="<?php echo esc_attr( (string) ( $r['to'] ?? '' ) ); ?>">
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'Price', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="text" inputmode="decimal" name="pricing[<?php echo (int) $i; ?>][price]" value="<?php echo esc_attr( (string) ( $r['price'] ?? '' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g. $1,200', 'ovr-core' ); ?>">
+                                    <input class="ld-fm-input" type="text" inputmode="decimal" name="pricing[<?php echo esc_attr( $i ); ?>][price]" value="<?php echo esc_attr( (string) ( $r['price'] ?? '' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g. $1,200', 'ovr-core' ); ?>">
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'Per', 'ovr-core' ); ?></label>
-                                    <select class="ld-fm-input" name="pricing[<?php echo (int) $i; ?>][per]">
+                                    <select class="ld-fm-input" name="pricing[<?php echo esc_attr( $i ); ?>][per]">
                                         <?php foreach ( $per_options as $pv => $pl ) : ?>
                                             <option value="<?php echo esc_attr( $pv ); ?>" <?php selected( (string) ( $r['per'] ?? 'per_month' ), $pv ); ?>><?php echo esc_html( $pl ); ?></option>
                                         <?php endforeach; ?>
@@ -774,7 +774,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'Min Term', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="number" min="0" step="1" name="pricing[<?php echo (int) $i; ?>][min_stay]" value="<?php echo esc_attr( (string) ( $r['min'] ?? '0' ) ); ?>" placeholder="0">
+                                    <input class="ld-fm-input" type="number" min="0" step="1" name="pricing[<?php echo esc_attr( $i ); ?>][min_stay]" value="<?php echo esc_attr( (string) ( $r['min'] ?? '0' ) ); ?>" placeholder="0">
                                 </div>
                                 <div class="ld-fm-price-actions">
                                     <button type="button" class="ld-fm-price-move" data-move="up" aria-label="<?php esc_attr_e( 'Move up', 'ovr-core' ); ?>" title="<?php esc_attr_e( 'Move up', 'ovr-core' ); ?>"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
