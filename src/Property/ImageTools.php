@@ -337,10 +337,10 @@ class ImageTools {
     }
 
     private static function quality(): int {
-        if ( ! class_exists( '\OVR\Core\SettingsBehaviors' ) ) {
-            return 82;
-        }
-        $s = \OVR\Core\SettingsBehaviors::s();
+        // Read the shared media-quality setting directly. (SettingsBehaviors::s()
+        // is private; calling it from here fatals — the cause of every image
+        // upload failing during watermarking.)
+        $s = (array) get_option( 'ovr_settings', [] );
         return max( 10, min( 100, (int) ( $s['image_quality'] ?? 82 ) ) );
     }
 }
