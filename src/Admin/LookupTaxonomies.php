@@ -185,9 +185,15 @@ class LookupTaxonomies {
                 $terms,
                 static fn( $t ) => '0' !== (string) get_term_meta( $t->term_id, self::META_ENABLED, true )
             ) );
-            usort( $terms, static function ( $a, $b ) {
-                $oa = (int) get_term_meta( $a->term_id, self::META_ORDER, true );
-                $ob = (int) get_term_meta( $b->term_id, self::META_ORDER, true );
+            // Unset order sorts *after* explicitly-ordered terms (so setting a low
+            // number actually promotes a term to the front); ties break by name.
+            $order_of = static function ( $t ): int {
+                $raw = get_term_meta( $t->term_id, self::META_ORDER, true );
+                return '' === $raw ? PHP_INT_MAX : (int) $raw;
+            };
+            usort( $terms, static function ( $a, $b ) use ( $order_of ) {
+                $oa = $order_of( $a );
+                $ob = $order_of( $b );
                 return $oa === $ob ? strcasecmp( $a->name, $b->name ) : $oa <=> $ob;
             } );
         }
