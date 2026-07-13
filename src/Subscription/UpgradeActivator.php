@@ -95,6 +95,27 @@ class UpgradeActivator {
     }
 
     /**
+     * Activate a boost with an explicit expiry date. Used by admin-assigned
+     * complimentary services, which carry their own end date. Never shortens an
+     * existing, later expiry, so a comp grant can never cut short a still-live
+     * (paid or longer comp) boost of the same type.
+     */
+    public static function activate_until( int $property_id, string $upgrade_id, string $expires ): bool {
+        if ( ! isset( self::MAP[ $upgrade_id ] ) || $property_id <= 0 || '' === $expires ) {
+            return false;
+        }
+        $keys    = self::MAP[ $upgrade_id ];
+        $current = (string) get_post_meta( $property_id, $keys['expires'], true );
+        if ( '' !== $current && $current > $expires ) {
+            $expires = $current; // keep the later expiry
+        }
+        update_post_meta( $property_id, $keys['flag'], '1' );
+        update_post_meta( $property_id, $keys['expires'], $expires );
+        do_action( 'ovr_upgrade_activated', $property_id, $upgrade_id, $expires );
+        return true;
+    }
+
+    /**
      * Remove a boost from a property.
      */
     public static function deactivate( int $property_id, string $upgrade_id ): void {

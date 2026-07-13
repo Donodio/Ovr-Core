@@ -1633,6 +1633,22 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         to.classList.remove('is-invalid');
         return true;
     }
+    // Keep "To" ≥ "From": point the To picker's `min` at the chosen From date so
+    // the native calendar greys out earlier days (prevents invalid selections),
+    // and flag any residual reversed range. Shared by availability & pricing rows.
+    function linkRowDates(row){
+        var from = row.querySelector('[name*="[start_date]"]');
+        var to   = row.querySelector('[name*="[end_date]"]');
+        if (!from || !to) { return; }
+        var sync = function(){
+            if (from.value) { to.setAttribute('min', from.value); } else { to.removeAttribute('min'); }
+            if (from.value && to.value && to.value < from.value) { to.classList.add('is-invalid'); }
+            else { to.classList.remove('is-invalid'); }
+        };
+        from.addEventListener('change', sync);
+        to.addEventListener('change', sync);
+        sync();
+    }
     if (availAdd && availTpl && availWrap) {
         availAdd.addEventListener('click', function(){
             var html = availTpl.innerHTML.replace(/__i__/g, String(availIdx++));
@@ -1642,6 +1658,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             row.querySelectorAll('input[type="date"]').forEach(function(inp){
                 inp.addEventListener('change', function(){ validateAvailRow(row); });
             });
+            linkRowDates(row);
         });
         availWrap.addEventListener('click', function(e){
             var x = e.target.closest('.ld-fm-avail-x'); if (!x) { return; }
@@ -1712,6 +1729,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     var priceIdx  = <?php echo (int) ( count( $price_rows ) + 1 ); ?>;
     var priceDrag = null;
     function bindPriceDrag(row){
+        linkRowDates(row);
         row.addEventListener('dragstart', function(e){
             // Don't start a row drag when interacting with an input/select.
             if (e.target.closest('input,select,button') && !e.target.closest('.ld-fm-price-handle')) { e.preventDefault(); return; }

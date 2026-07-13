@@ -3,6 +3,7 @@
 namespace OVR\Admin;
 
 use OVR\Core\AuditLog;
+use OVR\Subscription\UpgradeActivator;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -1053,9 +1054,70 @@ class PropertyListScreen {
             [ 'new' => $notes ]
         );
 
+        // Immediately activate the underlying boost so the complimentary service
+        // takes effect right away (Section 5: Apply → immediately activate) — the
+        // same meta flags the search ordering + homepage slider read.
+        $this->activate_service_boost( $listing_id, $service_id, $end_date );
+
         wp_send_json_success( [
             'message' => __( 'Service assigned.', 'ovr-core' ),
         ] );
+    }
+
+    /**
+     * Turn a complimentary service grant into its live boost. Resolves the
+     * catalogue service's boost behaviour (`service_type`) + duration, then sets
+     * the boost meta with an explicit expiry (the admin's end date, or today +
+     * the catalogue duration when left blank).
+     */
+    private function activate_service_boost( int $listing_id, int $service_id, string $end_date ): void {
+        global $wpdb;
+        $svc = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT service_type, duration_days FROM {$wpdb->prefix}ovr_paid_services WHERE id = %d",
+                $service_id
+            ),
+            ARRAY_A
+        );
+        if ( ! $svc || empty( $svc['service_type'] ) ) {
+            return;
+        }
+        $expires = $end_date
+            ?: gmdate( 'Y-m-d', strtotime( current_time( 'Y-m-d' ) . ' +' . max( 1, (int) $svc['duration_days'] ) . ' days' ) );
+        UpgradeActivator::activate_until( $listing_id, (string) $svc['service_type'], $expires );
+    }
+
+    /**
+     * After a complimentary service is removed, clear its boost only when no
+     * other active service of the same boost type remains on the listing, so a
+     * "Remove" click takes effect immediately without disturbing an overlapping
+     * grant. (Self-serve paid boosts are tracked via payment meta and expire on
+     * their own schedule.)
+     */
+    private function deactivate_service_boost( int $listing_id, int $service_id ): void {
+        global $wpdb;
+        $type = (string) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT service_type FROM {$wpdb->prefix}ovr_paid_services WHERE id = %d",
+                $service_id
+            )
+        );
+        if ( '' === $type ) {
+            return;
+        }
+        $remaining = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*)
+                   FROM {$wpdb->prefix}ovr_listing_services ls
+                   JOIN {$wpdb->prefix}ovr_paid_services ps ON ls.service_id = ps.id
+                  WHERE ls.listing_id = %d AND ls.active = 1 AND ps.service_type = %s",
+                $listing_id,
+                $type
+            )
+        );
+        if ( 0 === $remaining ) {
+            UpgradeActivator::deactivate( $listing_id, $type );
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -1098,6 +1160,9 @@ class PropertyListScreen {
             null,
             [ 'old' => 'active', 'new' => 'inactive' ]
         );
+
+        // Clear the underlying boost if this was the last active grant of its type.
+        $this->deactivate_service_boost( (int) $row['listing_id'], (int) $row['service_id'] );
 
         wp_send_json_success( [ 'message' => __( 'Service removed.', 'ovr-core' ) ] );
     }
