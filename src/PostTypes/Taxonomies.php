@@ -163,8 +163,11 @@ class Taxonomies {
             ],
             'hierarchical'      => false,
             'public'            => true,
+            // Mark feedback P6.1: restore lookup management under OVR Properties.
+            'show_ui'           => true,
+            'show_in_menu'      => true,
             'show_in_rest'      => true,
-            'show_admin_column' => false,
+            'show_admin_column' => true,
             'rewrite'           => [ 'slug' => 'amenity', 'with_front' => false ],
         ] );
     }
@@ -180,8 +183,11 @@ class Taxonomies {
             ],
             'hierarchical'      => false,
             'public'            => true,
+            // Mark feedback P6.1: restore lookup management under OVR Properties.
+            'show_ui'           => true,
+            'show_in_menu'      => true,
             'show_in_rest'      => true,
-            'show_admin_column' => false,
+            'show_admin_column' => true,
             'rewrite'           => [ 'slug' => 'view', 'with_front' => false ],
         ] );
     }
@@ -197,8 +203,11 @@ class Taxonomies {
             ],
             'hierarchical'      => false,
             'public'            => true,
+            // Mark feedback P6.1: restore lookup management under OVR Properties.
+            'show_ui'           => true,
+            'show_in_menu'      => true,
             'show_in_rest'      => true,
-            'show_admin_column' => false,
+            'show_admin_column' => true,
             'rewrite'           => [ 'slug' => 'feature', 'with_front' => false ],
         ] );
     }

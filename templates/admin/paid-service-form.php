@@ -42,9 +42,11 @@ $is_active = $is_edit ? ! empty( $s['is_active'] ) : true;
         .ovr-psf-field input[type=text],.ovr-psf-field input[type=number],.ovr-psf-field textarea,.ovr-psf-field select{width:100%;border:1px solid var(--gray-border);border-radius:var(--r-md);padding:11px 14px;font-size:15px;font-family:inherit;background:#fff;outline:none}
         .ovr-psf-field input:focus,.ovr-psf-field textarea:focus,.ovr-psf-field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,9,97,.1)}
         .ovr-psf-field textarea{min-height:90px;resize:vertical}
-        .ovr-psf-prefix{position:relative}
-        .ovr-psf-prefix span{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600}
-        .ovr-psf-prefix input{padding-left:30px}
+        /* P6.6: proper input-group so the $ never overlaps the digits, at any value. */
+        .ovr-psf-prefix{display:flex;align-items:stretch;border:1px solid var(--gray-border);border-radius:var(--r-md);overflow:hidden;background:#fff}
+        .ovr-psf-prefix:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,9,97,.1)}
+        .ovr-psf-prefix span{display:flex;align-items:center;padding:0 13px;background:var(--gray-light);color:var(--muted);font-weight:600;border-right:1px solid var(--gray-border)}
+        .ovr-psf-prefix input[type=number]{border:none!important;border-radius:0!important;box-shadow:none!important;flex:1;min-width:0}
         .ovr-psf-check{display:flex;align-items:center;gap:10px;padding:14px 16px;border:1px solid var(--gray-border);border-radius:var(--r-md);background:var(--gray-light)}
         .ovr-psf-check input{width:18px;height:18px}
         .ovr-psf-foot{display:flex;gap:12px;margin-top:8px}

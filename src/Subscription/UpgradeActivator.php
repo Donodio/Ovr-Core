@@ -45,9 +45,9 @@ class UpgradeActivator {
      * @var array<string, string>
      */
     private const TYPE_LABELS = [
-        'top_of_page'     => 'Top of Search',
+        'top_of_page'     => 'Priority Placement',
         'homepage_slider' => 'Homepage Slider',
-        'featured'        => 'Featured Listing',
+        'featured'        => 'Featured Property',
     ];
 
     public function init(): void {
@@ -167,7 +167,7 @@ class UpgradeActivator {
         $args = [
             'post_type'      => 'ovr_property',
             'post_status'    => 'any',
-            'posts_per_page' => -1,
+            'posts_per_page' => 999,
             'fields'         => 'ids',
             'no_found_rows'  => true,
             'meta_query'     => [
@@ -270,7 +270,7 @@ class UpgradeActivator {
             $q = new \WP_Query( [
                 'post_type'      => 'ovr_property',
                 'post_status'    => 'any',
-                'posts_per_page' => -1,
+                'posts_per_page' => 999,
                 'fields'         => 'ids',
                 'no_found_rows'  => true,
                 'meta_query'     => [

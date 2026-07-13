@@ -30,6 +30,11 @@
     font-family:'Inter',system-ui,sans-serif;width:100%;max-width:none;margin:0;color:var(--ink);
 }
 .ovr-adm,.ovr-adm *{box-sizing:border-box}
+/* Bind the icon font explicitly. The Google Fonts CSS2 response already binds
+   this class, but declaring it here guarantees ligatures render on every OVR
+   admin screen (including scoped ones like .ovr-dash / .ovr-pls) regardless of
+   CDN quirks, so icon names never leak through as plain text. */
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';-webkit-font-smoothing:antialiased}
 .ovr-adm .material-symbols-outlined{line-height:1;vertical-align:middle;font-size:22px}
 
 /* Page wrapper inset */

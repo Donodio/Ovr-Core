@@ -578,5 +578,25 @@ class Database {
             KEY sort_order (sort_order),
             KEY is_enabled (is_enabled)
         ) {$charset_collate};" );
+
+        // Listing ↔ Paid Service assignments (admin-granted, no payment).
+        $table_ls = $wpdb->prefix . 'ovr_listing_services';
+        dbDelta( "CREATE TABLE {$table_ls} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            listing_id bigint(20) unsigned NOT NULL,
+            service_id bigint(20) unsigned NOT NULL,
+            start_date date DEFAULT NULL,
+            end_date date DEFAULT NULL,
+            active tinyint(1) NOT NULL DEFAULT 1,
+            notes text DEFAULT NULL,
+            assigned_by bigint(20) unsigned DEFAULT NULL,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY listing_id (listing_id),
+            KEY service_id (service_id),
+            KEY active (active),
+            KEY end_date (end_date)
+        ) {$charset_collate};" );
     }
 }

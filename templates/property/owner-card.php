@@ -71,9 +71,13 @@ if ( $author_id && class_exists( Pages::class ) ) {
 $avatar_url  = $author_id ? get_avatar_url( $author_id, [ 'size' => 120 ] ) : '';
 $listings_n  = $author_id ? (int) count_user_posts( $author_id, 'ovr_property', true ) : 0;
 
-$is_verified = $author_id
-    ? (bool) apply_filters( 'ovr_owner_is_verified', (bool) get_user_meta( $author_id, 'ovr_verified', true ), $author_id, $post_id )
-    : false;
+// Verification classification (P8 §9): sourced from the OWNER's user record so
+// an admin change re-labels every listing they own. Legacy `ovr_verified` meta
+// still maps to "Verified Homeowner" via Verification::get().
+$verif_status = $author_id ? \OVR\Core\Verification::get( $author_id ) : \OVR\Core\Verification::NOT_VERIFIED;
+$verif_label  = \OVR\Core\Verification::label( $verif_status );
+$is_verified  = \OVR\Core\Verification::is_verified( $verif_status );
+$verif_icon   = \OVR\Core\Verification::icon( $verif_status );
 
 $compare_url = class_exists( Pages::class ) ? Pages::get_page_url( 'ovr_page_search' ) : home_url( '/' );
 
@@ -143,15 +147,9 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
     <div class="ovr-owner-card ovr-owner-pm">
         <div class="ovr-owner-pm-head">
             <p class="ovr-owner-block-label"><?php esc_html_e( 'Owner / Property Manager', 'ovr-core' ); ?></p>
-            <?php if ( $is_verified ) : ?>
-                <span class="ovr-verified-banner is-verified">
-                    <span class="material-symbols-outlined">verified</span><?php esc_html_e( 'Verified', 'ovr-core' ); ?>
-                </span>
-            <?php else : ?>
-                <span class="ovr-verified-banner is-unverified">
-                    <span class="material-symbols-outlined">gpp_maybe</span><?php esc_html_e( 'Not Verified', 'ovr-core' ); ?>
-                </span>
-            <?php endif; ?>
+            <span class="ovr-verified-banner <?php echo $is_verified ? 'is-verified' : 'is-unverified'; ?>">
+                <span class="material-symbols-outlined"><?php echo esc_html( $verif_icon ); ?></span><?php echo esc_html( $verif_label ); ?>
+            </span>
         </div>
 
         <div class="ovr-owner-person">

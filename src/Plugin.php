@@ -26,6 +26,8 @@ use OVR\Auth\PasswordResetHandler;
 use OVR\Auth\AuthRedirects;
 use OVR\Subscription\Plans;
 use OVR\Subscription\UserSubscription;
+use OVR\Subscription\SubscriptionManager;
+use OVR\Subscription\AccessControl;
 use OVR\Subscription\PricingDisplay;
 use OVR\Subscription\Lifecycle;
 use OVR\Subscription\SubscriptionGate;
@@ -57,6 +59,7 @@ use OVR\REST\ReviewEndpoint;
 use OVR\Elementor\ElementorIntegration;
 use OVR\Admin\PropertyMetaBoxes;
 use OVR\Admin\PropertyEditorScreen;
+use OVR\Admin\PropertyListScreen;
 use OVR\Admin\TestimonialMetaBox;
 use OVR\Admin\AdminAssets;
 use OVR\Admin\Settings;
@@ -125,8 +128,7 @@ class Plugin {
      * @since 1.0.0
      */
     public function init(): void {
-        // Load text domain for translations.
-        $this->load_textdomain();
+        // Textdomain loaded from ovr-core.php on `init` priority 0 (WP 6.7+ compat).
 
         // Boot core infrastructure first.
         $this->boot_core();
@@ -233,8 +235,16 @@ class Plugin {
     }
 
     private function boot_admin(): void {
+        // Guard against the blank "pageless" admin screen. Hitting
+        // wp-admin/admin.php with no ?page (e.g. a stale tab or a trimmed URL)
+        // falls straight through WordPress core and renders an empty white page.
+        // WordPress never links there itself, so quietly bounce such requests to
+        // the dashboard instead of showing a blank screen.
+        add_action( 'admin_init', [ $this, 'guard_pageless_admin' ] );
+
         $this->modules['admin_meta_boxes'] = new PropertyMetaBoxes();
         $this->modules['admin_property_editor'] = new PropertyEditorScreen();
+        $this->modules['admin_property_list'] = new PropertyListScreen();
         $this->modules['admin_testimonial_meta'] = new TestimonialMetaBox();
         $this->modules['admin_assets']     = new AdminAssets();
         $this->modules['admin_settings']   = new Settings();
@@ -261,6 +271,7 @@ class Plugin {
 
         $this->modules['admin_meta_boxes']->init();
         $this->modules['admin_property_editor']->init();
+        $this->modules['admin_property_list']->init();
         $this->modules['admin_testimonial_meta']->init();
         $this->modules['admin_assets']->init();
         $this->modules['admin_settings']->init();
@@ -287,11 +298,37 @@ class Plugin {
     }
 
     /**
+     * Redirect the pageless wp-admin/admin.php screen to the dashboard.
+     *
+     * admin.php with no ?page (and no importer) is not a real WordPress screen —
+     * core outputs nothing, producing a blank white page. Send those requests to
+     * the standard dashboard so a reload never lands on an empty screen.
+     *
+     * @since 1.1.2
+     */
+    public function guard_pageless_admin(): void {
+        global $pagenow;
+
+        if ( 'admin.php' !== $pagenow ) {
+            return;
+        }
+        if ( ! empty( $_GET['page'] ) || ! empty( $_GET['import'] ) ) {
+            return;
+        }
+        if ( wp_doing_ajax() ) {
+            return;
+        }
+
+        wp_safe_redirect( admin_url() );
+        exit;
+    }
+
+    /**
      * Load plugin text domain.
      *
      * @since 1.0.0
      */
-    private function load_textdomain(): void {
+    public function load_textdomain(): void {
         load_plugin_textdomain(
             'ovr-core',
             false,
@@ -356,6 +393,8 @@ class Plugin {
     private function boot_subscriptions(): void {
         $this->modules['plans']             = new Plans();
         $this->modules['user_subscription'] = new UserSubscription();
+        $this->modules['subscription_manager'] = new SubscriptionManager();
+        $this->modules['access_control']    = new AccessControl();
         $this->modules['pricing_display']   = new PricingDisplay();
         $this->modules['lifecycle']         = new Lifecycle();
         $this->modules['subscription_gate'] = new SubscriptionGate();

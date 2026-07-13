@@ -40,19 +40,19 @@ class PaidService {
      */
     public const TYPES = [
         'top_of_page' => [
-            'label'    => 'Top of Search Results',
+            'label'    => 'Priority Placement (Top of Search)',
             'icon'     => 'vertical_align_top',
-            'features' => [ 'Priority ranking', 'Display before normal listings', 'First purchased ranks highest' ],
+            'features' => [ 'Ranks above standard listings in search', 'Only within the visitor’s active filters', 'First purchased ranks highest' ],
         ],
         'homepage_slider' => [
-            'label'    => 'Homepage Slider',
+            'label'    => 'Homepage Slider (slideshow only)',
             'icon'     => 'view_carousel',
-            'features' => [ 'Homepage hero placement', 'Featured badge on listing', 'Maximum exposure' ],
+            'features' => [ 'Rotates in the homepage slideshow', 'Does NOT affect search ranking', 'Limited number of slots' ],
         ],
         'featured' => [
-            'label'    => 'Featured Listing',
+            'label'    => 'Featured Property',
             'icon'     => 'verified',
-            'features' => [ "Distinctive 'Featured' badge", 'Featured search filter', 'Featured listings page' ],
+            'features' => [ 'Top of search results (within matching filters)', 'Placement on the Featured Listings page', "Distinctive 'Featured' badge" ],
         ],
     ];
 

@@ -23,6 +23,8 @@ $properties       = $properties ?? [];
 $recent_inquiries = $recent_inquiries ?? [];
 $balance          = (float) ( $balance ?? 0 );
 $subscription     = $subscription ?? [];
+$sub_status_label = $sub_status_label ?? __( 'Unknown', 'ovr-core' );
+$sub_days_left    = $sub_days_left ?? null;
 $add_url          = $add_url ?? admin_url( 'post-new.php?post_type=ovr_property' );
 $pricing_url      = $pricing_url ?? Pages::get_page_url( 'ovr_page_pricing' );
 
@@ -35,7 +37,9 @@ $sub_url      = add_query_arg( 'tab', 'subscription', $base_url );
 $sub_name    = (string) ( $subscription['plan_name'] ?? __( 'No plan', 'ovr-core' ) );
 $sub_expires = (string) ( $subscription['expires'] ?? '' );
 $sub_ts      = $sub_expires ? strtotime( $sub_expires ) : 0;
-$sub_active  = $sub_ts > time();
+$sub_status  = (string) ( $subscription['status'] ?? '' );
+$is_active   = ( 'active' === $sub_status );
+$is_expired  = ( 'expired' === $sub_status );
 ?>
 
 <!-- Header -->
@@ -73,24 +77,30 @@ $sub_active  = $sub_ts > time();
         <p class="ld-stat-val"><?php echo esc_html( number_format( (int) ( $stats['inquiries_12mo'] ?? 0 ) ) ); ?></p>
     </div>
 
-    <!-- Subscription (plan, valid-through date, on-account balance) -->
+    <!-- Subscription (plan, status, expiry, days remaining, credit) -->
     <a href="<?php echo esc_url( $sub_url ); ?>" class="ld-stat ld-stat--sub">
         <div class="ld-stat-top">
             <span class="ld-stat-ic ld-stat-ic--glass"><span class="material-symbols-outlined">workspace_premium</span></span>
-            <span class="ld-stat-status<?php echo $sub_active ? '' : ' is-off'; ?>"><?php echo $sub_active ? esc_html__( 'Active', 'ovr-core' ) : esc_html__( 'Inactive', 'ovr-core' ); ?></span>
+            <span class="ld-stat-status<?php echo $is_active ? '' : ' is-off'; ?>"><?php echo esc_html( $sub_status_label ); ?></span>
         </div>
         <p class="ld-stat-lbl ld-stat-lbl--light"><?php esc_html_e( 'Subscription', 'ovr-core' ); ?></p>
         <p class="ld-sub-name"><?php echo esc_html( $sub_name ); ?></p>
-        <p class="ld-sub-renew">
-            <span class="material-symbols-outlined">event</span>
-            <?php
-            if ( $sub_ts ) {
-                printf( esc_html__( 'Valid Through: %s', 'ovr-core' ), esc_html( mysql2date( 'M j, Y', $sub_expires ) ) );
-            } else {
-                esc_html_e( 'Not subscribed', 'ovr-core' );
-            }
-            ?>
-        </p>
+        <?php if ( $is_active && $sub_days_left > 0 ) : ?>
+            <p class="ld-sub-renew">
+                <span class="material-symbols-outlined">event</span>
+                <?php printf( esc_html__( '%d days remaining', 'ovr-core' ), (int) $sub_days_left ); ?>
+                &middot;
+                <?php printf( esc_html__( 'Renews %s', 'ovr-core' ), esc_html( mysql2date( 'M j, Y', $sub_expires ) ) ); ?>
+            </p>
+        <?php elseif ( $sub_ts ) : ?>
+            <p class="ld-sub-renew">
+                <span class="material-symbols-outlined">event</span>
+                <?php printf( esc_html__( 'Valid Through: %s', 'ovr-core' ), esc_html( mysql2date( 'M j, Y', $sub_expires ) ) ); ?>
+            </p>
+        <?php endif; ?>
+        <?php if ( $is_expired ) : ?>
+            <p class="ld-sub-renew" style="color:var(--errc)"><?php esc_html_e( 'Your subscription has expired. Renew to reactivate your listings.', 'ovr-core' ); ?></p>
+        <?php endif; ?>
         <p class="ld-sub-balance">
             <span class="material-symbols-outlined">account_balance_wallet</span>
             <?php printf( esc_html__( 'Available Credit: %s', 'ovr-core' ), esc_html( '$' . number_format( $balance, 2 ) ) ); ?>
@@ -128,7 +138,11 @@ $sub_active  = $sub_ts > time();
                     $loc     = trim( implode( ', ', array_filter( [ $city, $state ] ) ) );
                     $edit    = add_query_arg( [ 'tab' => 'add-listing', 'post' => $p->ID ], $base_url );
                     $view    = get_permalink( $p->ID );
-                    $bump    = add_query_arg( [ 'tab' => 'upgrades', 'post' => $p->ID ], $base_url );
+                    $bump    = wp_nonce_url(
+                        admin_url( 'admin-post.php?action=ovr_bump_listing&post=' . $p->ID ),
+                        'ovr_bump_listing_' . $p->ID
+                    );
+                    $upgrade = add_query_arg( [ 'tab' => 'upgrades', 'post' => $p->ID ], $base_url );
                     $delete  = wp_nonce_url(
                         admin_url( 'admin-post.php?action=ovr_delete_listing&post=' . $p->ID ),
                         'ovr_delete_listing_' . $p->ID
@@ -167,8 +181,9 @@ $sub_active  = $sub_ts > time();
                             <div class="ld-card-actions">
                                 <a href="<?php echo esc_url( (string) $view ); ?>" target="_blank" rel="noopener" class="ld-card-act"><span class="material-symbols-outlined">visibility</span><?php esc_html_e( 'View', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $edit ); ?>" class="ld-card-act"><span class="material-symbols-outlined">edit</span><?php esc_html_e( 'Edit', 'ovr-core' ); ?></a>
-                                <a href="<?php echo esc_url( (string) $bump ); ?>" class="ld-card-act"><span class="material-symbols-outlined">trending_up</span><?php esc_html_e( 'Bump', 'ovr-core' ); ?></a>
+                                <a href="<?php echo esc_url( (string) $bump ); ?>" class="ld-card-act" title="<?php esc_attr_e( 'Bump to top of results (free, daily limit)', 'ovr-core' ); ?>"><span class="material-symbols-outlined">trending_up</span><?php esc_html_e( 'Bump', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $delete ); ?>" class="ld-card-act ld-card-act--danger" data-ovr-confirm="<?php echo esc_attr( sprintf( __( 'Delete “%s”? This cannot be undone.', 'ovr-core' ), $p->post_title ?: __( 'this listing', 'ovr-core' ) ) ); ?>"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Delete', 'ovr-core' ); ?></a>
+                                <a href="<?php echo esc_url( (string) $upgrade ); ?>" class="ld-card-act ld-card-act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>"><span class="material-symbols-outlined">rocket_launch</span><?php esc_html_e( 'Upgrade', 'ovr-core' ); ?></a>
                             </div>
                         </div>
                     </article>
@@ -221,10 +236,9 @@ $sub_active  = $sub_ts > time();
     </section>
 </div>
 
-<!-- Quick actions -->
+<!-- Quick actions — upgrades are managed per-listing (on each card above), not globally. -->
 <section class="ld-ov-actions">
     <a href="<?php echo esc_url( $add_url ); ?>" class="ld-ov-btn ld-ov-btn--primary"><?php esc_html_e( 'List New Property', 'ovr-core' ); ?></a>
-    <a href="<?php echo esc_url( $pricing_url ); ?>" class="ld-ov-btn ld-ov-btn--outline"><?php esc_html_e( 'Browse Upgrades', 'ovr-core' ); ?></a>
     <a href="<?php echo esc_url( $inq_url ); ?>" class="ld-ov-btn ld-ov-btn--ghost"><?php esc_html_e( 'View Inquiries', 'ovr-core' ); ?></a>
 </section>
 
@@ -302,11 +316,14 @@ $sub_active  = $sub_ts > time();
     .ovr-ld .ld-card-meta .material-symbols-outlined{font-size:18px}
     .ovr-ld .ld-card-edit{margin-left:auto;color:var(--sv);font-weight:600;text-decoration:none}
     .ovr-ld .ld-card-edit:hover{color:var(--p)}
-    .ovr-ld .ld-card-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(190,201,200,.35)}
-    .ovr-ld .ld-card-act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 4px;border:1px solid var(--ov);border-radius:9px;background:#fff;color:var(--sv);font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
-    .ovr-ld .ld-card-act .material-symbols-outlined{font-size:19px}
+    .ovr-ld .ld-card-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(190,201,200,.35)}
+    .ovr-ld .ld-card-act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 3px;border:1px solid var(--ov);border-radius:9px;background:#fff;color:var(--sv);font-size:11.5px;font-weight:600;text-decoration:none;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+    .ovr-ld .ld-card-act .material-symbols-outlined{font-size:18px}
     .ovr-ld .ld-card-act:hover{background:rgba(0,76,76,.07);color:var(--p);border-color:var(--p)}
     .ovr-ld .ld-card-act--danger:hover{background:var(--errc);color:var(--err);border-color:var(--err)}
+    .ovr-ld .ld-card-act--upgrade{color:#6b4e00;border-color:#e7cf7e;background:#fffdf5}
+    .ovr-ld .ld-card-act--upgrade:hover{background:#fff6d9;color:#6b4e00;border-color:#dcbf5e}
+    @media (max-width:520px){.ovr-ld .ld-card-actions{grid-template-columns:repeat(3,1fr)}}
 
     /* Inquiries list */
     .ovr-ld .ld-inq-card{background:var(--surf);border:1px solid rgba(190,201,200,.4);border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.03)}

@@ -94,12 +94,19 @@ class PropertyQuery {
     }
 
     /**
-     * posts_clauses filter: order listings by (1) an ACTIVE paid "Top of Page"
-     * promotion, then (2) recency — the greater of the publish date and the
-     * free-bump timestamp (Feature F), so a bump floats the listing back to the
-     * top. LEFT JOINs every signal so listings without the meta are kept (an
-     * INNER JOIN via meta_key orderby would drop them). Only runs when the query
-     * opted in via `_ovr_boost_first`.
+     * posts_clauses filter: order listings by (1) an ACTIVE "Featured Property"
+     * promotion, then (2) an ACTIVE "Top of Page"/Priority Placement (or free
+     * bump), then (3) recency — the greater of the publish date and the free-bump
+     * timestamp (Feature F). LEFT JOINs every signal so listings without the meta
+     * are kept (an INNER JOIN via meta_key orderby would drop them). Only runs
+     * when the query opted in via `_ovr_boost_first`.
+     *
+     * IMPORTANT (Mark feedback P2): this reorders the ALREADY-filtered result set.
+     * A Featured listing therefore floats above standard listings ONLY when it
+     * satisfies the current search filters — a featured listing that doesn't match
+     * the filters is simply not in the set, so it is never shown. Homepage-Slider
+     * boosts are deliberately NOT a signal here: the slider is a homepage-only
+     * placement and must never affect search rankings.
      *
      * @param array     $clauses
      * @param \WP_Query  $q
@@ -112,10 +119,18 @@ class PropertyQuery {
         global $wpdb;
         $today = current_time( 'Y-m-d' );
 
+        $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_ff ON ovr_ff.post_id = {$wpdb->posts}.ID AND ovr_ff.meta_key = '_ovr_is_featured' ";
+        $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_fe ON ovr_fe.post_id = {$wpdb->posts}.ID AND ovr_fe.meta_key = '_ovr_featured_expires' ";
         $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_bf ON ovr_bf.post_id = {$wpdb->posts}.ID AND ovr_bf.meta_key = '_ovr_is_bumped' ";
         $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_be ON ovr_be.post_id = {$wpdb->posts}.ID AND ovr_be.meta_key = '_ovr_bump_expires' ";
         $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_lb ON ovr_lb.post_id = {$wpdb->posts}.ID AND ovr_lb.meta_key = '" . Bump::META_LAST_BUMP . "' ";
 
+        // Active "Featured Property" boost → very top (within the filtered set).
+        $is_featured = $wpdb->prepare(
+            "(CASE WHEN ovr_ff.meta_value = '1' AND ( ovr_fe.meta_value IS NULL OR ovr_fe.meta_value = '' OR ovr_fe.meta_value >= %s ) THEN 1 ELSE 0 END)",
+            $today
+        );
+        // Active "Top of Page"/Priority Placement or free bump → next tier.
         $is_bumped = $wpdb->prepare(
             "(CASE WHEN ovr_bf.meta_value = '1' AND ( ovr_be.meta_value IS NULL OR ovr_be.meta_value = '' OR ovr_be.meta_value >= %s ) THEN 1 ELSE 0 END)",
             $today
@@ -125,7 +140,7 @@ class PropertyQuery {
         // store a Unix timestamp; un-bumped listings fall back to post_date.
         $recency = "GREATEST( UNIX_TIMESTAMP({$wpdb->posts}.post_date_gmt), COALESCE(ovr_lb.meta_value + 0, 0) )";
 
-        $clauses['orderby']  = $is_bumped . ' DESC, ' . $recency . ' DESC, ' . $clauses['orderby'];
+        $clauses['orderby']  = $is_featured . ' DESC, ' . $is_bumped . ' DESC, ' . $recency . ' DESC, ' . $clauses['orderby'];
         $clauses['groupby']  = "{$wpdb->posts}.ID"; // dedupe rows from the joins
         return $clauses;
     }

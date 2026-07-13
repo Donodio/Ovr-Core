@@ -38,7 +38,23 @@ class Header {
      *
      * @return array<string, array{label:string,url:string}>
      */
+    /** Nav-menu location admins assign a menu to (Mark feedback P6.7). */
+    public const MENU_LOCATION = 'ovr_primary';
+
     public static function nav_items(): array {
+        // P6.7: navigation is fully configurable from the admin panel. When an
+        // admin has assigned a menu to the "OVR Header Menu" location
+        // (Appearance → Menus), that menu drives the top nav — labels, URLs,
+        // order, external links, and visibility all come from there. Until one
+        // is assigned we fall back to the role-aware built-in defaults so the
+        // header is never empty.
+        if ( has_nav_menu( self::MENU_LOCATION ) ) {
+            $items = self::menu_nav_items();
+            if ( ! empty( $items ) ) {
+                return $items;
+            }
+        }
+
         // Admins manage from wp-admin; their front-end top nav stays the
         // visitor marketing set plus a Site Admin jump (added in the actions
         // area), so the public header never turns into an admin console.
@@ -47,6 +63,39 @@ class Header {
             return self::landlord_nav_items();
         }
         return self::visitor_nav_items();
+    }
+
+    /**
+     * Build top-nav items from the menu assigned to the OVR header location.
+     * Only top-level items are used (the header renders a flat bar); each item's
+     * label, URL and "open in new tab" target come straight from the menu editor.
+     *
+     * @return array<string, array{label:string,url:string,target?:string}>
+     */
+    public static function menu_nav_items(): array {
+        $locations = (array) get_nav_menu_locations();
+        $menu_id   = (int) ( $locations[ self::MENU_LOCATION ] ?? 0 );
+        if ( ! $menu_id ) {
+            return [];
+        }
+        $menu_items = wp_get_nav_menu_items( $menu_id );
+        if ( ! $menu_items ) {
+            return [];
+        }
+
+        $out = [];
+        foreach ( $menu_items as $item ) {
+            // Flat top bar: skip child items (their parents already show).
+            if ( (int) $item->menu_item_parent !== 0 ) {
+                continue;
+            }
+            $out[ 'item-' . (int) $item->ID ] = [
+                'label'  => $item->title,
+                'url'    => $item->url,
+                'target' => '_blank' === $item->target ? '_blank' : '',
+            ];
+        }
+        return $out;
     }
 
     /**
@@ -88,6 +137,17 @@ class Header {
 
     public function init(): void {
         add_action( 'wp_body_open', [ $this, 'render' ], 1 );
+        // P6.7: expose the "OVR Header Menu" location in Appearance → Menus so
+        // admins can fully configure the top navigation (booted on plugins_loaded,
+        // so after_setup_theme is still ahead of us).
+        add_action( 'after_setup_theme', [ $this, 'register_menu_location' ] );
+    }
+
+    /**
+     * Register the OVR header nav-menu location (Appearance → Menus).
+     */
+    public function register_menu_location(): void {
+        register_nav_menu( self::MENU_LOCATION, __( 'OVR Header Menu (top navigation)', 'ovr-core' ) );
     }
 
     /**

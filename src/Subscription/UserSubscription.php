@@ -14,42 +14,69 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class UserSubscription {
 
+    public const STATUS_NONE       = 'none';
+    public const STATUS_PENDING    = 'pending';
+    public const STATUS_ACTIVE     = 'active';
+    public const STATUS_EXPIRED    = 'expired';
+    public const STATUS_CANCELLED  = 'cancelled';
+    public const STATUS_SUSPENDED  = 'suspended';
+
+    public const META_STATUS       = 'ovr_subscription_status';
+    public const META_PLAN         = 'ovr_subscription_plan';
+    public const META_EXPIRES      = 'ovr_subscription_expires';
+    public const META_START        = 'ovr_subscription_start';
+    public const META_EDITING      = 'ovr_editing_enabled';
+
     public function init(): void {
-        add_action( 'init', [ $this, 'maybe_grandfather_landlords' ] );
+        add_action( 'init', [ $this, 'maybe_migrate_statuses' ] );
     }
 
     /**
-     * One-time backfill: treat every EXISTING landlord as an active paid
-     * subscriber through 2026-12-31 so the new subscription gate doesn't lock
-     * out long-standing subscribers on go-live. Runs once, then sets a flag.
+     * One-time migration: set ovr_subscription_status for all existing users
+     * so the new status-based access control works immediately on deploy.
      */
-    public function maybe_grandfather_landlords(): void {
-        if ( get_option( 'ovr_grandfather_2026' ) ) {
+    public function maybe_migrate_statuses(): void {
+        if ( get_option( 'ovr_subscription_status_migrated' ) ) {
             return;
         }
 
-        $through      = '2026-12-31';
-        $default_paid = 'standard_homeowner_5';
-
-        // Every current landlord — by role and by the legacy meta flag.
         $by_role = get_users( [ 'role' => 'ovr_landlord', 'fields' => 'ID' ] );
         $by_meta = get_users( [ 'meta_key' => 'ovr_is_landlord', 'meta_value' => '1', 'fields' => 'ID' ] );
         $ids     = array_unique( array_map( 'intval', array_merge( (array) $by_role, (array) $by_meta ) ) );
 
+        $default_paid = 'standard_homeowner_5';
+        $through = gmdate( 'Y-m-d', strtotime( '+1 year' ) );
+
         foreach ( $ids as $uid ) {
-            // Ensure a paid plan so has_listing_access() passes.
-            if ( ! self::is_paid_plan( (string) get_user_meta( $uid, 'ovr_subscription_plan', true ) ) ) {
-                update_user_meta( $uid, 'ovr_subscription_plan', $default_paid );
+            $existing_status = get_user_meta( $uid, self::META_STATUS, true );
+            if ( $existing_status ) {
+                continue;
             }
-            // Ensure the expiry runs at least through the grandfather date.
-            $exp = (string) get_user_meta( $uid, 'ovr_subscription_expires', true );
-            if ( ! $exp || strtotime( $exp ) < strtotime( $through ) ) {
+
+            $plan_slug = (string) get_user_meta( $uid, 'ovr_subscription_plan', true );
+
+            if ( ! self::is_paid_plan( $plan_slug ) ) {
+                update_user_meta( $uid, self::META_STATUS, self::STATUS_NONE );
+                continue;
+            }
+
+            $expiry = get_user_meta( $uid, 'ovr_subscription_expires', true );
+
+            if ( ! $expiry || strtotime( $expiry ) < strtotime( $through ) ) {
                 update_user_meta( $uid, 'ovr_subscription_expires', $through );
+                $expiry = $through;
             }
-            update_user_meta( $uid, 'ovr_editing_enabled', true );
+
+            if ( strtotime( $expiry ) > time() ) {
+                update_user_meta( $uid, self::META_STATUS, self::STATUS_ACTIVE );
+            } else {
+                update_user_meta( $uid, self::META_STATUS, self::STATUS_EXPIRED );
+            }
+
+            update_user_meta( $uid, self::META_EDITING, true );
         }
 
-        update_option( 'ovr_grandfather_2026', 1 );
+        update_option( 'ovr_subscription_status_migrated', 1 );
     }
 
     /**
@@ -59,14 +86,15 @@ class UserSubscription {
         if ( ! $user_id ) {
             $user_id = get_current_user_id();
         }
-        return get_user_meta( $user_id, 'ovr_subscription_plan', true ) ?: 'base_subscriber';
+        return get_user_meta( $user_id, self::META_PLAN, true ) ?: '';
     }
 
     /**
      * Get full plan data for a user.
      */
     public static function get_plan( int $user_id = 0 ): ?array {
-        return Plans::get_plan( self::get_plan_slug( $user_id ) );
+        $slug = self::get_plan_slug( $user_id );
+        return $slug ? Plans::get_plan( $slug ) : null;
     }
 
     /**
@@ -78,11 +106,95 @@ class UserSubscription {
     }
 
     /**
+     * Get the explicit subscription status for a user.
+     */
+    public static function get_status( int $user_id = 0 ): string {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        if ( ! $user_id ) {
+            return self::STATUS_NONE;
+        }
+        $status = get_user_meta( $user_id, self::META_STATUS, true );
+        if ( ! $status ) {
+            $plan_slug = self::get_plan_slug( $user_id );
+            if ( self::is_paid_plan( $plan_slug ) ) {
+                return self::STATUS_ACTIVE;
+            }
+            return self::STATUS_NONE;
+        }
+        return $status;
+    }
+
+    /**
+     * Human-readable label for a status value.
+     */
+    public static function status_label( string $status ): string {
+        $labels = [
+            self::STATUS_NONE      => __( 'No Subscription', 'ovr-core' ),
+            self::STATUS_PENDING   => __( 'Pending Payment', 'ovr-core' ),
+            self::STATUS_ACTIVE    => __( 'Active', 'ovr-core' ),
+            self::STATUS_EXPIRED   => __( 'Expired', 'ovr-core' ),
+            self::STATUS_CANCELLED => __( 'Cancelled', 'ovr-core' ),
+            self::STATUS_SUSPENDED => __( 'Suspended', 'ovr-core' ),
+        ];
+        return $labels[ $status ] ?? __( 'Unknown', 'ovr-core' );
+    }
+
+    /**
+     * Days remaining until the subscription expires (null = no expiry).
+     */
+    public static function get_days_remaining( int $user_id = 0 ): ?int {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        $expiry = get_user_meta( $user_id, self::META_EXPIRES, true );
+        if ( ! $expiry ) {
+            return null;
+        }
+        $diff = (int) ceil( ( strtotime( $expiry ) - time() ) / DAY_IN_SECONDS );
+        return max( 0, $diff );
+    }
+
+    /**
+     * Full subscription info array for dashboard widget and management page.
+     *
+     * @return array{plan_name:string,plan_slug:string,status:string,status_label:string,start_date:string,expiry_date:string,days_remaining:int|null,credit_balance:float,max_listings:int,listings_used:int,currency_symbol:string}
+     */
+    public static function get_info( int $user_id = 0 ): array {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        $plan_slug = self::get_plan_slug( $user_id );
+        $plan      = Plans::get_plan( $plan_slug );
+        $status    = self::get_status( $user_id );
+        $expiry    = get_user_meta( $user_id, self::META_EXPIRES, true );
+        $start     = get_user_meta( $user_id, self::META_START, true );
+        $credit    = 0.0;
+        if ( class_exists( '\OVR\Payment\Wallet' ) ) {
+            $credit = (float) \OVR\Payment\Wallet::get_balance( $user_id );
+        }
+        $settings  = (array) get_option( 'ovr_settings', [] );
+
+        return [
+            'plan_name'       => $plan['name'] ?? __( 'No Plan', 'ovr-core' ),
+            'plan_slug'       => $plan_slug,
+            'status'          => $status,
+            'status_label'    => self::status_label( $status ),
+            'start_date'      => $start ?: '',
+            'expiry_date'     => $expiry ?: '',
+            'days_remaining'  => self::get_days_remaining( $user_id ),
+            'credit_balance'  => $credit,
+            'max_listings'    => $plan['max_listings'] ?? 0,
+            'listings_used'   => self::get_listing_count( $user_id ),
+            'currency_symbol' => $settings['currency_symbol'] ?? '$',
+        ];
+    }
+
+    /**
      * Whether the user may publish listings at all.
      *
-     * Per client requirement: a landlord with no active, paid subscription
-     * cannot list a property. The free "base_subscriber" default and any
-     * expired plan therefore grant no listing access.
+     * A landlord with no active, paid subscription cannot list a property.
      */
     public static function has_listing_access( int $user_id = 0 ): bool {
         if ( ! $user_id ) {
@@ -113,7 +225,6 @@ class UserSubscription {
             $user_id = get_current_user_id();
         }
 
-        // No active paid subscription → no listings at all.
         if ( ! self::has_listing_access( $user_id ) ) {
             return false;
         }
@@ -123,7 +234,6 @@ class UserSubscription {
             return false;
         }
 
-        // Unlimited listings.
         if ( -1 === $plan['max_listings'] ) {
             return true;
         }
@@ -140,7 +250,7 @@ class UserSubscription {
             'post_type'      => 'ovr_property',
             'post_status'    => 'publish',
             'author'         => $user_id,
-            'posts_per_page' => -1,
+            'posts_per_page' => 999,
             'fields'         => 'ids',
             'no_found_rows'  => true,
         ] );
@@ -148,31 +258,32 @@ class UserSubscription {
     }
 
     /**
-     * Check if user's subscription is active (not expired).
+     * Check if user's subscription is active (status-based).
+     *
+     * Also validates the expiry date hasn't passed as a safety net.
      */
     public static function is_active( int $user_id = 0 ): bool {
         if ( ! $user_id ) {
             $user_id = get_current_user_id();
         }
 
-        $status = get_user_meta( $user_id, 'ovr_account_status', true );
-        if ( 'inactive' === $status ) {
+        $account_status = get_user_meta( $user_id, 'ovr_account_status', true );
+        if ( 'inactive' === $account_status ) {
             return false;
         }
 
-        $plan_slug = self::get_plan_slug( $user_id );
-        if ( 'base_subscriber' === $plan_slug ) {
-            return true; // Free plan never expires.
+        $status = self::get_status( $user_id );
+        if ( self::STATUS_ACTIVE !== $status ) {
+            return false;
         }
 
-        // NB: meta key is ovr_subscription_expires (Lifecycle::META_EXPIRES);
-        // an earlier ..._expiry typo here made paid plans read as never-expiring.
-        $expiry = get_user_meta( $user_id, 'ovr_subscription_expires', true );
-        if ( empty( $expiry ) ) {
-            return true;
+        // Double-check expiry hasn't passed.
+        $expiry = get_user_meta( $user_id, self::META_EXPIRES, true );
+        if ( $expiry && strtotime( $expiry ) <= time() ) {
+            return false;
         }
 
-        return strtotime( $expiry ) > time();
+        return true;
     }
 
     /**
@@ -182,6 +293,6 @@ class UserSubscription {
         if ( ! $user_id ) {
             $user_id = get_current_user_id();
         }
-        return (bool) get_user_meta( $user_id, 'ovr_editing_enabled', true );
+        return (bool) get_user_meta( $user_id, self::META_EDITING, true );
     }
 }

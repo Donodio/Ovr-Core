@@ -91,7 +91,12 @@ class IcalSync {
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_availability';
         $rows  = $wpdb->get_results(
-            $wpdb->prepare( "SELECT * FROM {$table} WHERE property_id = %d ORDER BY start_date ASC", $post_id ),
+            $wpdb->prepare(
+                "SELECT * FROM {$table}
+                 WHERE property_id = %d AND source != 'ical'
+                 ORDER BY start_date ASC",
+                $post_id
+            ),
             ARRAY_A
         );
 
@@ -167,7 +172,7 @@ class IcalSync {
         $query = new \WP_Query( [
             'post_type'      => 'ovr_property',
             'post_status'    => 'publish',
-            'posts_per_page' => -1,
+            'posts_per_page' => 999,
             'fields'         => 'ids',
             'meta_query'     => [
                 [

@@ -3646,69 +3646,6 @@
    (navy bar + cards, spanning grid cols 1–2) and the light-yellow Featured
    panel (col 3). Each cell sizes to its own content (align-items:start), so a
    tall featured panel never inflates the row or pushes the results down. */
-.ovr-results-area {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--ss-gap);
-    align-items: start;
-}
-.ovr-results-main {
-    grid-column: 1 / 3;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;            /* navy bar → first results row (tightened to align) */
-}
-.ovr-results-main > .ovr-results-header { margin-bottom: 0; }
-/* Two equal result columns inside the cols-1–2 cell. The cell width is
-   2·col + gap, so each card resolves to exactly one grid column wide. */
-.ovr-results-main .ovr-search-results {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: var(--ss-card-h);
-    gap: var(--ss-gap);
-}
-
-/* Featured panel = column 3; its own height (no row span). */
-.ovr-featured-panel {
-    grid-column: 3 / 4;
-    display: flex;
-    flex-direction: column;
-    background: var(--ss-card-yellow);
-    border: 1px solid var(--ss-gold);
-    border-radius: var(--ovr-radius-lg);
-    padding: 14px;
-}
-.ovr-featured-head {
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    /* Panel pad-top (14) + this height (52) + margin (20) = 86 = navy bar (66)
-       + results gap (20), so the first featured card lines up with the first
-       results card regardless of font metrics. */
-    height: 52px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid var(--ss-gold);
-    color: var(--ss-navy);
-}
-.ovr-featured-head .material-symbols-outlined { font-size: 24px; color: var(--ss-gold); font-variation-settings: 'FILL' 1; }
-.ovr-featured-head-text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-    font-size: 15px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-}
-.ovr-featured-head-text small { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; opacity: 0.7; }
-
-.ovr-featured-rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--ss-gap);
-}
 
 /* No featured listings → results use the full three-column width. */
 .ovr-results-fullgrid {
@@ -3877,86 +3814,6 @@
 .ovr-map-popup-price { color: var(--ss-navy); font-weight: 600; font-size: 13px; margin: 2px 0 6px; }
 .ovr-map-popup a.ovr-map-popup-link { color: var(--ss-gold); font-weight: 700; font-size: 13px; text-decoration: none; }
 
-/* ── Search "app-shell" scroll (desktop ≥1025px) ──────────────────────────
-   The page scrolls normally until the navy Featured-cities bar (.ovr-ss-villages)
-   has scrolled away; then the three-pane search area pins to fill the viewport
-   and each pane scrolls independently — put the cursor over a column and the
-   wheel scrolls only that column. --ss-shell-top is the height of the sticky
-   site header (+ admin bar), measured in ovr-search.js. Below 1025px the layout
-   collapses to one column and the page scrolls as a normal document. ──────── */
-@media (min-width: 1025px) {
-    .ovr-search-stitch .ovr-search-page {
-        position: sticky;
-        top: var(--ss-shell-top, 48px);
-        height: calc(100vh - var(--ss-shell-top, 48px));
-        padding-top: 24px;
-        padding-bottom: 24px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-    .ovr-search-stitch .ovr-search-layout {
-        flex: 1 1 auto;
-        min-height: 0;
-        height: 100%;
-        align-items: stretch;
-    }
-
-    /* Left pane: filters scroll on their own. */
-    .ovr-search-stitch .ovr-filters-sidebar {
-        height: 100%;
-        min-height: 0;
-        overflow-y: auto;
-    }
-
-    /* Middle column wrapper becomes a flex column the panes live in. */
-    .ovr-search-stitch .ovr-search-main {
-        height: 100%;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    /* Featured present → 3-col grid fills the column; each cell scrolls alone. */
-    .ovr-search-stitch .ovr-results-area {
-        flex: 1 1 auto;
-        min-height: 0;
-        align-items: stretch;
-    }
-    .ovr-search-stitch .ovr-results-main {
-        min-height: 0;
-        overflow-y: auto;          /* middle: navy bar + cards scroll together */
-    }
-    .ovr-search-stitch .ovr-featured-panel {
-        min-height: 0;
-        overflow-y: auto;          /* featured rail scrolls on its own */
-    }
-
-    /* No featured / list view → header stays, the grid scrolls beneath it. */
-    .ovr-search-stitch .ovr-search-main > .ovr-results-header { flex: 0 0 auto; margin-bottom: 16px; }
-    .ovr-search-stitch .ovr-search-main > .ovr-search-results {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-    }
-
-    /* Map view fills the middle column. */
-    .ovr-search-stitch .ovr-search-main > .ovr-map-view {
-        flex: 1 1 auto;
-        min-height: 0;
-        height: auto;
-    }
-
-    /* Pagination sits as a fixed bar at the bottom of the middle column. */
-    .ovr-search-stitch .ovr-pagination { flex: 0 0 auto; margin-top: 16px; margin-bottom: 0; }
-
-    /* Slimmer scrollbars inside the panes. */
-    .ovr-search-stitch .ovr-filters-sidebar,
-    .ovr-search-stitch .ovr-results-main,
-    .ovr-search-stitch .ovr-featured-panel,
-    .ovr-search-stitch .ovr-search-main > .ovr-search-results { scrollbar-width: thin; }
-}
 
 /* ── Search card (standard = yellow/navy, featured = white/gold) ── */
 .ovr-search-stitch .ovr-ss-card {
@@ -4120,26 +3977,15 @@
 
 /* ── Responsive ── */
 @media (max-width: 1024px) {
-    /* Filters already stack (.ovr-search-layout → 1fr). The results column goes
-       full width; the yellow Featured panel drops below it. */
-    .ovr-results-area { display: block; }
-    .ovr-results-area .ovr-search-results,
+    /* Filters already stack (.ovr-search-layout → 1fr). Results go full width. */
     .ovr-results-fullgrid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         grid-auto-rows: var(--ss-card-h);
         gap: var(--ss-gap);
     }
-    .ovr-featured-panel { margin-top: var(--ss-gap); }
-    .ovr-featured-rail {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--ss-gap);
-    }
 }
 @media (max-width: 600px) {
-    .ovr-results-area .ovr-search-results,
     .ovr-results-fullgrid { grid-template-columns: 1fr; grid-auto-rows: auto; }
-    .ovr-featured-rail { grid-template-columns: 1fr; }
     .ovr-search-stitch .ovr-ss-card { height: auto; min-height: var(--ss-card-h); }
 }
 
@@ -4232,24 +4078,6 @@
 .ovr-map-switch-btn .material-symbols-outlined { font-size: 18px; }
 .ovr-map-switch-btn.is-active { background: var(--ss-navy); color: #fff; }
 
-/* Desktop app-shell: cards scroll, map sticks full-height beside them. */
-@media (min-width: 1025px) {
-    .ovr-search-stitch .ovr-search-main > .ovr-map-split {
-        flex: 1 1 auto;
-        min-height: 0;
-        height: 100%;
-    }
-    .ovr-search-stitch .ovr-map-listcol {
-        height: 100%;
-        min-height: 0;
-        overflow-y: auto;
-        padding-right: 4px;
-        scrollbar-width: thin;
-    }
-    .ovr-search-stitch .ovr-map-listcol > .ovr-results-header { flex: 0 0 auto; margin-bottom: 16px; }
-    .ovr-search-stitch .ovr-map-canvas { height: 100%; min-height: 0; }
-    .ovr-search-stitch .ovr-map-split .ovr-map-view { height: 100%; min-height: 0; }
-}
 
 /* Mobile/tablet: one card column; switch flips between list and map. */
 @media (max-width: 1024px) {

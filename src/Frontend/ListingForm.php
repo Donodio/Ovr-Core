@@ -45,6 +45,7 @@ class ListingForm {
         add_action( 'wp_ajax_ovr_crop_listing_photo',      [ $this, 'handle_crop' ] );
         add_action( 'wp_ajax_ovr_watermark_listing_photo', [ $this, 'handle_watermark' ] );
         add_action( 'wp_ajax_ovr_upload_listing_media',     [ $this, 'handle_media_upload' ] );
+        add_action( 'wp_ajax_ovr_auto_save_listing',       [ $this, 'handle_auto_save' ] );
 
         // Defense-in-depth: if a non-admin ever reaches the wp.media grid, only
         // surface their own uploads — never the whole site library.
@@ -324,6 +325,12 @@ class ListingForm {
             update_post_meta( $post_id, '_ovr_admin_status', 'approved' );
         }
 
+        // Admin tab fields (P8 §8) — admins only; each guarded so a non-admin
+        // submit (fields absent) never clears them.
+        if ( $is_admin_user ) {
+            $this->save_admin_tab_fields( $post_id );
+        }
+
         // Single-value taxonomies.
         foreach ( self::SINGLE_TAX as $field => $tax ) {
             $tid = absint( $_POST[ $field ] ?? 0 );
@@ -334,6 +341,26 @@ class ListingForm {
             ? array_map( 'absint', $_POST['amenities'] )
             : [];
         wp_set_object_terms( $post_id, $amenities, 'ovr_amenity', false );
+
+        // Features (multi).
+        $features = ( isset( $_POST['ovr_features'] ) && is_array( $_POST['ovr_features'] ) )
+            ? array_map( 'absint', $_POST['ovr_features'] )
+            : [];
+        wp_set_object_terms( $post_id, $features, 'ovr_feature', false );
+
+        // Views (multi).
+        $views = ( isset( $_POST['ovr_views'] ) && is_array( $_POST['ovr_views'] ) )
+            ? array_map( 'absint', $_POST['ovr_views'] )
+            : [];
+        wp_set_object_terms( $post_id, $views, 'ovr_view', false );
+
+        // Feature order (drag-sorted amenity/feature/view term ids).
+        if ( isset( $_POST['feature_order'] ) ) {
+            $feature_order = json_decode( wp_unslash( $_POST['feature_order'] ), true );
+            if ( is_array( $feature_order ) ) {
+                update_post_meta( $post_id, '_ovr_feature_order', array_map( 'absint', $feature_order ) );
+            }
+        }
 
         // Gallery: validated attachment ids, in order; first = cover.
         $raw  = isset( $_POST['gallery_ids'] ) ? (string) wp_unslash( $_POST['gallery_ids'] ) : '';
@@ -422,6 +449,32 @@ class ListingForm {
     }
 
     /**
+     * Persist the admin-only Admin tab fields (P8 §8). Caller must confirm the
+     * current user is an admin. Each field is guarded by isset so a submit that
+     * doesn't include the Admin tab never wipes existing values.
+     */
+    private function save_admin_tab_fields( int $post_id ): void {
+        if ( isset( $_POST['admin_notes'] ) ) {
+            update_post_meta( $post_id, '_ovr_admin_notes', sanitize_textarea_field( wp_unslash( $_POST['admin_notes'] ) ) );
+        }
+        if ( isset( $_POST['deals_cancellations'] ) ) {
+            update_post_meta( $post_id, '_ovr_deals_cancellations', sanitize_key( wp_unslash( $_POST['deals_cancellations'] ) ) );
+        }
+        if ( isset( $_POST['referred_by'] ) ) {
+            update_post_meta( $post_id, '_ovr_referred_by', sanitize_text_field( wp_unslash( $_POST['referred_by'] ) ) );
+        }
+        foreach ( [ 'activity_start', 'activity_end' ] as $af ) {
+            if ( isset( $_POST[ $af ] ) ) {
+                $val = sanitize_text_field( wp_unslash( $_POST[ $af ] ) );
+                // Accept only YYYY-MM-DD (the <input type=date> value) or empty.
+                if ( '' === $val || preg_match( '/^\d{4}-\d{2}-\d{2}$/', $val ) ) {
+                    update_post_meta( $post_id, '_ovr_' . $af, $val );
+                }
+            }
+        }
+    }
+
+    /**
      * Persist the listing's documents (Feature D) from the submitted form.
      * Reads document_ids[] (ordered), doc_titles[id], doc_orders[id]; caps at
      * MAX_DOCS; keeps only real attachments. Stores the ordered id CSV in
@@ -490,6 +543,241 @@ class ListingForm {
             ];
         }
         return $out;
+    }
+
+    /**
+     * AJAX: auto-save the current editor section when the landlord navigates
+     * between tabs. Saves incrementally — only the fields visible in the
+     * current section are persisted.
+     */
+    public function handle_auto_save(): void {
+        if ( ! check_ajax_referer( 'ovr_listing_action', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'message' => __( 'Please log in.', 'ovr-core' ) ], 403 );
+        }
+
+        $post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+        $section = isset( $_POST['section'] ) ? sanitize_key( wp_unslash( $_POST['section'] ) ) : '';
+        $user_id = get_current_user_id();
+
+        if ( ! $section ) {
+            wp_send_json_error( [ 'message' => __( 'Missing parameters.', 'ovr-core' ) ], 400 );
+        }
+
+        $is_admin_user = current_user_can( 'manage_options' );
+
+        // New listing: no post exists yet. Create a DRAFT on the first auto-save
+        // so the landlord's progress is captured without going live. The listing
+        // stays a draft until they hit "Save Changes" (handle_save publishes it).
+        // Gated exactly like a full create so drafts can't bypass the plan cap.
+        if ( ! $post_id ) {
+            if ( ! $is_admin_user ) {
+                if ( ! UserSubscription::has_listing_access( $user_id ) ) {
+                    wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
+                }
+                if ( ! UserSubscription::can_create_listing( $user_id ) ) {
+                    wp_send_json_error( [ 'message' => __( 'You have reached the listing limit for your plan.', 'ovr-core' ) ], 403 );
+                }
+            }
+
+            $title = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
+            if ( '' === $title ) {
+                $title = __( 'Untitled Listing', 'ovr-core' );
+            }
+            $new_id = wp_insert_post( [
+                'post_type'   => 'ovr_property',
+                'post_title'  => $title,
+                'post_status' => 'draft',
+                'post_author' => $user_id,
+            ], true );
+            if ( is_wp_error( $new_id ) || ! $new_id ) {
+                wp_send_json_error( [ 'message' => __( 'Could not start a draft.', 'ovr-core' ) ], 500 );
+            }
+            $post_id = (int) $new_id;
+
+            // Sensible defaults so the draft behaves like any listing once live.
+            update_post_meta( $post_id, '_ovr_listing_status', 'active' );
+            update_post_meta( $post_id, '_ovr_admin_status', 'approved' );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post || 'ovr_property' !== $post->post_type ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid listing.', 'ovr-core' ) ], 400 );
+        }
+
+        if ( (int) $post->post_author !== $user_id && ! $is_admin_user ) {
+            wp_send_json_error( [ 'message' => __( 'You do not own this listing.', 'ovr-core' ) ], 403 );
+        }
+
+        switch ( $section ) {
+            case 'info':
+                if ( isset( $_POST['title'] ) ) {
+                    $title = sanitize_text_field( wp_unslash( $_POST['title'] ) );
+                    if ( '' === $title ) {
+                        $title = __( 'Untitled Listing', 'ovr-core' );
+                    }
+                    wp_update_post( [
+                        'ID'          => $post_id,
+                        'post_title'  => $title,
+                        'post_content'=> wp_kses_post( wp_unslash( $_POST['description'] ?? '' ) ),
+                        'post_excerpt'=> mb_substr( sanitize_text_field( wp_unslash( $_POST['short_description'] ?? '' ) ), 0, 200 ),
+                    ] );
+                }
+
+                $meta_fields = [ 'bedrooms', 'bathrooms', 'beds', 'max_guests', 'sqft', 'address', 'city', 'state', 'zip', 'village_name' ];
+                foreach ( $meta_fields as $f ) {
+                    if ( isset( $_POST[ $f ] ) ) {
+                        update_post_meta( $post_id, '_ovr_' . $f, sanitize_text_field( wp_unslash( $_POST[ $f ] ) ) );
+                    }
+                }
+                update_post_meta( $post_id, '_ovr_pets_allowed', empty( $_POST['pets_allowed'] ) ? 0 : 1 );
+
+                if ( isset( $_POST['listing_status'] ) ) {
+                    $s = sanitize_key( wp_unslash( $_POST['listing_status'] ) );
+                    update_post_meta( $post_id, '_ovr_listing_status', in_array( $s, [ 'active', 'inactive' ], true ) ? $s : 'active' );
+                }
+                if ( $is_admin_user && isset( $_POST['admin_status'] ) ) {
+                    $s = sanitize_key( wp_unslash( $_POST['admin_status'] ) );
+                    $allowed = [ 'approved', 'hidden', 'suspended', 'pending_review' ];
+                    update_post_meta( $post_id, '_ovr_admin_status', in_array( $s, $allowed, true ) ? $s : 'approved' );
+                }
+
+                foreach ( [ 'village_section', 'property_type', 'rental_type' ] as $field ) {
+                    if ( isset( $_POST[ $field ] ) ) {
+                        $tax = [ 'village_section' => 'ovr_village', 'property_type' => 'ovr_property_type', 'rental_type' => 'ovr_rental_type' ][ $field ];
+                        $tid = absint( $_POST[ $field ] );
+                        wp_set_object_terms( $post_id, $tid ? [ $tid ] : [], $tax, false );
+                    }
+                }
+
+                if ( isset( $_POST['amenities'] ) && is_array( $_POST['amenities'] ) ) {
+                    $amenities = array_map( 'absint', $_POST['amenities'] );
+                    wp_set_object_terms( $post_id, $amenities, 'ovr_amenity', false );
+                }
+
+                Geocoder::geocode_listing( $post_id );
+                break;
+
+            case 'additional':
+                $meta_fields = [ 'nearby', 'policies', 'payment_info' ];
+                foreach ( $meta_fields as $f ) {
+                    if ( isset( $_POST[ $f ] ) ) {
+                        update_post_meta( $post_id, '_ovr_' . $f, wp_kses_post( wp_unslash( $_POST[ $f ] ) ) );
+                    }
+                }
+
+                if ( isset( $_POST['ovr_features'] ) && is_array( $_POST['ovr_features'] ) ) {
+                    wp_set_object_terms( $post_id, array_map( 'absint', $_POST['ovr_features'] ), 'ovr_feature', false );
+                }
+                if ( isset( $_POST['ovr_views'] ) && is_array( $_POST['ovr_views'] ) ) {
+                    wp_set_object_terms( $post_id, array_map( 'absint', $_POST['ovr_views'] ), 'ovr_view', false );
+                }
+
+                if ( isset( $_POST['feature_order'] ) ) {
+                    $order = json_decode( wp_unslash( $_POST['feature_order'] ), true );
+                    if ( is_array( $order ) ) {
+                        update_post_meta( $post_id, '_ovr_feature_order', array_map( 'absint', $order ) );
+                    }
+                }
+                break;
+
+            case 'media':
+                if ( isset( $_POST['gallery_ids'] ) ) {
+                    $raw  = (string) wp_unslash( $_POST['gallery_ids'] );
+                    $gids = array_values( array_filter(
+                        array_map( 'absint', explode( ',', $raw ) ),
+                        static fn( $id ) => $id && 'attachment' === get_post_type( $id )
+                    ) );
+                    $photo_cap = \OVR\Core\SettingsBehaviors::max_photos();
+                    if ( $photo_cap > 0 && count( $gids ) > $photo_cap ) {
+                        $gids = array_slice( $gids, 0, $photo_cap );
+                    }
+                    update_post_meta( $post_id, '_ovr_gallery_ids', implode( ',', $gids ) );
+                    if ( $gids ) {
+                        set_post_thumbnail( $post_id, $gids[0] );
+                    } else {
+                        delete_post_thumbnail( $post_id );
+                    }
+
+                    $caps_in   = ( isset( $_POST['captions'] ) && is_array( $_POST['captions'] ) ) ? wp_unslash( $_POST['captions'] ) : [];
+                    $captions  = [];
+                    $listing_t = get_the_title( $post_id );
+                    $pos       = 0;
+                    foreach ( $gids as $gid ) {
+                        $pos++;
+                        $c = isset( $caps_in[ $gid ] ) ? sanitize_text_field( (string) $caps_in[ $gid ] ) : '';
+                        if ( '' !== $c ) {
+                            $captions[ (string) $gid ] = $c;
+                        }
+                        $alt = '' !== $c ? $c : trim( $listing_t . ' — photo ' . $pos );
+                        update_post_meta( $gid, '_wp_attachment_image_alt', $alt );
+                    }
+                    update_post_meta( $post_id, '_ovr_gallery_captions', $captions );
+
+                    foreach ( $gids as $gid ) {
+                        $this->ensure_watermarked( $gid, true );
+                    }
+                }
+
+                foreach ( [ 'video_url', 'panorama_url' ] as $u ) {
+                    if ( isset( $_POST[ $u ] ) ) {
+                        update_post_meta( $post_id, '_ovr_' . $u, esc_url_raw( wp_unslash( $_POST[ $u ] ) ) );
+                    }
+                }
+                foreach ( [ 'video_id' => '_ovr_video_id', 'panorama_id' => '_ovr_panorama_id' ] as $field => $key ) {
+                    if ( isset( $_POST[ $field ] ) ) {
+                        $att = absint( $_POST[ $field ] );
+                        if ( $att && 'attachment' === get_post_type( $att ) ) {
+                            update_post_meta( $post_id, $key, $att );
+                        } else {
+                            delete_post_meta( $post_id, $key );
+                        }
+                    }
+                }
+
+                $this->save_documents( $post_id );
+                break;
+
+            case 'calendar':
+                if ( isset( $_POST['avail'] ) && is_array( $_POST['avail'] ) ) {
+                    Availability::save_manual_blocks( $post_id, $_POST['avail'] );
+                }
+                if ( isset( $_POST['ical_url'] ) ) {
+                    update_post_meta( $post_id, '_ovr_ical_url', esc_url_raw( wp_unslash( $_POST['ical_url'] ) ) );
+                }
+                break;
+
+            case 'pricing':
+                if ( isset( $_POST['hide_pricing'] ) ) {
+                    update_post_meta( $post_id, '_ovr_hide_pricing', 1 );
+                } elseif ( isset( $_POST['hide_pricing_check'] ) ) {
+                    // Hidden field sent even when unchecked to signal "set to 0".
+                    update_post_meta( $post_id, '_ovr_hide_pricing', 0 );
+                }
+                if ( isset( $_POST['pricing'] ) && is_array( $_POST['pricing'] ) ) {
+                    SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] );
+                }
+                break;
+
+            case 'admin':
+                // P8 §8 — Admin tab auto-save (admins only). Owner reassignment
+                // has its own AJAX endpoint and is not part of the form save.
+                if ( ! $is_admin_user ) {
+                    break;
+                }
+                if ( isset( $_POST['admin_status'] ) ) {
+                    $s = sanitize_key( wp_unslash( $_POST['admin_status'] ) );
+                    $allowed = [ 'approved', 'hidden', 'suspended', 'pending_review' ];
+                    update_post_meta( $post_id, '_ovr_admin_status', in_array( $s, $allowed, true ) ? $s : 'approved' );
+                }
+                $this->save_admin_tab_fields( $post_id );
+                break;
+        }
+
+        do_action( 'ovr_listing_saved', $post_id, $user_id, true );
+        wp_send_json_success( [ 'message' => __( 'Changes saved.', 'ovr-core' ), 'post_id' => $post_id ] );
     }
 
     /**

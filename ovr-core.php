@@ -26,14 +26,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 | Plugin Constants
 |--------------------------------------------------------------------------
 */
-define( 'OVR_VERSION', '1.1.1' );
+define( 'OVR_VERSION', '1.1.2' );
 define( 'OVR_PLUGIN_FILE', __FILE__ );
 define( 'OVR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'OVR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'OVR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'OVR_PLUGIN_SLUG', 'ovr-core' );
 define( 'OVR_TEXT_DOMAIN', 'ovr-core' );
-define( 'OVR_DB_VERSION', '2.7.0' );
+define( 'OVR_DB_VERSION', '2.8.0' );
 
 /*
 |--------------------------------------------------------------------------
@@ -70,6 +70,21 @@ if ( file_exists( OVR_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 */
 register_activation_hook( __FILE__, [ 'OVR\\Activator', 'activate' ] );
 register_deactivation_hook( __FILE__, [ 'OVR\\Deactivator', 'deactivate' ] );
+
+/*
+|--------------------------------------------------------------------------
+| Textdomain (must load on `init` for WP 6.7+ compatibility)
+|--------------------------------------------------------------------------
+*/
+add_action( 'after_setup_theme', function () {
+    load_plugin_textdomain( 'ovr-core', false, dirname( OVR_PLUGIN_BASENAME ) . '/languages' );
+}, 0 );
+
+// DEBUG: Capture caller when _load_textdomain_just_in_time triggers for ovr-core.
+add_action( 'after_setup_theme', function () {
+    if ( ! has_filter( 'override_load_textdomain' ) ) return;
+    error_log( 'after_setup_theme: ' . ( doing_action( 'after_setup_theme' ) ? 'doing' : ( did_action( 'after_setup_theme' ) ? 'done' : 'no' ) ) );
+}, -1 );
 
 /*
 |--------------------------------------------------------------------------

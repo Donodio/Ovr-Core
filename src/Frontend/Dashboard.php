@@ -20,7 +20,9 @@ namespace OVR\Frontend;
 
 use OVR\Core\TemplateLoader;
 use OVR\Core\Pages;
+use OVR\Subscription\AccessControl;
 use OVR\Subscription\UserSubscription;
+use OVR\Subscription\SubscriptionManager;
 use OVR\Subscription\Plans;
 use OVR\Subscription\ListingUpgrades;
 use OVR\Subscription\UpgradeActivator;
@@ -91,12 +93,14 @@ class Dashboard {
 
         // Gate (defense-in-depth; the SubscriptionGate also redirects the page):
         // landlord tools require an active paid subscription.
-        if ( ! current_user_can( 'manage_options' ) && ! UserSubscription::has_listing_access( $user->ID ) ) {
-            $select = Pages::get_page_url( 'ovr_page_subscription_select' );
+        $access_error = AccessControl::check_access( $user->ID );
+        if ( is_wp_error( $access_error ) ) {
+            $redirect = SubscriptionManager::get_redirect_by_status( $user->ID );
+            $url      = $redirect ?: Pages::get_page_url( 'ovr_page_subscription_select' );
             return '<div style="max-width:560px;margin:48px auto;padding:36px 28px;text-align:center;font-family:Inter,system-ui,sans-serif;background:#fff;border:1px solid #bec9c8;border-radius:16px">'
                 . '<h2 style="color:#004c4c;margin:0 0 10px;font-size:24px">' . esc_html__( 'Subscription required', 'ovr-core' ) . '</h2>'
-                . '<p style="color:#3f4948;margin:0 0 22px;font-size:16px;line-height:1.6">' . esc_html__( 'You need an active subscription to access your landlord dashboard and listings.', 'ovr-core' ) . '</p>'
-                . '<a href="' . esc_url( $select ) . '" style="display:inline-block;background:#004c4c;color:#fff;padding:14px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px">' . esc_html__( 'Choose a Plan', 'ovr-core' ) . '</a>'
+                . '<p style="color:#3f4948;margin:0 0 22px;font-size:16px;line-height:1.6">' . esc_html( $access_error->get_error_message() ) . '</p>'
+                . '<a href="' . esc_url( $url ) . '" style="display:inline-block;background:#004c4c;color:#fff;padding:14px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px">' . esc_html__( 'View Plans', 'ovr-core' ) . '</a>'
                 . '</div>';
         }
 
@@ -159,12 +163,14 @@ class Dashboard {
                 $data['properties']       = self::get_properties( $user, 4 );
                 $data['balance']          = Wallet::get_balance( $user->ID );
                 $data['subscription']     = self::get_subscription_info( $user );
+                $data['sub_status_label'] = UserSubscription::status_label( $data['subscription']['status'] ?? '' );
+                $data['sub_days_left']    = $data['subscription']['days_remaining'] ?? null;
                 $data['add_url']          = add_query_arg( 'tab', 'add-listing', Pages::get_page_url( 'ovr_page_dashboard' ) );
                 $data['pricing_url']      = Pages::get_page_url( 'ovr_page_pricing' );
                 break;
 
             case 'properties':
-                $data['properties'] = self::get_properties( $user, -1 );
+                $data['properties'] = self::get_properties( $user, 999 );
                 $data['add_url']    = add_query_arg( 'tab', 'add-listing', Pages::get_page_url( 'ovr_page_dashboard' ) );
                 break;
 
@@ -194,7 +200,7 @@ class Dashboard {
                 }
                 $data['boost_post']   = $bpost;
                 $data['boosted']      = self::get_boosted_properties( $user );
-                $data['properties']   = self::get_properties( $user, -1 );
+                $data['properties']   = self::get_properties( $user, 999 );
                 $data['upgrades']     = ListingUpgrades::get_products();
                 $data['checkout_url'] = Pages::get_page_url( 'ovr_page_checkout' );
                 $data['props_url']    = add_query_arg( 'tab', 'properties', Pages::get_page_url( 'ovr_page_dashboard' ) );
@@ -207,7 +213,7 @@ class Dashboard {
                 break;
 
             case 'reviews':
-                $data['properties']      = self::get_properties( $user, -1 );
+                $data['properties']      = self::get_properties( $user, 999 );
                 $data['review_requests'] = \OVR\Property\ReviewRequest::for_owner( $user->ID, 50 );
                 $data['rr_bookings']     = \OVR\Booking\BookingRepository::for_owner( $user->ID, 100 );
                 $data['rr_action']       = admin_url( 'admin-post.php' );
@@ -216,6 +222,7 @@ class Dashboard {
 
             case 'subscription':
                 $data['subscription']  = self::get_subscription_info( $user );
+                $data['status_label']  = UserSubscription::status_label( $data['subscription']['status'] ?? '' );
                 $data['plans']         = Plans::get_plans();
                 $data['pricing_url']   = Pages::get_page_url( 'ovr_page_pricing' );
                 $data['checkout_url']  = Pages::get_page_url( 'ovr_page_checkout' );
@@ -319,7 +326,7 @@ class Dashboard {
      * @param int $limit -1 for all.
      * @return \WP_Post[]
      */
-    private static function get_properties( \WP_User $user, int $limit = -1 ): array {
+    private static function get_properties( \WP_User $user, int $limit = 999 ): array {
         $q = new \WP_Query( [
             'post_type'      => 'ovr_property',
             'post_status'    => [ 'publish', 'draft', 'pending' ],
@@ -343,7 +350,7 @@ class Dashboard {
             'post_type'      => 'ovr_property',
             'post_status'    => [ 'publish', 'draft', 'pending' ],
             'author'         => $user->ID,
-            'posts_per_page' => -1,
+            'posts_per_page' => 999,
             'no_found_rows'  => true,
             'meta_query'     => [
                 'relation' => 'OR',
@@ -382,17 +389,12 @@ class Dashboard {
      * Subscription summary for the current user.
      */
     private static function get_subscription_info( \WP_User $user ): array {
-        $current       = UserSubscription::get_plan_slug( $user->ID );
-        $expires       = (string) get_user_meta( $user->ID, 'ovr_subscription_expires', true );
-        $listings_used = UserSubscription::get_listing_count( $user->ID );
-        $plan_data     = Plans::get_plan( $current );
-
-        return [
-            'plan_slug'    => $current,
-            'plan_name'    => $plan_data['name']         ?? __( 'Unknown plan', 'ovr-core' ),
-            'plan_limit'   => (int) ( $plan_data['max_listings'] ?? 0 ),
-            'expires'      => $expires,
-            'listings_used'=> $listings_used,
-        ];
+        $info = UserSubscription::get_info( $user->ID );
+        $plan = Plans::get_plan( $info['plan_slug'] );
+        return array_merge( $info, [
+            'plan_name'    => $plan['name']         ?? __( 'Unknown plan', 'ovr-core' ),
+            'plan_limit'   => (int) ( $plan['max_listings'] ?? 0 ),
+            'listings_used'=> UserSubscription::get_listing_count( $user->ID ),
+        ] );
     }
 }

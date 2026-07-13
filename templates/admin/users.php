@@ -131,6 +131,7 @@ use OVR\Subscription\UserSubscription;
         .ovr-u-action-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:var(--radius-sm);border:none;cursor:pointer;background:transparent;color:var(--gray-mid);text-decoration:none;transition:all .18s ease}
         .ovr-u-action-btn:hover{background:var(--gray-light);color:var(--ink);box-shadow:var(--shadow-sm)}
         .ovr-u-action-btn .material-symbols-outlined{font-size:21px}
+        .ovr-u-action-btn--listings:hover{background:var(--green-light,#e3f4ea);color:var(--green,#006c4a)}
         .ovr-u-action-btn--edit:hover{background:var(--blue-light);color:var(--blue)}
         .ovr-u-action-btn--suspend:hover{background:var(--gold-light);color:var(--gold-dark)}
         .ovr-u-action-btn--danger:hover{background:var(--red-light);color:var(--red)}
@@ -253,10 +254,9 @@ use OVR\Subscription\UserSubscription;
                     </div>
                     <div class="ovr-u-filter">
                         <select name="role">
-                            <option value=""><?php esc_html_e( 'All Roles', 'ovr-core' ); ?></option>
-                            <option value="ovr_landlord" <?php selected( $role, 'ovr_landlord' ); ?>><?php esc_html_e( 'Landlord', 'ovr-core' ); ?></option>
-                            <option value="administrator" <?php selected( $role, 'administrator' ); ?>><?php esc_html_e( 'Administrator', 'ovr-core' ); ?></option>
-                            <option value="subscriber" <?php selected( $role, 'subscriber' ); ?>><?php esc_html_e( 'Subscriber', 'ovr-core' ); ?></option>
+                            <option value=""><?php esc_html_e( 'All Users', 'ovr-core' ); ?></option>
+                            <option value="administrator" <?php selected( $role, 'administrator' ); ?>><?php esc_html_e( 'Administrators', 'ovr-core' ); ?></option>
+                            <option value="user" <?php selected( $role, 'user' ); ?>><?php esc_html_e( 'Users', 'ovr-core' ); ?></option>
                         </select>
                     </div>
                     <div class="ovr-u-filter">
@@ -406,7 +406,17 @@ use OVR\Subscription\UserSubscription;
                                     </span>
                                 </td>
                                 <td>
+                                    <?php
+                                    // P6.4: jump straight to this user's listings (business-critical).
+                                    $listings_url = add_query_arg(
+                                        [ 'post_type' => 'ovr_property', 'author' => (int) $user->ID ],
+                                        admin_url( 'edit.php' )
+                                    );
+                                    ?>
                                     <div class="ovr-u-actions-cell">
+                                        <a href="<?php echo esc_url( $listings_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--listings" title="<?php esc_attr_e( 'View this user’s listings', 'ovr-core' ); ?>">
+                                            <span class="material-symbols-outlined">home</span>
+                                        </a>
                                         <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--edit" title="<?php esc_attr_e( 'Edit profile', 'ovr-core' ); ?>">
                                             <span class="material-symbols-outlined">edit</span>
                                         </a>

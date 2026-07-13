@@ -14,6 +14,7 @@ namespace OVR\Auth;
 use OVR\Core\Pages;
 use OVR\Core\TemplateLoader;
 use OVR\Frontend\ProfileCompletion;
+use OVR\Subscription\UserSubscription;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -87,23 +88,47 @@ class LoginHandler {
             return;
         }
 
-        // Compute redirect. Onboarding only fires for a freshly-registered
-        // user whose profile is still incomplete — a returning landlord
-        // must never see the welcome screen just for logging in.
-        $profile_complete = (int) ProfileCompletion::percent( $user->ID );
-        $is_first_login   = (string) get_user_meta( $user->ID, 'ovr_first_login', true ) === '1';
+        // Subscription-based redirect. Status determines where the user goes.
+        $status   = UserSubscription::get_status( $user->ID );
+        $redirect = '';
 
-        if ( $is_first_login && $profile_complete < 100 ) {
-            // Brand-new user → show /welcome/ exactly once. The onboarding
-            // template clears ovr_first_login when it renders, so a refresh
-            // won't re-trigger the welcome screen.
-            $redirect = Pages::get_page_url( 'ovr_page_onboarding' );
-        } else {
-            // Returning user OR completed profile → straight to dashboard.
-            $redirect = add_query_arg(
-                [ 'tab' => isset( $_GET['view'] ) ? sanitize_key( $_GET['view'] ) : '' ],
-                Pages::get_page_url( 'ovr_page_dashboard', true )
-            );
+        switch ( $status ) {
+            case UserSubscription::STATUS_NONE:
+                $redirect = Pages::get_page_url( 'ovr_page_subscription_select' );
+                break;
+            case UserSubscription::STATUS_PENDING:
+                $redirect = add_query_arg(
+                    'payment', 'pending',
+                    Pages::get_page_url( 'ovr_page_subscription_select' )
+                );
+                break;
+            case UserSubscription::STATUS_EXPIRED:
+            case UserSubscription::STATUS_CANCELLED:
+                $redirect = add_query_arg(
+                    'renew', 'required',
+                    Pages::get_page_url( 'ovr_page_subscription_select' )
+                );
+                break;
+            case UserSubscription::STATUS_SUSPENDED:
+                $redirect = add_query_arg( 'suspended', '1', home_url() );
+                break;
+            case UserSubscription::STATUS_ACTIVE:
+                // Active subscriber — check onboarding for first login.
+                $profile_complete = (int) ProfileCompletion::percent( $user->ID );
+                $is_first_login   = (string) get_user_meta( $user->ID, 'ovr_first_login', true ) === '1';
+                if ( $is_first_login && $profile_complete < 100 ) {
+                    $redirect = Pages::get_page_url( 'ovr_page_onboarding' );
+                } else {
+                    $redirect = add_query_arg(
+                        [ 'tab' => isset( $_GET['view'] ) ? sanitize_key( $_GET['view'] ) : '' ],
+                        Pages::get_page_url( 'ovr_page_dashboard', true )
+                    );
+                }
+                break;
+        }
+
+        if ( ! $redirect ) {
+            $redirect = Pages::get_page_url( 'ovr_page_subscription_select' );
         }
 
         /**

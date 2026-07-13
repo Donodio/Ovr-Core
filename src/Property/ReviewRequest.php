@@ -13,6 +13,7 @@
 namespace OVR\Property;
 
 use OVR\Core\AuditLog;
+use OVR\Email\Mailer;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -121,21 +122,33 @@ class ReviewRequest {
         $title = get_the_title( (int) $req['property_id'] );
         $site  = get_bloginfo( 'name' );
 
-        $subject = sprintf(
-            /* translators: %s: property title */
-            __( 'How was your stay at %s?', 'ovr-core' ),
-            $title
-        );
-        $body = sprintf(
-            /* translators: 1: guest name 2: property 3: review URL 4: site */
-            __( "Hi %1\$s,\n\nThank you for staying at %2\$s. We'd love to hear about your experience — it only takes a minute:\n\n%3\$s\n\nWith thanks,\n%4\$s", 'ovr-core' ),
-            $req['guest_name'] ?: __( 'there', 'ovr-core' ),
-            $title,
-            $url,
-            $site
-        );
+        $sent = Mailer::send( 'review_request', [
+            'guest_name'      => $req['guest_name'] ?: __( 'there', 'ovr-core' ),
+            'property_title'  => $title,
+            'review_url'      => $url,
+            'site_name'       => $site,
+            'site_url'        => home_url(),
+        ], [
+            'user_email' => $req['guest_email'],
+        ] );
 
-        $sent = wp_mail( $req['guest_email'], $subject, $body );
+        if ( ! $sent ) {
+            $subject = sprintf(
+                /* translators: %s: property title */
+                __( 'How was your stay at %s?', 'ovr-core' ),
+                $title
+            );
+            $body = sprintf(
+                /* translators: 1: guest name 2: property 3: review URL 4: site */
+                __( "Hi %1\$s,\n\nThank you for staying at %2\$s. We'd love to hear about your experience — it only takes a minute:\n\n%3\$s\n\nWith thanks,\n%4\$s", 'ovr-core' ),
+                $req['guest_name'] ?: __( 'there', 'ovr-core' ),
+                $title,
+                $url,
+                $site
+            );
+            $sent = wp_mail( $req['guest_email'], $subject, $body );
+        }
+
         if ( $sent ) {
             self::mark_sent( $id );
         }

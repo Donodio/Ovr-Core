@@ -295,7 +295,7 @@ class ImageTools {
         $ok = false;
         switch ( $type ) {
             case IMAGETYPE_JPEG:
-                $ok = imagejpeg( $out, $file, 90 );
+                $ok = imagejpeg( $out, $file, self::quality() );
                 break;
             case IMAGETYPE_PNG:
                 imagesavealpha( $out, true );
@@ -334,5 +334,13 @@ class ImageTools {
             }
         }
         return null;
+    }
+
+    private static function quality(): int {
+        if ( ! class_exists( '\OVR\Core\SettingsBehaviors' ) ) {
+            return 82;
+        }
+        $s = \OVR\Core\SettingsBehaviors::s();
+        return max( 10, min( 100, (int) ( $s['image_quality'] ?? 82 ) ) );
     }
 }

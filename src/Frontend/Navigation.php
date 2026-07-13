@@ -8,6 +8,40 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 class Navigation {
     public function init(): void {
         add_filter( 'wp_nav_menu_items', [ $this, 'add_auth_links' ], 10, 2 );
+        // Mark feedback P5: navigation must open in the same tab. Strip any
+        // "open in new tab" target from internal menu links (a menu-item setting
+        // or theme walker may add it); genuinely external links keep theirs.
+        add_filter( 'nav_menu_link_attributes', [ $this, 'force_same_tab' ], 10, 3 );
+    }
+
+    /**
+     * Remove target="_blank" from same-site menu links so navigation stays in
+     * the current tab. External links (different host) are left untouched.
+     *
+     * @param array<string,string> $atts
+     * @param mixed                $item
+     * @param mixed                $args
+     * @return array<string,string>
+     */
+    public function force_same_tab( array $atts, $item = null, $args = null ): array {
+        $href = $atts['href'] ?? '';
+        if ( '' === $href ) {
+            return $atts;
+        }
+        $host = wp_parse_url( $href, PHP_URL_HOST );
+        $site = wp_parse_url( home_url(), PHP_URL_HOST );
+
+        // Relative links (no host) or same-host links must never open a new tab.
+        if ( empty( $host ) || 0 === strcasecmp( (string) $host, (string) $site ) ) {
+            unset( $atts['target'] );
+            if ( isset( $atts['rel'] ) ) {
+                $atts['rel'] = trim( (string) preg_replace( '/\bnoopener\b|\bnoreferrer\b/', '', $atts['rel'] ) );
+                if ( '' === $atts['rel'] ) {
+                    unset( $atts['rel'] );
+                }
+            }
+        }
+        return $atts;
     }
 
     /**

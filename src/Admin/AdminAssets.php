@@ -33,7 +33,17 @@ class AdminAssets {
         $ovr_post_types = [ 'ovr_property', 'ovr_testimonial' ];
         $ovr_taxonomies = [ 'ovr_village', 'ovr_property_type', 'ovr_amenity', 'ovr_rental_type', 'ovr_view', 'ovr_feature' ];
 
-        $is_ovr_screen = in_array( $screen->post_type, $ovr_post_types, true )
+        // Some OVR admin pages (e.g. All Properties, which redirects to
+        // admin.php?page=ovr-properties, and the Platform Overview) do not carry
+        // a post_type context on their screen, so the checks above miss them and
+        // the shared fonts/design system never load — icons then render as their
+        // ligature text. Treat any admin page whose ?page slug begins with "ovr"
+        // as an OVR screen too.
+        $page_slug   = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+        $is_ovr_page = '' !== $page_slug && 0 === strpos( $page_slug, 'ovr' );
+
+        $is_ovr_screen = $is_ovr_page
+            || in_array( $screen->post_type, $ovr_post_types, true )
             || in_array( (string) $screen->taxonomy, $ovr_taxonomies, true );
         if ( ! $is_ovr_screen ) return;
 

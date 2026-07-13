@@ -11,11 +11,13 @@
  * @var string   $checkout_url
  * @var string   $logout_url
  * @var bool     $is_expired
+ * @var bool     $is_pending
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 $plans      = $plans ?? [];
 $is_expired = ! empty( $is_expired );
+$is_pending = ! empty( $is_pending );
 $settings   = (array) get_option( 'ovr_settings', [] );
 $sym        = $settings['currency_symbol'] ?? '$';
 $first_name = $user->first_name ?: $user->display_name;
@@ -60,7 +62,12 @@ $period_label = static function ( string $p ): string {
 
     <div class="ovr-subsel-inner">
 
-        <?php if ( $is_expired ) : ?>
+        <?php if ( $is_pending ) : ?>
+            <div class="ovr-subsel-banner" style="background:var(--terc)">
+                <span class="material-symbols-outlined">hourglass_top</span>
+                <span><?php esc_html_e( 'You have a payment pending. Once confirmed, your subscription will activate and you can access your dashboard.', 'ovr-core' ); ?></span>
+            </div>
+        <?php elseif ( $is_expired ) : ?>
             <div class="ovr-subsel-banner">
                 <span class="material-symbols-outlined">warning</span>
                 <span><?php esc_html_e( 'Your subscription has expired. Renew below to restore access to your dashboard and listings.', 'ovr-core' ); ?></span>

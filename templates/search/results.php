@@ -54,9 +54,30 @@ $results_ref = $build_url( [ 'paged' => $paged ] );
 $range_start = $total > 0 ? ( ( $paged - 1 ) * $per_page ) + 1 : 0;
 $range_end   = min( $total, $paged * $per_page );
 
-// Featured listings for the right-hand rail. Same equal-width grid track as
-// the results, so featured cards line up row-for-row (grid view only).
-$featured = ( 'list' !== $view && 'map' !== $view && ! $owner_active ) ? PropertyQuery::get_featured( 4 ) : null;
+// Check if any search filter is actively set. When no filters are applied we
+// prepend featured listings at the top of the grid (page 1 only); when filters
+// are active the results are purely query-driven — featured status is still
+// shown as a badge but does not affect ordering.
+$has_active_filters = (
+    '' !== ( $filters['keyword'] ?? '' ) ||
+    ! empty( $filters['village'] ) ||
+    ! empty( $filters['village_section'] ) ||
+    ! empty( $filters['property_type'] ) ||
+    ! empty( $filters['rental_type'] ) ||
+    ! empty( $filters['amenities'] ) ||
+    ! empty( $filters['views'] ) ||
+    ! empty( $filters['features'] ) ||
+    (int) ( $filters['bedrooms'] ?? 0 ) > 0 ||
+    (float) ( $filters['bathrooms'] ?? 0 ) > 0 ||
+    (float) ( $filters['price_min'] ?? 0 ) > 0 ||
+    (float) ( $filters['price_max'] ?? 0 ) > 0 ||
+    (int) ( $filters['guests'] ?? 0 ) > 0 ||
+    ! empty( $filters['pets'] ) ||
+    '' !== ( $filters['checkin'] ?? '' ) ||
+    '' !== ( $filters['checkout'] ?? '' ) ||
+    (int) ( $filters['owner_id'] ?? 0 ) > 0 ||
+    'newest' !== ( $filters['sort'] ?? 'newest' )
+);
 
 // Featured Cities strip: admin-managed entries (Featured Cities portal) link to
 // a keyword search; if none are configured, fall back to the village list.
@@ -203,7 +224,6 @@ if ( ! $owner_active ) {
                     </div>
                 </div>
                 <?php $results_header = ob_get_clean(); ?>
-                <?php $has_featured = ( $featured instanceof WP_Query && $featured->have_posts() ); ?>
 
                 <!-- Results -->
                 <?php if ( $query->have_posts() ) : ?>
@@ -265,40 +285,24 @@ if ( ! $owner_active ) {
                                 <?php echo PropertyCard::render_list( get_the_ID(), $results_ref ); ?>
                             <?php endwhile; wp_reset_postdata(); ?>
                         </div>
-                    <?php elseif ( $has_featured ) : ?>
-                        <!-- Single row, two cells: results column (navy bar + cards)
-                             and the light-yellow Featured panel. Independent heights
-                             so a tall featured panel never pushes the results down. -->
-                        <div class="ovr-results-area">
-                            <div class="ovr-results-main">
-                                <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-                                <div class="ovr-search-results">
-                                    <?php while ( $query->have_posts() ) : $query->the_post(); $cid = (int) get_the_ID(); ?>
-                                        <?php echo PropertyCard::render_search( $cid, \OVR\Subscription\UpgradeActivator::is_active( $cid, 'featured' ), $results_ref ); ?>
-                                    <?php endwhile; wp_reset_postdata(); ?>
-                                </div>
-                            </div>
-                            <aside class="ovr-featured-panel" aria-label="<?php esc_attr_e( 'Featured listings', 'ovr-core' ); ?>">
-                                <div class="ovr-featured-head">
-                                    <span class="material-symbols-outlined">star</span>
-                                    <span class="ovr-featured-head-text">
-                                        <?php esc_html_e( 'Featured Listings', 'ovr-core' ); ?>
-                                        <small><?php esc_html_e( 'Paid Service', 'ovr-core' ); ?></small>
-                                    </span>
-                                </div>
-                                <div class="ovr-featured-rail">
-                                    <?php while ( $featured->have_posts() ) : $featured->the_post(); ?>
-                                        <?php echo PropertyCard::render_search( get_the_ID(), true, $results_ref ); ?>
-                                    <?php endwhile; wp_reset_postdata(); ?>
-                                </div>
-                            </aside>
-                        </div>
                     <?php else : ?>
                         <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                         <div class="ovr-search-results ovr-results-fullgrid">
-                            <?php while ( $query->have_posts() ) : $query->the_post(); $cid = (int) get_the_ID(); ?>
-                                <?php echo PropertyCard::render_search( $cid, \OVR\Subscription\UpgradeActivator::is_active( $cid, 'featured' ), $results_ref ); ?>
-                            <?php endwhile; wp_reset_postdata(); ?>
+                            <?php
+                            // Featured listings float to the top of the grid via
+                            // the query's boost ordering (PropertyQuery::
+                            // boost_order_clauses) — but ONLY when they match the
+                            // active search filters, since ordering acts on the
+                            // already-filtered set. We no longer inject featured
+                            // listings from a separate, filter-blind query, so an
+                            // unrelated featured listing is never shown (Mark P2).
+                            while ( $query->have_posts() ) {
+                                $query->the_post();
+                                $cid = (int) get_the_ID();
+                                echo PropertyCard::render_search( $cid, \OVR\Subscription\UpgradeActivator::is_active( $cid, 'featured' ), $results_ref ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+                            }
+                            wp_reset_postdata();
+                            ?>
                         </div>
                     <?php endif; ?>
 

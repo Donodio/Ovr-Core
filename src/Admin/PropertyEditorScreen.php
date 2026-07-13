@@ -93,9 +93,12 @@ class PropertyEditorScreen {
             wp_die( esc_html__( 'You are not allowed to edit this listing.', 'ovr-core' ) );
         }
 
-        $list_url = admin_url( 'edit.php?post_type=' . self::POST_TYPE );
+        $list_url = admin_url( 'admin.php?page=ovr-properties' );
 
         echo '<div class="wrap">';
+        echo '<div style="margin-bottom:12px;font-size:13px;color:#646970">';
+        echo '<a href="' . esc_url( $list_url ) . '" style="text-decoration:none;color:#2271b1">&larr; ' . esc_html__( 'Back to All Properties', 'ovr-core' ) . '</a>';
+        echo '</div>';
         echo '<h1 class="wp-heading-inline">' . ( $post ? esc_html__( 'Edit Listing', 'ovr-core' ) : esc_html__( 'Add New Listing', 'ovr-core' ) ) . '</h1>';
         echo '<hr class="wp-header-end">';
 
@@ -126,8 +129,7 @@ class PropertyEditorScreen {
 
     /** Surface the save result on the property list screen. */
     public function maybe_notice(): void {
-        $screen = get_current_screen();
-        if ( ! $screen || 'edit-' . self::POST_TYPE !== $screen->id ) {
+        if ( ! isset( $_GET['page'] ) || 'ovr-properties' !== $_GET['page'] ) {
             return;
         }
         $notice = isset( $_GET['ovr_listing'] ) ? sanitize_key( wp_unslash( $_GET['ovr_listing'] ) ) : '';

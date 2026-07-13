@@ -11,6 +11,7 @@ namespace OVR\Ajax;
 use OVR\Property\PropertyQuery;
 use OVR\Property\PropertyCard;
 use OVR\Property\IcalSync;
+use OVR\Property\Geocoder;
 use OVR\Search\SearchHandler;
 use OVR\Core\Pages;
 
@@ -55,6 +56,9 @@ class AjaxHandler {
         add_action( 'wp_ajax_ovr_upload_avatar', [ $this, 'upload_avatar' ] );
         // Serve the uploaded photo wherever WordPress asks for the user's avatar.
         add_filter( 'get_avatar_data', [ $this, 'filter_avatar_data' ], 10, 2 );
+
+        // Frontend: auto-geocode address fields (landlord editor).
+        add_action( 'wp_ajax_ovr_geocode_address', [ $this, 'geocode_address' ] );
     }
 
     /**
@@ -350,6 +354,12 @@ class AjaxHandler {
         $owns = $post && (int) $post->post_author === get_current_user_id();
         if ( ! current_user_can( 'edit_post', $post_id ) && ! $owns ) {
             wp_send_json_error( [ 'message' => __( 'You cannot edit this property.', 'ovr-core' ) ], 403 );
+        }
+
+        // Persist the URL the user just typed so "paste → Sync now" works without
+        // a separate save (the field may not have been saved to meta yet).
+        if ( isset( $_POST['ical_url'] ) ) {
+            update_post_meta( $post_id, '_ovr_ical_url', esc_url_raw( wp_unslash( $_POST['ical_url'] ) ) );
         }
 
         $sync   = new IcalSync();
@@ -663,50 +673,27 @@ class AjaxHandler {
     }
 
     /**
-     * Apply promo code.
+     * Auto-geocode address fields from the listing editor. Returns lat/lng
+     * via OpenStreetMap Nominatim (no API key required). Uses Geocoder::geocode()
+     * which caches results in transients to stay within rate limits.
      */
-    public function apply_promo(): void {
-        check_ajax_referer( 'ovr_public_nonce', 'nonce' );
-
-        if ( ! is_user_logged_in() ) {
-            wp_send_json_error( [ 'message' => __( 'Please log in first.', 'ovr-core' ) ], 401 );
+    public function geocode_address(): void {
+        if ( ! check_ajax_referer( 'ovr_listing_action', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
         }
 
-        $code = sanitize_text_field( wp_unslash( $_POST['code'] ?? '' ) );
-        if ( empty( $code ) ) {
-            wp_send_json_error( [ 'message' => __( 'Please enter a promo code.', 'ovr-core' ) ], 400 );
+        $address = sanitize_text_field( wp_unslash( $_POST['address'] ?? '' ) );
+        $city    = sanitize_text_field( wp_unslash( $_POST['city']    ?? '' ) );
+        $state   = sanitize_text_field( wp_unslash( $_POST['state']   ?? '' ) );
+        $zip     = sanitize_text_field( wp_unslash( $_POST['zip']     ?? '' ) );
+
+        $coords = Geocoder::geocode( $address, $city, $state, $zip );
+
+        if ( $coords ) {
+            wp_send_json_success( $coords );
         }
 
-        global $wpdb;
-        $table = $wpdb->prefix . 'ovr_promo_codes';
-
-        $promo = $wpdb->get_row(
-            $wpdb->prepare( "SELECT * FROM {$table} WHERE code = %s AND is_active = 1", $code ),
-            ARRAY_A
-        );
-
-        if ( ! $promo ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid or expired promo code.', 'ovr-core' ) ], 404 );
-        }
-
-        $now = current_time( 'Y-m-d' );
-        if ( ( $promo['valid_from'] && $now < $promo['valid_from'] ) || ( $promo['valid_until'] && $now > $promo['valid_until'] ) ) {
-            wp_send_json_error( [ 'message' => __( 'This promo code is not currently valid.', 'ovr-core' ) ], 400 );
-        }
-
-        if ( $promo['max_uses'] && $promo['current_uses'] >= $promo['max_uses'] ) {
-            wp_send_json_error( [ 'message' => __( 'This promo code has reached its usage limit.', 'ovr-core' ) ], 400 );
-        }
-
-        wp_send_json_success( [
-            'discount_type'  => $promo['discount_type'],
-            'discount_value' => (float) $promo['discount_value'],
-            'message'        => sprintf(
-                __( 'Promo code applied! %s discount.', 'ovr-core' ),
-                'percentage' === $promo['discount_type']
-                    ? $promo['discount_value'] . '%'
-                    : '$' . number_format( $promo['discount_value'], 2 )
-            ),
-        ] );
+        wp_send_json_error( [ 'message' => __( 'Could not locate that address.', 'ovr-core' ) ], 200 );
     }
 }
+

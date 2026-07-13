@@ -41,7 +41,7 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Village Renta
         <nav class="ovr-nav-links" aria-label="<?php esc_attr_e( 'Primary navigation', 'ovr-core' ); ?>">
             <?php foreach ( $nav_items as $slug => $item ) : ?>
                 <a href="<?php echo esc_url( $item['url'] ); ?>"
-                   class="<?php echo $active === $slug ? 'active' : ''; ?>">
+                   class="<?php echo $active === $slug ? 'active' : ''; ?>"<?php echo ! empty( $item['target'] ) ? ' target="_blank" rel="noopener"' : ''; ?>>
                     <?php echo esc_html( $item['label'] ); ?>
                 </a>
             <?php endforeach; ?>

@@ -1,0 +1,9 @@
+.ovr-loading .ovr-ft-table {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.ovr-loading .tablenav {
+    opacity: 0.5;
+    pointer-events: none;
+}

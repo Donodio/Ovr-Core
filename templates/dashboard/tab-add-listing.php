@@ -104,17 +104,36 @@ $admin_statuses = [
     'pending_review' => __( 'Pending Review', 'ovr-core' ),
 ];
 
-// Tab definitions (number, key, label). The "Review & Publish" step was removed
-// (Phase 7); Videos is the final step and Save Changes is always available.
+// Admin-only tab data (P8 §8): a dedicated Admin tab, shown only when an admin
+// edits an existing listing (owner reassignment + complimentary services need a
+// saved post).
+$show_admin_tab = $is_admin_user && $is_edit;
+$admin_notes    = $is_edit ? (string) get_post_meta( $pid, '_ovr_admin_notes', true ) : '';
+$deals_cancel   = $is_edit ? (string) get_post_meta( $pid, '_ovr_deals_cancellations', true ) : '';
+$referred_by    = $is_edit ? (string) get_post_meta( $pid, '_ovr_referred_by', true ) : '';
+$activity_start = $is_edit ? (string) get_post_meta( $pid, '_ovr_activity_start', true ) : '';
+$activity_end   = $is_edit ? (string) get_post_meta( $pid, '_ovr_activity_end', true ) : '';
+$owner_user     = $is_edit ? get_userdata( (int) $post->post_author ) : null;
+$deals_options  = [
+    ''                      => __( 'None', 'ovr-core' ),
+    'special_deal'          => __( 'Special Deal', 'ovr-core' ),
+    'last_minute'           => __( 'Last-Minute Discount', 'ovr-core' ),
+    'flexible_cancellation' => __( 'Flexible Cancellation', 'ovr-core' ),
+    'non_refundable'        => __( 'Non-Refundable', 'ovr-core' ),
+];
+
+// Tab definitions (key, label). Consolidated workflow; admins get a 6th "Admin" tab.
 $ld_tabs = [
     [ 'info',      __( 'Property Information', 'ovr-core' ) ],
-    [ 'photos',    __( 'Photos', 'ovr-core' ) ],
+    [ 'additional',  __( 'Additional Information', 'ovr-core' ) ],
+    [ 'media',     __( 'Photos & Media', 'ovr-core' ) ],
+    [ 'calendar',  __( 'Calendar', 'ovr-core' ) ],
     [ 'pricing',   __( 'Pricing', 'ovr-core' ) ],
-    [ 'calendar',  __( 'Availability Calendar', 'ovr-core' ) ],
-    [ 'videos',    __( 'Video', 'ovr-core' ) ],
-    [ 'panorama',  __( 'Panorama', 'ovr-core' ) ],
-    [ 'documents', __( 'Documents', 'ovr-core' ) ],
 ];
+if ( $show_admin_tab ) {
+    $ld_tabs[] = [ 'admin', __( 'Admin', 'ovr-core' ) ];
+}
+$ld_step_keys = array_map( static fn( $t ) => $t[0], $ld_tabs );
 
 // Existing uploaded media (Features B/C/D) for re-render on edit.
 $video_att_id = (int) $m( 'video_id' );
@@ -135,7 +154,26 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     /* translators: %d: listing/property ID */
                     printf( esc_html__( 'Property ID: #%d', 'ovr-core' ), (int) $pid );
                     ?>
+                    <button type="button" class="ld-fm-copy-id" data-copy="#<?php echo (int) $pid; ?>" title="<?php esc_attr_e( 'Copy Property ID', 'ovr-core' ); ?>">
+                        <span class="material-symbols-outlined">content_copy</span>
+                        <span class="ld-fm-copy-id-msg"><?php esc_html_e( 'Copy', 'ovr-core' ); ?></span>
+                    </button>
                 </span>
+                <?php if ( $is_admin_user ) :
+                    $author = get_userdata( $post->post_author );
+                    $view_url = get_permalink( $pid );
+                ?>
+                    <?php if ( $view_url ) : ?>
+                        <a href="<?php echo esc_url( $view_url ); ?>" class="ld-fm-back" target="_blank" style="margin-left:14px;display:inline-flex;align-items:center;gap:4px">
+                            <span class="material-symbols-outlined">open_in_new</span><?php esc_html_e( 'View Listing', 'ovr-core' ); ?>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ( $author ) : ?>
+                        <span class="ld-fm-statuspill" style="margin-left:10px;background:#f0f0f1;color:#50575e;border-color:#c3c4c7;font-size:11px;text-transform:none;letter-spacing:normal;font-weight:500">
+                            <?php echo esc_html( $author->display_name ); ?> &lt;<?php echo esc_html( $author->user_email ); ?>&gt;
+                        </span>
+                    <?php endif; ?>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </header>
@@ -181,6 +219,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         <?php if ( ! empty( $return_url ) ) : ?>
             <input type="hidden" name="return_url" value="<?php echo esc_url( $return_url ); ?>">
         <?php endif; ?>
+        <input type="hidden" id="ovr-editor-admin-nonce" value="<?php echo esc_attr( wp_create_nonce( 'ovr_admin_nonce' ) ); ?>">
 
         <!-- ── TAB 1: Property Information ── -->
         <section class="ld-fm-panel is-active" data-ld-panel="info">
@@ -199,20 +238,11 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                                 <option value="inactive" <?php selected( $owner_status, 'inactive' ); ?>><?php esc_html_e( 'Inactive — hidden from the site & searches', 'ovr-core' ); ?></option>
                             </select>
                         </div>
-                        <?php if ( $is_admin_user ) : ?>
-                            <div class="ld-fm-field ld-fm-adminonly" style="margin-bottom:0">
-                                <label class="ld-fm-label" for="ld-fm-admin-status"><?php esc_html_e( 'Admin Status', 'ovr-core' ); ?> <span class="ld-fm-adminbadge"><?php esc_html_e( 'Admins only', 'ovr-core' ); ?></span></label>
-                                <select class="ld-fm-input" id="ld-fm-admin-status" name="admin_status">
-                                    <?php foreach ( $admin_statuses as $av => $al ) : ?>
-                                        <option value="<?php echo esc_attr( $av ); ?>" <?php selected( $admin_status, $av ); ?>><?php echo esc_html( $al ); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <p class="ld-fm-subhint"><?php esc_html_e( 'Overrides the owner status. Anything other than “Approved” removes the listing from the public site.', 'ovr-core' ); ?></p>
-                            </div>
-                        <?php endif; ?>
+                        <?php // Admin Status moved to the dedicated Admin tab (P8 §8). ?>
                     </div>
                 </div>
             <?php endif; ?>
+
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Property Information', 'ovr-core' ); ?></h2>
                 <div class="ld-fm-field">
@@ -226,8 +256,36 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     <p class="ld-fm-subhint"><span id="ld-fm-shortdesc-count">0</span>/200 <?php esc_html_e( 'characters. Appears in search results, featured listings, and cards.', 'ovr-core' ); ?></p>
                 </div>
                 <div class="ld-fm-field">
-                    <label class="ld-fm-label" for="ld-fm-desc"><?php esc_html_e( 'Full Description', 'ovr-core' ); ?></label>
-                    <textarea class="ld-fm-input ld-fm-textarea" id="ld-fm-desc" name="description" rows="5" placeholder="<?php esc_attr_e( 'Describe your property in full — shown on the listing page…', 'ovr-core' ); ?>"><?php echo esc_textarea( $desc ); ?></textarea>
+                    <label class="ld-fm-label" for="ld-rte-body"><?php esc_html_e( 'Full Description', 'ovr-core' ); ?></label>
+                    <div class="ld-rte" id="ld-rte">
+                        <div class="ld-rte-toolbar" role="toolbar" aria-label="<?php esc_attr_e( 'Formatting', 'ovr-core' ); ?>">
+                            <select class="ld-rte-block" aria-label="<?php esc_attr_e( 'Paragraph style', 'ovr-core' ); ?>">
+                                <option value=""><?php esc_html_e( 'Paragraph', 'ovr-core' ); ?></option>
+                                <option value="p"><?php esc_html_e( 'Normal text', 'ovr-core' ); ?></option>
+                                <option value="h2"><?php esc_html_e( 'Heading', 'ovr-core' ); ?></option>
+                                <option value="h3"><?php esc_html_e( 'Subheading', 'ovr-core' ); ?></option>
+                            </select>
+                            <span class="ld-rte-sep"></span>
+                            <button type="button" class="ld-rte-btn" data-cmd="bold" title="<?php esc_attr_e( 'Bold', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Bold', 'ovr-core' ); ?>"><b>B</b></button>
+                            <button type="button" class="ld-rte-btn" data-cmd="italic" title="<?php esc_attr_e( 'Italic', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Italic', 'ovr-core' ); ?>"><i>I</i></button>
+                            <button type="button" class="ld-rte-btn" data-cmd="underline" title="<?php esc_attr_e( 'Underline', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Underline', 'ovr-core' ); ?>"><u>U</u></button>
+                            <span class="ld-rte-sep"></span>
+                            <button type="button" class="ld-rte-btn" data-cmd="insertUnorderedList" title="<?php esc_attr_e( 'Bulleted list', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Bulleted list', 'ovr-core' ); ?>"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+                            <button type="button" class="ld-rte-btn" data-cmd="insertOrderedList" title="<?php esc_attr_e( 'Numbered list', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Numbered list', 'ovr-core' ); ?>"><span class="material-symbols-outlined">format_list_numbered</span></button>
+                            <span class="ld-rte-sep"></span>
+                            <button type="button" class="ld-rte-btn" data-cmd="createLink" title="<?php esc_attr_e( 'Insert link', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Insert link', 'ovr-core' ); ?>"><span class="material-symbols-outlined">link</span></button>
+                            <button type="button" class="ld-rte-btn" data-cmd="unlink" title="<?php esc_attr_e( 'Remove link', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Remove link', 'ovr-core' ); ?>"><span class="material-symbols-outlined">link_off</span></button>
+                            <button type="button" class="ld-rte-btn" data-cmd="removeFormat" title="<?php esc_attr_e( 'Clear formatting', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Clear formatting', 'ovr-core' ); ?>"><span class="material-symbols-outlined">format_clear</span></button>
+                            <span class="ld-rte-sep"></span>
+                            <button type="button" class="ld-rte-btn" data-cmd="undo" title="<?php esc_attr_e( 'Undo', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Undo', 'ovr-core' ); ?>"><span class="material-symbols-outlined">undo</span></button>
+                            <button type="button" class="ld-rte-btn" data-cmd="redo" title="<?php esc_attr_e( 'Redo', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Redo', 'ovr-core' ); ?>"><span class="material-symbols-outlined">redo</span></button>
+                            <span class="ld-rte-sep ld-rte-spacer"></span>
+                            <button type="button" class="ld-rte-btn ld-rte-htmltoggle" data-rte-html title="<?php esc_attr_e( 'Edit HTML source', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Edit HTML source', 'ovr-core' ); ?>"><span class="material-symbols-outlined">code</span></button>
+                        </div>
+                        <div class="ld-rte-body" id="ld-rte-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="<?php esc_attr_e( 'Describe your property in full — shown on the listing page…', 'ovr-core' ); ?>"><?php echo wp_kses_post( $desc ); ?></div>
+                        <textarea class="ld-rte-source" id="ld-fm-desc" name="description" hidden><?php echo esc_textarea( $desc ); ?></textarea>
+                    </div>
+                    <p class="ld-fm-subhint"><?php esc_html_e( 'Use the toolbar to format your description — headings, bold, lists, and links. Click the “</>” button to edit the HTML directly.', 'ovr-core' ); ?></p>
                 </div>
                 <div class="ld-fm-grid">
                     <div class="ld-fm-field">
@@ -298,6 +356,24 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     <label class="ld-fm-label" for="ld-fm-villagename"><?php esc_html_e( 'Village Name', 'ovr-core' ); ?> <span class="ld-fm-req">*</span></label>
                     <input class="ld-fm-input" id="ld-fm-villagename" name="village_name" type="text" value="<?php echo esc_attr( (string) $m( 'village_name' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g. Village of Caroline', 'ovr-core' ); ?>">
                 </div>
+
+                <?php
+                $lat = (float) $m( 'latitude' );
+                $lng = (float) $m( 'longitude' );
+                ?>
+                <input type="hidden" name="latitude" id="ld-fm-lat" value="<?php echo esc_attr( (string) $lat ); ?>">
+                <input type="hidden" name="longitude" id="ld-fm-lng" value="<?php echo esc_attr( (string) $lng ); ?>">
+
+                <div id="ld-fm-map-preview" class="ld-fm-map-preview" style="<?php echo $lat && $lng ? '' : 'display:none;'; ?>">
+                    <iframe
+                        src="about:blank"
+                        id="ld-fm-map-iframe"
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade"
+                        title="<?php esc_attr_e( 'Property location map', 'ovr-core' ); ?>"
+                        style="width:100%;height:200px;border:0;border-radius:12px"></iframe>
+                </div>
+                <p class="ld-fm-subhint" id="ld-fm-geo-status" style="margin-top:4px"></p>
             </div>
 
             <div class="ld-fm-card">
@@ -339,10 +415,59 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     </div>
                 <?php endif; ?>
             </div>
+        </section>
+
+        <!-- ── TAB 2: Additional Information ── -->
+        <section class="ld-fm-panel" data-ld-panel="additional">
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Features & Views', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Select what applies to your property. Drag to reorder — the order you set is how they appear on your listing.', 'ovr-core' ); ?></p>
+
+                <div class="ld-fm-feature-search" style="margin-bottom:16px">
+                    <input type="text" class="ld-fm-input" id="ld-fm-feature-search" placeholder="<?php esc_attr_e( 'Search features…', 'ovr-core' ); ?>" style="padding:10px 14px;border-radius:10px;border:1px solid var(--gray-border,#dbdbdb);width:100%;max-width:400px;font-size:14px">
+                </div>
+
+                <div class="ld-fm-feature-groups" id="ld-fm-feature-groups">
+                    <?php
+                    $feature_terms    = $terms( 'ovr_feature' );
+                    $view_terms       = $terms( 'ovr_view' );
+                    $saved_order      = $is_edit ? (array) get_post_meta( $pid, '_ovr_feature_order', true ) : [];
+                    $saved_features   = $is_edit ? $sel( 'ovr_feature' ) : [];
+                    $saved_views      = $is_edit ? $sel( 'ovr_view' ) : [];
+
+                    // Amenities are collected on the Property Information tab only;
+                    // just Features & Views live here so nothing is duplicated.
+                    $grouped = [
+                        'features'  => [ 'label' => __( 'Features', 'ovr-core' ),  'terms' => $feature_terms, 'selected' => $saved_features ],
+                        'views'     => [ 'label' => __( 'Views', 'ovr-core' ),      'terms' => $view_terms,    'selected' => $saved_views ],
+                    ];
+
+                    foreach ( $grouped as $gkey => $group ) :
+                        if ( empty( $group['terms'] ) ) { continue; }
+                    ?>
+                        <div class="ld-fm-feat-group" data-group="<?php echo esc_attr( $gkey ); ?>">
+                            <h3 class="ld-fm-feat-group-title"><?php echo esc_html( $group['label'] ); ?></h3>
+                            <div class="ld-fm-feat-list" data-group="<?php echo esc_attr( $gkey ); ?>">
+                                <?php foreach ( $group['terms'] as $term ) :
+                                    $tax_name = $gkey === 'amenities' ? 'ovr_amenity' : ( $gkey === 'views' ? 'ovr_view' : 'ovr_feature' );
+                                ?>
+                                    <label class="ld-fm-feat-item" data-term-id="<?php echo (int) $term->term_id; ?>" data-tax="<?php echo esc_attr( $tax_name ); ?>">
+                                        <input type="checkbox" name="<?php echo esc_attr( $gkey === 'amenities' ? 'amenities[]' : ( $gkey === 'features' ? 'ovr_features[]' : 'ovr_views[]' ) ); ?>" value="<?php echo (int) $term->term_id; ?>" <?php checked( in_array( (int) $term->term_id, $group['selected'], true ) ); ?>>
+                                        <span class="ld-fm-feat-drag"><span class="material-symbols-outlined">drag_indicator</span></span>
+                                        <span class="ld-fm-feat-name"><?php echo esc_html( $term->name ); ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <input type="hidden" name="feature_order" id="ld-fm-feature-order" value="<?php echo esc_attr( wp_json_encode( $saved_order ) ); ?>">
+            </div>
 
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Additional Information', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'Optional. These appear as their own sections on your listing page. Put each item on its own line.', 'ovr-core' ); ?></p>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Optional. These appear as their own sections on your listing page.', 'ovr-core' ); ?></p>
                 <div class="ld-fm-field">
                     <label class="ld-fm-label" for="ld-fm-nearby"><?php esc_html_e( "What's Nearby", 'ovr-core' ); ?></label>
                     <textarea class="ld-fm-input ld-fm-textarea" id="ld-fm-nearby" name="nearby" rows="4" placeholder="<?php esc_attr_e( "e.g. Golf courses, pools, restaurants, shopping…", 'ovr-core' ); ?>"><?php echo esc_textarea( (string) $m( 'nearby' ) ); ?></textarea>
@@ -358,8 +483,8 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             </div>
         </section>
 
-        <!-- ── TAB 2: Photos ── -->
-        <section class="ld-fm-panel" data-ld-panel="photos">
+        <!-- ── TAB 3: Photos & Media ── -->
+        <section class="ld-fm-panel" data-ld-panel="media">
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Photos', 'ovr-core' ); ?></h2>
                 <p class="ld-fm-hint">
@@ -406,14 +531,190 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     <p class="ld-fm-uperr" id="ld-fm-uperr" role="alert"></p>
                 </div>
             </div>
+
+            <!-- Video sub-section -->
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Video', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint"><?php esc_html_e( 'When a listing has a video it becomes the primary media — shown first on the listing page and flagged on search cards. Upload a file (MP4, MOV, or WebM) or paste a YouTube/Vimeo link.', 'ovr-core' ); ?></p>
+
+                <div class="ld-fm-field">
+                    <label class="ld-fm-label"><?php esc_html_e( 'Upload a video', 'ovr-core' ); ?></label>
+                    <div class="ld-fm-media-up" data-ld-media="video">
+                        <input type="hidden" name="video_id" id="ld-fm-video-id" value="<?php echo esc_attr( (string) $video_att_id ); ?>">
+                        <input type="file" id="ld-fm-video-file" accept="video/mp4,video/quicktime,video/webm" hidden>
+                        <div class="ld-fm-media-preview" id="ld-fm-video-preview"<?php echo $video_att_url ? '' : ' hidden'; ?>>
+                            <?php if ( $video_att_url ) : ?>
+                                <video src="<?php echo esc_url( $video_att_url ); ?>" controls preload="metadata"></video>
+                            <?php endif; ?>
+                        </div>
+                        <div class="ld-fm-media-actions">
+                            <button type="button" class="ld-fm-btn ld-fm-media-pick"><span class="material-symbols-outlined">upload</span><?php esc_html_e( 'Choose video', 'ovr-core' ); ?></button>
+                            <button type="button" class="ld-fm-btn ld-fm-media-remove"<?php echo $video_att_id ? '' : ' hidden'; ?>><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></button>
+                        </div>
+                        <p class="ld-fm-media-status" role="status"></p>
+                    </div>
+                </div>
+
+                <div class="ld-fm-field">
+                    <label class="ld-fm-label" for="ld-fm-video"><?php esc_html_e( 'Or paste a video link (YouTube or Vimeo)', 'ovr-core' ); ?></label>
+                    <input class="ld-fm-input" id="ld-fm-video" name="video_url" type="text" inputmode="url" value="<?php echo esc_attr( (string) $m( 'video_url' ) ); ?>" placeholder="https://www.youtube.com/watch?v=…">
+                </div>
+            </div>
+
+            <!-- Panorama / Virtual Tour sub-section -->
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Panorama / Virtual Tour', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Add an immersive 360° experience. Upload a 360°/panorama image, or paste a virtual-tour link.', 'ovr-core' ); ?></p>
+
+                <div class="ld-fm-field">
+                    <label class="ld-fm-label"><?php esc_html_e( 'Upload a 360° / panorama image', 'ovr-core' ); ?></label>
+                    <div class="ld-fm-media-up" data-ld-media="pano">
+                        <input type="hidden" name="panorama_id" id="ld-fm-pano-id" value="<?php echo esc_attr( (string) $pano_att_id ); ?>">
+                        <input type="file" id="ld-fm-pano-file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <div class="ld-fm-media-preview" id="ld-fm-pano-preview"<?php echo $pano_att_url ? '' : ' hidden'; ?>>
+                            <?php if ( $pano_att_url ) : ?>
+                                <img src="<?php echo esc_url( $pano_att_url ); ?>" alt="">
+                            <?php endif; ?>
+                        </div>
+                        <div class="ld-fm-media-actions">
+                            <button type="button" class="ld-fm-btn ld-fm-media-pick"><span class="material-symbols-outlined">upload</span><?php esc_html_e( 'Choose image', 'ovr-core' ); ?></button>
+                            <button type="button" class="ld-fm-btn ld-fm-media-remove"<?php echo $pano_att_id ? '' : ' hidden'; ?>><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></button>
+                        </div>
+                        <p class="ld-fm-media-status" role="status"></p>
+                    </div>
+                </div>
+
+                <div class="ld-fm-field">
+                    <label class="ld-fm-label" for="ld-fm-pano"><?php esc_html_e( 'Or paste a virtual-tour link (Matterport, Kuula, etc.)', 'ovr-core' ); ?></label>
+                    <input class="ld-fm-input" id="ld-fm-pano" name="panorama_url" type="text" inputmode="url" value="<?php echo esc_attr( (string) $m( 'panorama_url' ) ); ?>" placeholder="https://my.matterport.com/show/?m=…">
+                </div>
+            </div>
+
+            <!-- Documents sub-section -->
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Documents', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint">
+                    <?php
+                    printf( esc_html__( 'Share downloadable resources (rental agreement, house rules, golf-cart info…). Up to %d files — PDF, DOCX, or XLSX.', 'ovr-core' ), (int) \OVR\Frontend\ListingForm::MAX_DOCS );
+                    ?>
+                </p>
+
+                <div class="ld-fm-docs" id="ld-fm-docs" data-max="<?php echo (int) \OVR\Frontend\ListingForm::MAX_DOCS; ?>">
+                    <?php foreach ( $doc_rows as $i => $doc ) : ?>
+                        <div class="ld-fm-doc-row" data-id="<?php echo esc_attr( (string) $doc['id'] ); ?>">
+                            <input type="hidden" name="document_ids[]" value="<?php echo esc_attr( (string) $doc['id'] ); ?>">
+                            <span class="ld-fm-doc-ext"><?php echo esc_html( $doc['ext'] ?: 'DOC' ); ?></span>
+                            <input type="text" class="ld-fm-input ld-fm-doc-title" name="doc_titles[<?php echo esc_attr( (string) $doc['id'] ); ?>]" value="<?php echo esc_attr( (string) $doc['title'] ); ?>" placeholder="<?php esc_attr_e( 'Document title', 'ovr-core' ); ?>" maxlength="160">
+                            <input type="number" class="ld-fm-input ld-fm-doc-order" name="doc_orders[<?php echo esc_attr( (string) $doc['id'] ); ?>]" value="<?php echo esc_attr( (string) $i ); ?>" min="0" step="1" title="<?php esc_attr_e( 'Display order', 'ovr-core' ); ?>">
+                            <a href="<?php echo esc_url( $doc['url'] ); ?>" target="_blank" rel="noopener" class="ld-fm-doc-view" title="<?php esc_attr_e( 'Open', 'ovr-core' ); ?>"><span class="material-symbols-outlined">open_in_new</span></a>
+                            <button type="button" class="ld-fm-doc-remove" title="<?php esc_attr_e( 'Remove', 'ovr-core' ); ?>"><span class="material-symbols-outlined">delete</span></button>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <input type="file" id="ld-fm-doc-file" accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf" hidden>
+                <button type="button" class="ld-fm-btn ld-fm-media-pick" id="ld-fm-doc-add"><span class="material-symbols-outlined">note_add</span><?php esc_html_e( 'Add document', 'ovr-core' ); ?></button>
+                <p class="ld-fm-media-status" id="ld-fm-doc-status" role="status"></p>
+            </div>
+        </section>
+        <!-- ── TAB 4: Calendar ── -->
+        <section class="ld-fm-panel" data-ld-panel="calendar">
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Availability Calendar', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Block out date ranges when your property is NOT available. Leave this empty if it is open year-round.', 'ovr-core' ); ?></p>
+
+                <div class="ld-fm-avail" id="ld-fm-avail">
+                    <?php
+                    // Simplified row (Phase 2 refinement): no Status dropdown, no
+                    // Notes — just the dates, who's renting, and one "Show as
+                    // available" checkbox. Unchecked = the dates are blocked
+                    // (unavailable); checked = the dates stay bookable on the site.
+                    $render_avail_row = static function ( $i, $start, $end, $renter, $show_avail = 0 ) {
+                        ?>
+                        <div class="ld-fm-avail-row">
+                            <div class="ld-fm-field">
+                                <label class="ld-fm-label"><?php esc_html_e( 'From', 'ovr-core' ); ?></label>
+                                <input class="ld-fm-input" type="date" name="avail[<?php echo (int) $i; ?>][start_date]" value="<?php echo esc_attr( (string) $start ); ?>">
+                            </div>
+                            <div class="ld-fm-field">
+                                <label class="ld-fm-label"><?php esc_html_e( 'To', 'ovr-core' ); ?></label>
+                                <input class="ld-fm-input" type="date" name="avail[<?php echo (int) $i; ?>][end_date]" value="<?php echo esc_attr( (string) $end ); ?>">
+                            </div>
+                            <div class="ld-fm-field">
+                                <label class="ld-fm-label"><?php esc_html_e( 'Renter Name', 'ovr-core' ); ?></label>
+                                <input class="ld-fm-input" type="text" name="avail[<?php echo (int) $i; ?>][renter_name]" value="<?php echo esc_attr( (string) $renter ); ?>" placeholder="<?php esc_attr_e( 'e.g. John Smith', 'ovr-core' ); ?>" maxlength="120">
+                            </div>
+                            <div class="ld-fm-field ld-fm-avail-showfield">
+                                <label class="ld-fm-check">
+                                    <input type="checkbox" name="avail[<?php echo (int) $i; ?>][show_as_available]" value="1" <?php checked( (int) $show_avail, 1 ); ?>>
+                                    <span><?php esc_html_e( 'Show as available', 'ovr-core' ); ?></span>
+                                </label>
+                            </div>
+                            <button type="button" class="ld-fm-avail-x" aria-label="<?php esc_attr_e( 'Remove this date range', 'ovr-core' ); ?>"><span class="material-symbols-outlined">delete</span></button>
+                        </div>
+                        <?php
+                    };
+                    foreach ( $avail_rows as $i => $row ) {
+                        $render_avail_row( $i, $row['start_date'] ?? '', $row['end_date'] ?? '', $row['renter_name'] ?? '', $row['show_as_available'] ?? 0 );
+                    }
+                    ?>
+                </div>
+
+                <!-- Hidden template row cloned by JS for new ranges. -->
+                <template id="ld-fm-avail-tpl">
+                    <?php $render_avail_row( '__i__', '', '', '', 0 ); ?>
+                </template>
+
+                <button type="button" class="ld-fm-btn ld-fm-btn--ghost" id="ld-fm-avail-add">
+                    <span class="material-symbols-outlined">add</span><?php esc_html_e( 'Add blocked date range', 'ovr-core' ); ?>
+                </button>
+            </div>
+
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Calendar Sync (iCal)', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Optional. Paste an iCal link from Airbnb, VRBO, Booking.com, or Google Calendar to import booked dates automatically. Save the listing first, then press “Sync now” — we also refresh it every hour.', 'ovr-core' ); ?></p>
+                <div class="ld-fm-field">
+                    <label class="ld-fm-label" for="ld-fm-ical"><?php esc_html_e( 'iCal feed URL', 'ovr-core' ); ?></label>
+                    <input class="ld-fm-input" id="ld-fm-ical" name="ical_url" type="text" inputmode="url" value="<?php echo esc_attr( (string) $m( 'ical_url' ) ); ?>" placeholder="https://…/calendar.ics">
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                    <button type="button" class="ld-fm-btn ld-fm-btn--ghost" id="ld-fm-ical-sync">
+                        <span class="material-symbols-outlined">sync</span><?php esc_html_e( 'Sync now', 'ovr-core' ); ?>
+                    </button>
+                    <span class="ld-fm-subhint" id="ld-fm-ical-status" style="margin-top:0">
+                        <?php
+                        if ( ! $is_edit ) {
+                            esc_html_e( 'Save the listing first to enable syncing.', 'ovr-core' );
+                        } else {
+                            $last = (string) get_post_meta( $pid, '_ovr_ical_last_sync', true );
+                            if ( $last ) {
+                                printf(
+                                    /* translators: %s: date/time of last sync */
+                                    esc_html__( 'Last synced: %s', 'ovr-core' ),
+                                    esc_html( mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last ) )
+                                );
+                            }
+                        }
+                        ?>
+                    </span>
+                </div>
+
+                <?php if ( $is_edit ) : ?>
+                    <div class="ld-fm-field" style="margin-top:20px">
+                        <label class="ld-fm-label" for="ld-fm-ical-export"><?php esc_html_e( 'Your shareable calendar link (export)', 'ovr-core' ); ?></label>
+                        <input class="ld-fm-input" id="ld-fm-ical-export" type="text" readonly value="<?php echo esc_attr( \OVR\Property\IcalSync::export_url( $pid ) ); ?>" onclick="this.select()">
+                        <p class="ld-fm-subhint"><?php esc_html_e( 'Paste this link into Airbnb, VRBO, or Google Calendar so they block the dates you have booked here.', 'ovr-core' ); ?></p>
+                    </div>
+                <?php endif; ?>
+            </div>
         </section>
 
-        <!-- ── TAB 3: Pricing ── -->
         <section class="ld-fm-panel" data-ld-panel="pricing">
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></h2>
 
                 <label class="ld-fm-check ld-fm-pricehide" style="align-self:flex-start;margin-bottom:16px">
+                    <input type="hidden" name="hide_pricing_check" value="1">
                     <input type="checkbox" name="hide_pricing" id="ld-fm-hide-pricing" value="1" <?php checked( $hide_pricing ); ?>>
                     <span><?php esc_html_e( 'Check Description For Pricing', 'ovr-core' ); ?></span>
                 </label>
@@ -495,193 +796,159 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             </div>
         </section>
 
-        <!-- ── TAB 4: Availability Calendar ── -->
-        <section class="ld-fm-panel" data-ld-panel="calendar">
+        <?php if ( $show_admin_tab ) : ?>
+        <!-- ── TAB 6: Admin (admins only, P8 §8) ── -->
+        <section class="ld-fm-panel" data-ld-panel="admin">
             <div class="ld-fm-card">
-                <h2 class="ld-fm-sec"><?php esc_html_e( 'Availability Calendar', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'Block out date ranges when your property is NOT available. Leave this empty if it is open year-round.', 'ovr-core' ); ?></p>
-
-                <div class="ld-fm-avail" id="ld-fm-avail">
-                    <?php
-                    $render_avail_row = static function ( $i, $start, $end, $renter ) {
-                        ?>
-                        <div class="ld-fm-avail-row">
-                            <div class="ld-fm-field">
-                                <label class="ld-fm-label"><?php esc_html_e( 'From', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="date" name="avail[<?php echo (int) $i; ?>][start_date]" value="<?php echo esc_attr( (string) $start ); ?>">
-                            </div>
-                            <div class="ld-fm-field">
-                                <label class="ld-fm-label"><?php esc_html_e( 'To', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="date" name="avail[<?php echo (int) $i; ?>][end_date]" value="<?php echo esc_attr( (string) $end ); ?>">
-                            </div>
-                            <div class="ld-fm-field">
-                                <label class="ld-fm-label"><?php esc_html_e( 'Renter Name', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="text" name="avail[<?php echo (int) $i; ?>][notes]" value="<?php echo esc_attr( (string) $renter ); ?>" placeholder="<?php esc_attr_e( 'e.g. John Smith, Winter Guest', 'ovr-core' ); ?>" maxlength="120">
-                            </div>
-                            <button type="button" class="ld-fm-avail-x" aria-label="<?php esc_attr_e( 'Remove this date range', 'ovr-core' ); ?>"><span class="material-symbols-outlined">delete</span></button>
-                        </div>
-                        <?php
-                    };
-                    foreach ( $avail_rows as $i => $row ) {
-                        $render_avail_row( $i, $row['start_date'] ?? '', $row['end_date'] ?? '', $row['notes'] ?? '' );
-                    }
-                    ?>
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Admin Controls', 'ovr-core' ); ?> <span class="ld-fm-adminbadge"><?php esc_html_e( 'Admins only', 'ovr-core' ); ?></span></h2>
+                <div class="ld-fm-grid">
+                    <div class="ld-fm-field">
+                        <label class="ld-fm-label" for="ld-fm-admin-status"><?php esc_html_e( 'Admin Status', 'ovr-core' ); ?></label>
+                        <select class="ld-fm-input" id="ld-fm-admin-status" name="admin_status">
+                            <?php foreach ( $admin_statuses as $av => $al ) : ?>
+                                <option value="<?php echo esc_attr( $av ); ?>" <?php selected( $admin_status, $av ); ?>><?php echo esc_html( $al ); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="ld-fm-subhint"><?php esc_html_e( 'Overrides the owner status. Anything other than “Approved” removes the listing from the public site.', 'ovr-core' ); ?></p>
+                    </div>
+                    <div class="ld-fm-field">
+                        <label class="ld-fm-label" for="ld-fm-deals"><?php esc_html_e( 'Deals & Cancellations', 'ovr-core' ); ?></label>
+                        <select class="ld-fm-input" id="ld-fm-deals" name="deals_cancellations">
+                            <?php foreach ( $deals_options as $dv => $dl ) : ?>
+                                <option value="<?php echo esc_attr( $dv ); ?>" <?php selected( $deals_cancel, $dv ); ?>><?php echo esc_html( $dl ); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="ld-fm-field">
+                        <label class="ld-fm-label" for="ld-fm-referred"><?php esc_html_e( 'Referred By', 'ovr-core' ); ?></label>
+                        <input class="ld-fm-input" id="ld-fm-referred" name="referred_by" type="text" value="<?php echo esc_attr( $referred_by ); ?>" placeholder="<?php esc_attr_e( 'e.g. Facebook group, agent name…', 'ovr-core' ); ?>">
+                    </div>
                 </div>
+                <div class="ld-fm-grid" style="margin-top:16px">
+                    <div class="ld-fm-field">
+                        <label class="ld-fm-label" for="ld-fm-activity-start"><?php esc_html_e( 'Period of Listing Activity — From', 'ovr-core' ); ?></label>
+                        <input class="ld-fm-input" id="ld-fm-activity-start" name="activity_start" type="date" value="<?php echo esc_attr( $activity_start ); ?>">
+                    </div>
+                    <div class="ld-fm-field">
+                        <label class="ld-fm-label" for="ld-fm-activity-end"><?php esc_html_e( 'Period of Listing Activity — To', 'ovr-core' ); ?></label>
+                        <input class="ld-fm-input" id="ld-fm-activity-end" name="activity_end" type="date" value="<?php echo esc_attr( $activity_end ); ?>">
+                    </div>
+                </div>
+                <div class="ld-fm-field" style="margin-top:16px">
+                    <label class="ld-fm-label" for="ld-fm-admin-notes"><?php esc_html_e( 'Admin Notes', 'ovr-core' ); ?></label>
+                    <textarea class="ld-fm-input ld-fm-textarea" id="ld-fm-admin-notes" name="admin_notes" rows="4" placeholder="<?php esc_attr_e( 'Internal notes — never shown to renters or the owner.', 'ovr-core' ); ?>"><?php echo esc_textarea( $admin_notes ); ?></textarea>
+                </div>
+            </div>
 
-                <!-- Hidden template row cloned by JS for new ranges. -->
-                <template id="ld-fm-avail-tpl">
-                    <?php $render_avail_row( '__i__', '', '', '' ); ?>
-                </template>
+            <!-- Reassign listing owner -->
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Listing Owner', 'ovr-core' ); ?></h2>
+                <div class="ld-fm-owner-current">
+                    <span class="material-symbols-outlined">account_circle</span>
+                    <div class="ld-fm-owner-meta">
+                        <p class="ld-fm-owner-name" id="ld-fm-owner-name"><?php echo esc_html( $owner_user ? $owner_user->display_name : __( '(unknown)', 'ovr-core' ) ); ?></p>
+                        <p class="ld-fm-owner-email" id="ld-fm-owner-email"><?php echo esc_html( $owner_user ? $owner_user->user_email : '' ); ?></p>
+                    </div>
+                    <button type="button" class="ld-fm-btn ld-fm-btn--ghost ld-fm-btn--small" id="ld-fm-reassign-open"><span class="material-symbols-outlined">swap_horiz</span><?php esc_html_e( 'Reassign', 'ovr-core' ); ?></button>
+                </div>
+                <p class="ld-fm-subhint"><?php esc_html_e( 'Transfer this listing to another user account. The change takes effect immediately.', 'ovr-core' ); ?></p>
+            </div>
 
-                <button type="button" class="ld-fm-btn ld-fm-btn--ghost" id="ld-fm-avail-add">
-                    <span class="material-symbols-outlined">add</span><?php esc_html_e( 'Add blocked date range', 'ovr-core' ); ?>
+            <!-- Complimentary paid services -->
+            <?php $svc_types = \OVR\Subscription\PaidService::active(); ?>
+            <div class="ld-fm-card">
+                <h2 class="ld-fm-sec"><?php esc_html_e( 'Complimentary Paid Services', 'ovr-core' ); ?></h2>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Assign promotional upgrades to this listing at no charge.', 'ovr-core' ); ?></p>
+                <div id="ovr-editor-svc-list" class="ld-fm-svc-list">
+                    <p class="ld-fm-subhint"><?php esc_html_e( 'Loading…', 'ovr-core' ); ?></p>
+                </div>
+                <button type="button" id="ovr-editor-svc-add" class="ld-fm-btn ld-fm-btn--small" data-listing-id="<?php echo (int) $pid; ?>">
+                    <span class="material-symbols-outlined">add</span> <?php esc_html_e( 'Assign Service', 'ovr-core' ); ?>
                 </button>
             </div>
-
-            <div class="ld-fm-card">
-                <h2 class="ld-fm-sec"><?php esc_html_e( 'Calendar Sync (iCal)', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'Optional. Paste an iCal link from Airbnb, VRBO, Booking.com, or Google Calendar to import booked dates automatically. Save the listing first, then press “Sync now” — we also refresh it every hour.', 'ovr-core' ); ?></p>
-                <div class="ld-fm-field">
-                    <label class="ld-fm-label" for="ld-fm-ical"><?php esc_html_e( 'iCal feed URL', 'ovr-core' ); ?></label>
-                    <input class="ld-fm-input" id="ld-fm-ical" name="ical_url" type="text" inputmode="url" value="<?php echo esc_attr( (string) $m( 'ical_url' ) ); ?>" placeholder="https://…/calendar.ics">
-                </div>
-                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-                    <button type="button" class="ld-fm-btn ld-fm-btn--ghost" id="ld-fm-ical-sync" <?php echo $is_edit ? '' : 'disabled'; ?>>
-                        <span class="material-symbols-outlined">sync</span><?php esc_html_e( 'Sync now', 'ovr-core' ); ?>
-                    </button>
-                    <span class="ld-fm-subhint" id="ld-fm-ical-status" style="margin-top:0">
-                        <?php
-                        if ( ! $is_edit ) {
-                            esc_html_e( 'Save the listing first to enable syncing.', 'ovr-core' );
-                        } else {
-                            $last = (string) get_post_meta( $pid, '_ovr_ical_last_sync', true );
-                            if ( $last ) {
-                                printf(
-                                    /* translators: %s: date/time of last sync */
-                                    esc_html__( 'Last synced: %s', 'ovr-core' ),
-                                    esc_html( mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last ) )
-                                );
-                            }
-                        }
-                        ?>
-                    </span>
-                </div>
-
-                <?php if ( $is_edit ) : ?>
-                    <div class="ld-fm-field" style="margin-top:20px">
-                        <label class="ld-fm-label" for="ld-fm-ical-export"><?php esc_html_e( 'Your shareable calendar link (export)', 'ovr-core' ); ?></label>
-                        <input class="ld-fm-input" id="ld-fm-ical-export" type="text" readonly value="<?php echo esc_attr( \OVR\Property\IcalSync::export_url( $pid ) ); ?>" onclick="this.select()">
-                        <p class="ld-fm-subhint"><?php esc_html_e( 'Paste this link into Airbnb, VRBO, or Google Calendar so they block the dates you have booked here.', 'ovr-core' ); ?></p>
-                    </div>
-                <?php endif; ?>
-            </div>
         </section>
+        <?php endif; ?>
 
-        <!-- ── TAB 5: Videos ── -->
-        <section class="ld-fm-panel" data-ld-panel="videos">
-            <div class="ld-fm-card">
-                <h2 class="ld-fm-sec"><?php esc_html_e( 'Video', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'When a listing has a video it becomes the primary media — shown first on the listing page and flagged on search cards. Upload a file (MP4, MOV, or WebM) or paste a YouTube/Vimeo link.', 'ovr-core' ); ?></p>
-
-                <div class="ld-fm-field">
-                    <label class="ld-fm-label"><?php esc_html_e( 'Upload a video', 'ovr-core' ); ?></label>
-                    <div class="ld-fm-media-up" data-ld-media="video">
-                        <input type="hidden" name="video_id" id="ld-fm-video-id" value="<?php echo esc_attr( (string) $video_att_id ); ?>">
-                        <input type="file" id="ld-fm-video-file" accept="video/mp4,video/quicktime,video/webm" hidden>
-                        <div class="ld-fm-media-preview" id="ld-fm-video-preview"<?php echo $video_att_url ? '' : ' hidden'; ?>>
-                            <?php if ( $video_att_url ) : ?>
-                                <video src="<?php echo esc_url( $video_att_url ); ?>" controls preload="metadata"></video>
-                            <?php endif; ?>
-                        </div>
-                        <div class="ld-fm-media-actions">
-                            <button type="button" class="ld-fm-btn ld-fm-media-pick"><span class="material-symbols-outlined">upload</span><?php esc_html_e( 'Choose video', 'ovr-core' ); ?></button>
-                            <button type="button" class="ld-fm-btn ld-fm-media-remove"<?php echo $video_att_id ? '' : ' hidden'; ?>><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></button>
-                        </div>
-                        <p class="ld-fm-media-status" role="status"></p>
-                    </div>
-                </div>
-
-                <div class="ld-fm-field">
-                    <label class="ld-fm-label" for="ld-fm-video"><?php esc_html_e( 'Or paste a video link (YouTube or Vimeo)', 'ovr-core' ); ?></label>
-                    <input class="ld-fm-input" id="ld-fm-video" name="video_url" type="text" inputmode="url" value="<?php echo esc_attr( (string) $m( 'video_url' ) ); ?>" placeholder="https://www.youtube.com/watch?v=…">
-                </div>
-            </div>
-        </section>
-
-        <!-- ── TAB 6: Panorama / Virtual Tour ── -->
-        <section class="ld-fm-panel" data-ld-panel="panorama">
-            <div class="ld-fm-card">
-                <h2 class="ld-fm-sec"><?php esc_html_e( 'Panorama / Virtual Tour', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'Add an immersive 360° experience. Upload a 360°/panorama image, or paste a virtual-tour link (Matterport, Kuula, or any tour URL). A “Virtual Tour” button then appears on your listing.', 'ovr-core' ); ?></p>
-
-                <div class="ld-fm-field">
-                    <label class="ld-fm-label"><?php esc_html_e( 'Upload a 360° / panorama image', 'ovr-core' ); ?></label>
-                    <div class="ld-fm-media-up" data-ld-media="pano">
-                        <input type="hidden" name="panorama_id" id="ld-fm-pano-id" value="<?php echo esc_attr( (string) $pano_att_id ); ?>">
-                        <input type="file" id="ld-fm-pano-file" accept="image/jpeg,image/png,image/webp" hidden>
-                        <div class="ld-fm-media-preview" id="ld-fm-pano-preview"<?php echo $pano_att_url ? '' : ' hidden'; ?>>
-                            <?php if ( $pano_att_url ) : ?>
-                                <img src="<?php echo esc_url( $pano_att_url ); ?>" alt="">
-                            <?php endif; ?>
-                        </div>
-                        <div class="ld-fm-media-actions">
-                            <button type="button" class="ld-fm-btn ld-fm-media-pick"><span class="material-symbols-outlined">upload</span><?php esc_html_e( 'Choose image', 'ovr-core' ); ?></button>
-                            <button type="button" class="ld-fm-btn ld-fm-media-remove"<?php echo $pano_att_id ? '' : ' hidden'; ?>><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></button>
-                        </div>
-                        <p class="ld-fm-media-status" role="status"></p>
-                    </div>
-                </div>
-
-                <div class="ld-fm-field">
-                    <label class="ld-fm-label" for="ld-fm-pano"><?php esc_html_e( 'Or paste a virtual-tour link', 'ovr-core' ); ?></label>
-                    <input class="ld-fm-input" id="ld-fm-pano" name="panorama_url" type="text" inputmode="url" value="<?php echo esc_attr( (string) $m( 'panorama_url' ) ); ?>" placeholder="https://my.matterport.com/show/?m=…">
-                </div>
-            </div>
-        </section>
-
-        <!-- ── TAB 7: Documents ── -->
-        <section class="ld-fm-panel" data-ld-panel="documents">
-            <div class="ld-fm-card">
-                <h2 class="ld-fm-sec"><?php esc_html_e( 'Documents', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint">
-                    <?php
-                    /* translators: %d: max documents */
-                    printf( esc_html__( 'Share downloadable resources (rental agreement, house rules, golf-cart info…). Up to %d files — PDF, DOCX, or XLSX. Give each a title; drag the order field to control display order.', 'ovr-core' ), (int) \OVR\Frontend\ListingForm::MAX_DOCS );
-                    ?>
-                </p>
-
-                <div class="ld-fm-docs" id="ld-fm-docs" data-max="<?php echo (int) \OVR\Frontend\ListingForm::MAX_DOCS; ?>">
-                    <?php foreach ( $doc_rows as $i => $doc ) : ?>
-                        <div class="ld-fm-doc-row" data-id="<?php echo esc_attr( (string) $doc['id'] ); ?>">
-                            <input type="hidden" name="document_ids[]" value="<?php echo esc_attr( (string) $doc['id'] ); ?>">
-                            <span class="ld-fm-doc-ext"><?php echo esc_html( $doc['ext'] ?: 'DOC' ); ?></span>
-                            <input type="text" class="ld-fm-input ld-fm-doc-title" name="doc_titles[<?php echo esc_attr( (string) $doc['id'] ); ?>]" value="<?php echo esc_attr( (string) $doc['title'] ); ?>" placeholder="<?php esc_attr_e( 'Document title', 'ovr-core' ); ?>" maxlength="160">
-                            <input type="number" class="ld-fm-input ld-fm-doc-order" name="doc_orders[<?php echo esc_attr( (string) $doc['id'] ); ?>]" value="<?php echo esc_attr( (string) $i ); ?>" min="0" step="1" title="<?php esc_attr_e( 'Display order', 'ovr-core' ); ?>">
-                            <a href="<?php echo esc_url( $doc['url'] ); ?>" target="_blank" rel="noopener" class="ld-fm-doc-view" title="<?php esc_attr_e( 'Open', 'ovr-core' ); ?>"><span class="material-symbols-outlined">open_in_new</span></a>
-                            <button type="button" class="ld-fm-doc-remove" title="<?php esc_attr_e( 'Remove', 'ovr-core' ); ?>"><span class="material-symbols-outlined">delete</span></button>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-
-                <input type="file" id="ld-fm-doc-file" accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf" hidden>
-                <button type="button" class="ld-fm-btn ld-fm-media-pick" id="ld-fm-doc-add" data-target="ld-fm-doc-file"><span class="material-symbols-outlined">note_add</span><?php esc_html_e( 'Add document', 'ovr-core' ); ?></button>
-                <p class="ld-fm-media-status" id="ld-fm-doc-status" role="status"></p>
-            </div>
-        </section>
-
-        <!-- Sticky action bar — single, always-visible Save Changes button -->
+        <!-- Sticky action bar: ← Previous · Save & Exit · Next → . Previous/Next
+             auto-save the current tab; Save & Exit saves everything and returns
+             to My Listings. -->
         <div class="ld-fm-bar">
-            <div class="ld-fm-bar-steps">
-                <button type="button" class="ld-fm-stepbtn" id="ld-fm-prev"><span class="material-symbols-outlined">chevron_left</span><?php esc_html_e( 'Back', 'ovr-core' ); ?></button>
-                <button type="button" class="ld-fm-stepbtn" id="ld-fm-next"><?php esc_html_e( 'Next', 'ovr-core' ); ?><span class="material-symbols-outlined">chevron_right</span></button>
-            </div>
-            <div class="ld-fm-bar-actions">
-                <button type="submit" class="ld-fm-btn ld-fm-btn--xl ld-fm-btn--primary" id="ld-fm-publish">
-                    <span class="material-symbols-outlined">save</span><?php esc_html_e( 'Save Changes', 'ovr-core' ); ?>
-                </button>
-            </div>
+            <button type="button" class="ld-fm-stepbtn ld-fm-bar-prev" id="ld-fm-prev"><span class="material-symbols-outlined">chevron_left</span><?php esc_html_e( 'Previous', 'ovr-core' ); ?></button>
+            <button type="submit" class="ld-fm-btn ld-fm-btn--xl ld-fm-btn--primary ld-fm-bar-save" id="ld-fm-publish">
+                <span class="material-symbols-outlined">save</span><?php esc_html_e( 'Save &amp; Exit', 'ovr-core' ); ?>
+            </button>
+            <button type="button" class="ld-fm-stepbtn ld-fm-bar-next" id="ld-fm-next"><?php esc_html_e( 'Next', 'ovr-core' ); ?><span class="material-symbols-outlined">chevron_right</span></button>
         </div>
     </form>
+
+    <?php if ( $is_edit && $is_admin_user ) : ?>
+    <!-- Paid Services assign modal -->
+    <div id="ovr-editor-svc-modal" class="ovr-editor-modal" style="display:none;">
+        <div class="ovr-editor-modal-backdrop"></div>
+        <div class="ovr-editor-modal-content">
+            <div class="ovr-editor-modal-header">
+                <h3><?php esc_html_e( 'Assign Paid Service', 'ovr-core' ); ?></h3>
+                <button type="button" class="ovr-editor-modal-close button">&times;</button>
+            </div>
+            <div class="ovr-editor-modal-body">
+                <input type="hidden" id="ovr-editor-svc-listing-id" value="<?php echo (int) $pid; ?>">
+                <p>
+                    <label for="ovr-editor-svc-select"><?php esc_html_e( 'Service:', 'ovr-core' ); ?></label>
+                    <select id="ovr-editor-svc-select">
+                        <option value=""><?php esc_html_e( 'Select…', 'ovr-core' ); ?></option>
+                        <?php foreach ( $svc_types as $svc ) : ?>
+                            <option value="<?php echo (int) $svc['id']; ?>">
+                                <?php echo esc_html( $svc['name'] . ( $svc['badge'] ? ' (' . $svc['badge'] . ')' : '' ) ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </p>
+                <p>
+                    <label for="ovr-editor-svc-start"><?php esc_html_e( 'Start Date:', 'ovr-core' ); ?></label>
+                    <input type="date" id="ovr-editor-svc-start" value="<?php echo esc_attr( current_time( 'Y-m-d' ) ); ?>">
+                </p>
+                <p>
+                    <label for="ovr-editor-svc-end"><?php esc_html_e( 'End Date (optional):', 'ovr-core' ); ?></label>
+                    <input type="date" id="ovr-editor-svc-end" value="">
+                </p>
+                <p>
+                    <label for="ovr-editor-svc-notes"><?php esc_html_e( 'Notes:', 'ovr-core' ); ?></label>
+                    <textarea id="ovr-editor-svc-notes" rows="2"></textarea>
+                </p>
+                <div class="ovr-editor-modal-actions">
+                    <button type="button" class="button button-primary" id="ovr-editor-svc-save"><?php esc_html_e( 'Assign', 'ovr-core' ); ?></button>
+                    <button type="button" class="button ovr-editor-modal-close"><?php esc_html_e( 'Cancel', 'ovr-core' ); ?></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reassign owner modal (P8 §8) -->
+    <div id="ovr-reassign-modal" class="ovr-editor-modal" style="display:none;">
+        <div class="ovr-editor-modal-backdrop" data-reassign-close></div>
+        <div class="ovr-editor-modal-content">
+            <div class="ovr-editor-modal-header">
+                <h3><?php esc_html_e( 'Reassign Listing Owner', 'ovr-core' ); ?></h3>
+                <button type="button" class="button" data-reassign-close>&times;</button>
+            </div>
+            <div class="ovr-editor-modal-body">
+                <input type="hidden" id="ovr-reassign-listing-id" value="<?php echo (int) $pid; ?>">
+                <input type="hidden" id="ovr-reassign-selected" value="">
+                <p>
+                    <label for="ovr-reassign-search"><?php esc_html_e( 'Search users by name or email:', 'ovr-core' ); ?></label>
+                    <input type="text" id="ovr-reassign-search" autocomplete="off" placeholder="<?php esc_attr_e( 'Type at least 2 characters…', 'ovr-core' ); ?>">
+                </p>
+                <div id="ovr-reassign-results" class="ovr-reassign-results"></div>
+                <p class="ld-fm-media-status" id="ovr-reassign-status" role="status"></p>
+                <div class="ovr-editor-modal-actions">
+                    <button type="button" class="button button-primary" id="ovr-reassign-confirm" disabled><?php esc_html_e( 'Confirm Transfer', 'ovr-core' ); ?></button>
+                    <button type="button" class="button" data-reassign-close><?php esc_html_e( 'Cancel', 'ovr-core' ); ?></button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <?php endif; ?>
 </div>
 
@@ -738,6 +1005,30 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ovr-ld .ld-fm-input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(0,76,76,.12)}
     .ovr-ld .ld-fm-input.is-invalid{border-color:var(--err);box-shadow:0 0 0 3px rgba(186,26,26,.14)}
     .ovr-ld .ld-fm-textarea{resize:vertical;min-height:130px;line-height:1.6}
+
+    /* Rich-text editor (Full Description) */
+    .ovr-ld .ld-rte{border:1px solid var(--ov);border-radius:9px;overflow:hidden;background:#fff}
+    .ovr-ld .ld-rte:focus-within{border-color:var(--p);box-shadow:0 0 0 3px rgba(0,76,76,.12)}
+    .ovr-ld .ld-rte-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid var(--ov);background:var(--sclow)}
+    .ovr-ld .ld-rte-btn{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:32px;padding:0 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--on);cursor:pointer;font-family:inherit;font-size:15px;line-height:1}
+    .ovr-ld .ld-rte-btn:hover{background:#fff;border-color:var(--ov)}
+    .ovr-ld .ld-rte-btn.is-active{background:rgba(0,76,76,.12);border-color:var(--p);color:var(--p)}
+    .ovr-ld .ld-rte-btn .material-symbols-outlined{font-size:19px}
+    .ovr-ld .ld-rte-btn b,.ovr-ld .ld-rte-btn i,.ovr-ld .ld-rte-btn u{font-size:15px;line-height:1}
+    .ovr-ld .ld-rte-block{height:32px;border:1px solid var(--ov);border-radius:7px;background:#fff;font-family:inherit;font-size:13px;color:var(--on);padding:0 8px;cursor:pointer}
+    .ovr-ld .ld-rte-sep{width:1px;height:22px;background:var(--ov);margin:0 4px}
+    .ovr-ld .ld-rte-spacer{flex:1 1 auto;background:transparent;margin:0}
+    .ovr-ld .ld-rte-body{min-height:360px;max-height:640px;overflow-y:auto;padding:16px 18px;font-size:16px;line-height:1.6;color:var(--on);outline:none}
+    .ovr-ld .ld-rte-body p{margin:0 0 1em}
+    .ovr-ld .ld-rte-body h2{font-size:22px;font-weight:700;margin:0 0 .5em}
+    .ovr-ld .ld-rte-body h3{font-size:18px;font-weight:700;margin:0 0 .5em}
+    .ovr-ld .ld-rte-body ul,.ovr-ld .ld-rte-body ol{margin:0 0 1em;padding-left:1.6em}
+    .ovr-ld .ld-rte-body li{margin:0 0 .25em}
+    .ovr-ld .ld-rte-body a{color:var(--p);text-decoration:underline}
+    .ovr-ld .ld-rte-body:empty:before{content:attr(data-placeholder);color:var(--sv)}
+    .ovr-ld .ld-rte.is-html .ld-rte-block{opacity:.4;pointer-events:none}
+    .ovr-ld .ld-rte-source{display:block;width:100%;box-sizing:border-box;min-height:360px;border:none;border-radius:0;padding:16px 18px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.55;color:var(--on);outline:none;resize:vertical;background:#fbfcfc}
+    .ovr-ld .ld-rte-source[hidden]{display:none}
     .ovr-ld .ld-fm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
     .ovr-ld .ld-fm-grid .ld-fm-field{margin-bottom:0}
     .ovr-ld .ld-fm-check{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--on);cursor:pointer;align-self:center}
@@ -778,6 +1069,36 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ovr-ld .ld-fm-thumb.is-primary .ld-fm-setmain{display:none}
     .ovr-ld .ld-fm-cap{width:100%;border:none;border-top:1px solid var(--ov);padding:9px 11px;font-family:inherit;font-size:13px;color:var(--on);outline:none;background:#fff;box-sizing:border-box}
     .ovr-ld .ld-fm-cap:focus{background:var(--sclow)}
+
+    /* Toast notification */
+    .ovr-ld .ld-fm-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:99999;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.15);transition:opacity .3s ease;pointer-events:none;opacity:0}
+    .ovr-ld .ld-fm-toast.is-success{background:#d6f3e6;color:#00714e;border:1px solid #a6e3c8}
+    .ovr-ld .ld-fm-toast.is-error{background:#fde2e2;color:#93000a;border:1px solid #f5b8b8}
+    .ovr-ld .ld-fm-toast.is-loading{background:#e8ecf0;color:#1c2430;border:1px solid #cdd2d8}
+
+    /* Copy ID button */
+    .ovr-ld .ld-fm-copy-id{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:3px 10px;border:none;border-radius:6px;background:rgba(0,76,76,.12);color:var(--p);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;vertical-align:middle;line-height:1.4}
+    .ovr-ld .ld-fm-copy-id:hover{background:rgba(0,76,76,.2)}
+    .ovr-ld .ld-fm-copy-id .material-symbols-outlined{font-size:14px}
+    .ovr-ld .ld-fm-copy-id-msg{font-size:11px;font-weight:600}
+
+    /* Feature items */
+    .ovr-ld .ld-fm-feat-group{margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--ov)}
+    .ovr-ld .ld-fm-feat-group:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+    .ovr-ld .ld-fm-feat-group-title{font-size:15px;font-weight:700;color:var(--on);margin:0 0 12px}
+    .ovr-ld .ld-fm-feat-list{display:flex;flex-wrap:wrap;gap:8px}
+    .ovr-ld .ld-fm-feat-item{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--ov);border-radius:10px;background:var(--surf);cursor:grab;user-select:none;font-size:13px;font-weight:500;color:var(--on);transition:box-shadow .15s,border-color .15s}
+    .ovr-ld .ld-fm-feat-item:hover{border-color:var(--p);box-shadow:0 2px 8px rgba(0,76,76,.1)}
+    .ovr-ld .ld-fm-feat-item.is-dragging{opacity:.5;border-style:dashed}
+    .ovr-ld .ld-fm-feat-item input[type="checkbox"]{margin:0;width:16px;height:16px;accent-color:var(--p);cursor:pointer}
+    .ovr-ld .ld-fm-feat-drag{display:inline-flex;color:var(--sv);cursor:grab}
+    .ovr-ld .ld-fm-feat-drag .material-symbols-outlined{font-size:18px}
+    .ovr-ld .ld-fm-feat-name{line-height:1.3}
+
+    /* Map preview */
+    .ovr-ld .ld-fm-map-preview{margin-top:16px;border:1px solid var(--ov);border-radius:12px;overflow:hidden}
+    .ovr-ld .ld-fm-map-preview iframe{display:block}
+
     .ovr-ld [id="ld-fm-uperr"]{font-size:13px;color:var(--err);margin:10px 0 0;min-height:1px}
     .ovr-ld .ld-fm-spin{width:26px;height:26px;border:3px solid var(--ov);border-top-color:var(--p);border-radius:50%;animation:ldfmspin .8s linear infinite}
     @keyframes ldfmspin{to{transform:rotate(360deg)}}
@@ -799,10 +1120,12 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ld-crop-sel i[data-h=se]{right:-7px;bottom:-7px;cursor:nwse-resize}
     .ld-crop-foot{padding:14px 20px;border-top:1px solid #e3e3e3;display:flex;justify-content:flex-end;gap:10px}
 
-    /* Availability repeater */
+    /* Availability repeater — From | To | Renter Name | Show as available | ✕ */
     .ovr-ld .ld-fm-avail{display:flex;flex-direction:column;gap:14px;margin-bottom:16px}
-    .ovr-ld .ld-fm-avail-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;padding:14px;border:1px solid var(--ov);border-radius:12px;background:var(--sclow)}
+    .ovr-ld .ld-fm-avail-row{display:grid;grid-template-columns:1fr 1fr 1.4fr auto auto;gap:10px;align-items:end;padding:14px;border:1px solid var(--ov);border-radius:12px;background:var(--sclow)}
     .ovr-ld .ld-fm-avail-row .ld-fm-field{margin-bottom:0}
+    .ovr-ld .ld-fm-avail-showfield{align-self:end}
+    .ovr-ld .ld-fm-avail-row .ld-fm-check{font-size:13px;margin-bottom:0;white-space:nowrap;height:46px}
     .ovr-ld .ld-fm-avail-x{width:42px;height:46px;border:1px solid var(--ov);border-radius:9px;background:#fff;color:var(--err);cursor:pointer;display:flex;align-items:center;justify-content:center}
     .ovr-ld .ld-fm-avail-x:hover{background:var(--errc)}
 
@@ -858,16 +1181,19 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         .ovr-ld .ld-fm-h1{font-size:26px}
         .ovr-ld .ld-fm-tab-label{display:none}
         .ovr-ld .ld-fm-tab{min-width:0;flex:1 1 auto}
-        .ovr-ld .ld-fm-avail-row{grid-template-columns:1fr 1fr;}
+        .ovr-ld .ld-fm-avail-row{grid-template-columns:1fr 1fr}
+        .ovr-ld .ld-fm-avail-row .ld-fm-field:nth-child(3){grid-column:1 / -1}
+        .ovr-ld .ld-fm-avail-showfield{grid-column:1 / -1}
+        .ovr-ld .ld-fm-avail-row .ld-fm-check{height:auto}
         .ovr-ld .ld-fm-avail-x{grid-column:1 / -1;width:100%}
         .ovr-ld .ld-fm-price-head{display:none}
         .ovr-ld .ld-fm-price-row{grid-template-columns:1fr;align-items:stretch}
         .ovr-ld .ld-fm-price-mlabel{display:block}
         .ovr-ld .ld-fm-price-x{width:100%}
-        .ovr-ld .ld-fm-bar{flex-direction:column;align-items:stretch}
-        .ovr-ld .ld-fm-bar-actions{flex-direction:column-reverse}
-        .ovr-ld .ld-fm-bar-actions .ld-fm-btn{width:100%}
-        .ovr-ld .ld-fm-bar-steps{justify-content:space-between}
+        .ovr-ld .ld-fm-bar{flex-wrap:wrap}
+        .ovr-ld .ld-fm-bar-save{order:-1;flex:1 1 100%;width:100%}
+        .ovr-ld .ld-fm-bar-prev,.ovr-ld .ld-fm-bar-next{flex:1 1 40%}
+        .ovr-ld .ld-fm-bar-next{justify-content:flex-end}
     }
 
     /* Single-file media uploaders (video / panorama) + documents */
@@ -887,6 +1213,42 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         .ovr-ld .ld-fm-doc-row{flex-wrap:wrap}
         .ovr-ld .ld-fm-doc-title{flex:1 1 100%;order:1}
     }
+
+    /* ── Paid Services card ── */
+    .ovr-ld .ld-fm-svc-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;min-height:2em}
+    .ovr-ld .ld-fm-svc-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 14px;border-radius:9999px;font-size:12px;font-weight:600;background:rgba(0,76,76,.08);color:var(--p);border:1px solid var(--p)}
+    .ovr-ld .ld-fm-svc-badge.is-expired{opacity:.5;background:var(--sclow);color:var(--sv);border-color:var(--ov)}
+    .ovr-ld .ld-fm-svc-remove{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:none;border-radius:50%;background:transparent;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0;margin:0 0 0 2px;opacity:.6}
+    .ovr-ld .ld-fm-svc-remove:hover{opacity:1;background:rgba(0,0,0,.1)}
+    .ovr-ld .ld-fm-btn--small{display:inline-flex;align-items:center;gap:4px;padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid var(--p);background:transparent;color:var(--p);cursor:pointer;font-family:inherit;transition:background .15s,color .15s}
+    .ovr-ld .ld-fm-btn--small:hover{background:var(--p);color:#fff}
+    .ovr-ld .ld-fm-btn--small .material-symbols-outlined{font-size:16px}
+
+    /* ── Editor modal ── */
+    .ovr-editor-modal{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center}
+    .ovr-editor-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4)}
+    .ovr-editor-modal-content{position:relative;background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.18);max-width:420px;width:calc(100% - 40px);max-height:80vh;overflow-y:auto}
+    .ovr-editor-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #dcdcde}
+    .ovr-editor-modal-header h3{margin:0;font-size:15px;font-weight:600;color:#1d2327}
+    .ovr-editor-modal-header .button{border:none;background:none;font-size:20px;cursor:pointer;padding:0;color:#787c82;line-height:1}
+    .ovr-editor-modal-body{padding:20px}
+    .ovr-editor-modal-body p{margin:0 0 14px}
+    .ovr-editor-modal-body label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:#1d2327}
+    .ovr-editor-modal-body select,.ovr-editor-modal-body input[type="date"],.ovr-editor-modal-body textarea{width:100%;padding:8px 10px;border:1px solid #8c8f94;border-radius:6px;font-size:13px;font-family:inherit}
+    .ovr-editor-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid #dcdcde}
+
+    /* Admin tab — owner reassign (P8 §8) */
+    .ovr-ld .ld-fm-owner-current{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--ov);border-radius:12px;background:var(--sclow)}
+    .ovr-ld .ld-fm-owner-current > .material-symbols-outlined{font-size:34px;color:var(--sv)}
+    .ovr-ld .ld-fm-owner-meta{flex:1;min-width:0}
+    .ovr-ld .ld-fm-owner-name{margin:0;font-size:15px;font-weight:700;color:var(--on)}
+    .ovr-ld .ld-fm-owner-email{margin:2px 0 0;font-size:13px;color:var(--sv);word-break:break-all}
+    .ovr-reassign-results{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;margin:6px 0}
+    .ovr-reassign-row{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;padding:9px 12px;border:1px solid #dcdcde;border-radius:8px;background:#fff;cursor:pointer;font-family:inherit}
+    .ovr-reassign-row:hover{background:#f0f3f2;border-color:#004c4c}
+    .ovr-reassign-row.is-selected{background:rgba(0,76,76,.1);border-color:#004c4c;box-shadow:0 0 0 2px rgba(0,76,76,.2)}
+    .ovr-reassign-row-name{font-size:14px;font-weight:600;color:#1c2430}
+    .ovr-reassign-row-email{font-size:12px;color:#5f6b7a}
 </style>
 
 <script>
@@ -896,15 +1258,27 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     if (!form) { return; }
 
     // ── Tab navigation ──
-    var STEPS = ['info','photos','pricing','calendar','videos','panorama','documents'];
+    var STEPS = <?php echo wp_json_encode( $ld_step_keys ); ?>;
     var tabs  = Array.prototype.slice.call(root.querySelectorAll('.ld-fm-tab'));
     var panels= Array.prototype.slice.call(root.querySelectorAll('.ld-fm-panel'));
     var prevBtn = document.getElementById('ld-fm-prev');
     var nextBtn = document.getElementById('ld-fm-next');
     var cur = 0;
 
-    function show(idx){
+    function show(idx, skipSave){
+        if (typeof skipSave === 'undefined') { skipSave = false; }
+        if (!skipSave && cur !== idx && dirty) {
+            // Auto-save current section before navigating.
+            autoSave(function(){
+                cur = Math.max(0, Math.min(STEPS.length - 1, idx));
+                renderStep();
+            });
+            return;
+        }
         cur = Math.max(0, Math.min(STEPS.length - 1, idx));
+        renderStep();
+    }
+    function renderStep(){
         var key = STEPS[cur];
         tabs.forEach(function(t, i){
             var active = (t.getAttribute('data-ld-tab') === key);
@@ -917,10 +1291,287 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         if (prevBtn) { prevBtn.disabled = (cur === 0); }
         if (nextBtn) { nextBtn.disabled = (cur === STEPS.length - 1); }
         try { root.scrollIntoView({ behavior:'smooth', block:'start' }); } catch(e){}
+        dirty = false;
     }
     tabs.forEach(function(t){ t.addEventListener('click', function(){ show(STEPS.indexOf(t.getAttribute('data-ld-tab'))); }); });
     if (prevBtn) { prevBtn.addEventListener('click', function(){ show(cur - 1); }); }
     if (nextBtn) { nextBtn.addEventListener('click', function(){ show(cur + 1); }); }
+
+    // ── Auto-save ──
+    var saving = false;
+    var dirty = false;
+    var toastEl = null;
+    var _ajaxUrl = form.getAttribute('data-ajax');
+    var _nonce   = form.getAttribute('data-nonce');
+    function autoSave(cb){
+        if (saving) { if (cb) { cb(); } return; }
+        if (window.__ovrSyncRte) { window.__ovrSyncRte(); }
+        var key = STEPS[cur];
+        var fd = new FormData(form);
+        fd.set('action', 'ovr_auto_save_listing');
+        fd.set('nonce', _nonce);
+        fd.set('section', key);
+        saving = true;
+        showToast('<?php echo esc_js( __( 'Saving…', 'ovr-core' ) ); ?>', 'loading');
+        fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+            .then(function(r){ return r.json(); })
+            .then(function(res){
+                if (res.success) {
+                    // A brand-new listing is created as a draft on first save;
+                    // capture its id so every later save (and the final publish)
+                    // targets the same draft rather than creating duplicates.
+                    if (res.data && res.data.post_id) {
+                        var pidEl = form.querySelector('[name="post_id"]');
+                        if (pidEl && (!pidEl.value || pidEl.value === '0')) {
+                            pidEl.value = res.data.post_id;
+                        }
+                    }
+                    showToast('<?php echo esc_js( __( '✓ Changes saved', 'ovr-core' ) ); ?>', 'success');
+                    dirty = false;
+                    markSaved();
+                } else {
+                    showToast(res.data && res.data.message ? res.data.message : '<?php echo esc_js( __( 'Save failed. Please try again.', 'ovr-core' ) ); ?>', 'error');
+                }
+            })
+            .catch(function(){
+                showToast('<?php echo esc_js( __( 'Save failed. Please try again.', 'ovr-core' ) ); ?>', 'error');
+            })
+            .then(function(){
+                saving = false;
+                if (cb) { cb(); }
+            });
+    }
+    function showToast(msg, type){
+        if (!toastEl) {
+            toastEl = document.createElement('div');
+            toastEl.className = 'ld-fm-toast';
+            root.appendChild(toastEl);
+        }
+        toastEl.textContent = msg;
+        toastEl.className = 'ld-fm-toast is-' + (type || 'info');
+        toastEl.style.opacity = '1';
+        clearTimeout(toastEl._hide);
+        toastEl._hide = setTimeout(function(){
+            toastEl.style.opacity = '0';
+        }, 3000);
+    }
+
+    // ── Dirty tracking + debounced auto-save (≈5s after the last edit) ──
+    var _autosaveDebounce;
+    function scheduleAutoSave(){
+        clearTimeout(_autosaveDebounce);
+        _autosaveDebounce = setTimeout(function(){
+            if (dirty && !saving) { autoSave(markSaved); }
+        }, 5000);
+    }
+    form.addEventListener('input', function(){ dirty = true; updateSaveIndicator(); scheduleAutoSave(); });
+    form.addEventListener('change', function(){ dirty = true; updateSaveIndicator(); scheduleAutoSave(); });
+    // Only warn about unsaved work when the user is NOT intentionally leaving
+    // via Save & Exit (which is a normal form submit). Auto-save clears `dirty`,
+    // so navigating after a successful save never triggers the prompt either.
+    var leaving = false;
+    window.addEventListener('beforeunload', function(e){
+        if (dirty && !leaving) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // ── Periodic auto-save (every 30s) ──
+    var saveIndicator = null;
+    function updateSaveIndicator(){
+        if (!saveIndicator) {
+            saveIndicator = document.createElement('div');
+            saveIndicator.className = 'ld-fm-autosave';
+            saveIndicator.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:6px 14px;background:#f0f0f1;border:1px solid #dcdcde;border-radius:3px;font-size:12px;color:#646970;z-index:99999;transition:opacity 0.3s';
+            document.body.appendChild(saveIndicator);
+        }
+        saveIndicator.textContent = '<?php echo esc_js( __( 'Unsaved changes…', 'ovr-core' ) ); ?>';
+        saveIndicator.style.opacity = '1';
+        saveIndicator.style.background = '#fcf9e8';
+        saveIndicator.style.borderColor = '#996800';
+        saveIndicator.style.color = '#996800';
+    }
+    function markSaved(){
+        if (saveIndicator) {
+            saveIndicator.textContent = '<?php echo esc_js( __( '✓ Saved just now', 'ovr-core' ) ); ?>';
+            saveIndicator.style.background = '#e6f7e6';
+            saveIndicator.style.borderColor = '#008a20';
+            saveIndicator.style.color = '#008a20';
+            setTimeout(function(){ saveIndicator.style.opacity = '0'; }, 3000);
+        }
+    }
+    setInterval(function(){
+        if (dirty && !saving) { autoSave(markSaved); }
+    }, 30000);
+
+    // ── Copy Property ID ──
+    var copyBtn = root.querySelector('.ld-fm-copy-id');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function(){
+            var text = copyBtn.getAttribute('data-copy') || '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function(){
+                    var msg = copyBtn.querySelector('.ld-fm-copy-id-msg');
+                    if (msg) {
+                        var orig = msg.textContent;
+                        msg.textContent = '<?php echo esc_js( __( 'Copied!', 'ovr-core' ) ); ?>';
+                        setTimeout(function(){ msg.textContent = orig; }, 2000);
+                    }
+                });
+            }
+        });
+    }
+
+    // ── Feature drag-sort ──
+    (function(){
+        var groups = root.querySelectorAll('.ld-fm-feat-list');
+        var orderInput = document.getElementById('ld-fm-feature-order');
+        if (!groups.length || !orderInput) { return; }
+        function collectOrder(){
+            var order = [];
+            groups.forEach(function(g){
+                g.querySelectorAll('.ld-fm-feat-item').forEach(function(item){
+                    var tid = item.getAttribute('data-term-id');
+                    if (tid) { order.push(parseInt(tid, 10)); }
+                });
+            });
+            orderInput.value = JSON.stringify(order);
+            dirty = true;
+        }
+        groups.forEach(function(g){
+            g.addEventListener('dragstart', function(e){
+                var item = e.target.closest('.ld-fm-feat-item');
+                if (item) { e.dataTransfer.setData('text/plain', ''); item.classList.add('is-dragging'); }
+            });
+            g.addEventListener('dragend', function(e){
+                var item = e.target.closest('.ld-fm-feat-item');
+                if (item) { item.classList.remove('is-dragging'); }
+            });
+            g.addEventListener('dragover', function(e){
+                e.preventDefault();
+                var dragging = g.querySelector('.is-dragging');
+                if (!dragging) { return; }
+                var after = e.target.closest('.ld-fm-feat-item');
+                if (!after || after === dragging) { return; }
+                var rect = after.getBoundingClientRect();
+                var mid = rect.top + rect.height / 2;
+                if (e.clientY < mid) {
+                    g.insertBefore(dragging, after);
+                } else {
+                    g.insertBefore(dragging, after.nextSibling);
+                }
+            });
+            g.addEventListener('drop', function(e){
+                e.preventDefault();
+                collectOrder();
+            });
+        });
+        // Feature search filter
+        var searchInput = document.getElementById('ld-fm-feature-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', function(){
+                var q = searchInput.value.toLowerCase().trim();
+                groups.forEach(function(g){
+                    g.querySelectorAll('.ld-fm-feat-item').forEach(function(item){
+                        var name = (item.querySelector('.ld-fm-feat-name') || {}).textContent || '';
+                        item.style.display = (q === '' || name.toLowerCase().indexOf(q) > -1) ? '' : 'none';
+                    });
+                });
+            });
+        }
+        // Wire up feature checkboxes to mark dirty
+        root.querySelectorAll('.ld-fm-feat-item input[type="checkbox"]').forEach(function(cb){
+            cb.addEventListener('change', function(){ dirty = true; });
+        });
+    })();
+
+    // ── Feature group move up/down ──
+    // (Drag-sort within each group covers reordering; up/down buttons are
+    //  implicit via drag. The feature_order input stores the canonical order.)
+
+    // ── Auto-geocode address fields ──
+    (function(){
+        var addrEl = document.getElementById('ld-fm-addr');
+        var cityEl = document.getElementById('ld-fm-city');
+        var stateEl = document.getElementById('ld-fm-state');
+        var zipEl = document.getElementById('ld-fm-zip');
+        var latIn = document.getElementById('ld-fm-lat');
+        var lngIn = document.getElementById('ld-fm-lng');
+        var mapPreview = document.getElementById('ld-fm-map-preview');
+        var mapIframe = document.getElementById('ld-fm-map-iframe');
+        var geoStatus = document.getElementById('ld-fm-geo-status');
+        var _debounceTimer;
+
+        if (!addrEl || !cityEl || !latIn || !lngIn) { return; }
+
+        function updateMap(lat, lng){
+            if (mapIframe) {
+                var bboxLng = lng - 0.008;
+                var bboxLat = lat - 0.006;
+                mapIframe.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bboxLng + ',' + bboxLat + ',' + (lng + 0.008) + ',' + (lat + 0.006) + '&layer=mapnik&marker=' + lat + ',' + lng;
+            }
+            if (mapPreview) { mapPreview.style.display = ''; }
+        }
+
+        function doGeocode(){
+            var address = addrEl.value.trim();
+            var city    = cityEl.value.trim();
+            var state   = stateEl ? stateEl.value.trim() : '';
+            var zip     = zipEl ? zipEl.value.trim() : '';
+
+            // Need at least street or city to attempt a lookup.
+            if (!address && !city) {
+                if (geoStatus) { geoStatus.textContent = ''; }
+                return;
+            }
+
+            var fd = new FormData();
+            fd.set('action', 'ovr_geocode_address');
+            fd.set('nonce', _nonce);
+            fd.set('address', address);
+            fd.set('city', city);
+            fd.set('state', state);
+            fd.set('zip', zip);
+
+            if (geoStatus) { geoStatus.textContent = '<?php echo esc_js( __( 'Looking up address…', 'ovr-core' ) ); ?>'; }
+
+            fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (res.success && res.data) {
+                        latIn.value = res.data.lat;
+                        lngIn.value = res.data.lng;
+                        updateMap(res.data.lat, res.data.lng);
+                        if (geoStatus) { geoStatus.textContent = ''; }
+                    } else {
+                        var msg = res.data && res.data.message ? res.data.message : '<?php echo esc_js( __( 'Could not locate address. Check the fields and try again.', 'ovr-core' ) ); ?>';
+                        if (geoStatus) { geoStatus.textContent = msg; }
+                        // Keep stale coordinates — user may fix the address.
+                    }
+                })
+                .catch(function(){
+                    if (geoStatus) { geoStatus.textContent = '<?php echo esc_js( __( 'Geocoding unavailable. Try again later.', 'ovr-core' ) ); ?>'; }
+                });
+        }
+
+        function onAddressChange(){
+            clearTimeout(_debounceTimer);
+            _debounceTimer = setTimeout(doGeocode, 800);
+        }
+
+        addrEl.addEventListener('input', onAddressChange);
+        cityEl.addEventListener('input', onAddressChange);
+        if (stateEl) { stateEl.addEventListener('input', onAddressChange); }
+        if (zipEl) { zipEl.addEventListener('input', onAddressChange); }
+
+        // On edit: show map if lat/lng already set.
+        var existingLat = parseFloat(latIn.value);
+        var existingLng = parseFloat(lngIn.value);
+        if (existingLat && existingLng) {
+            updateMap(existingLat, existingLng);
+        }
+    })();
 
     // ── Short description live character counter (max 200) ──
     var shortDesc = form.querySelector('[name="short_description"]');
@@ -936,6 +1587,8 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     var publishBtn = document.getElementById('ld-fm-publish');
     if (publishBtn) {
         publishBtn.addEventListener('click', function(e){
+            // Flush the rich-text editor into its textarea before validating/submitting.
+            if (window.__ovrSyncRte) { window.__ovrSyncRte(); }
             var req = [
                 { el: form.querySelector('[name="title"]'),             bad: function(v){ return v.trim() === ''; } },
                 { el: form.querySelector('[name="short_description"]'), bad: function(v){ return v.trim() === ''; } },
@@ -957,6 +1610,9 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 e.preventDefault();
                 show(STEPS.indexOf('info'));
                 firstBad.focus();
+            } else {
+                // Valid: the form is about to submit — don't warn about leaving.
+                leaving = true;
             }
         });
     }
@@ -966,27 +1622,55 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     var availTpl  = document.getElementById('ld-fm-avail-tpl');
     var availAdd  = document.getElementById('ld-fm-avail-add');
     var availIdx  = <?php echo (int) ( count( $avail_rows ) + 1 ); ?>;
+    function validateAvailRow(row){
+        var from = row.querySelector('[name*="[start_date]"]');
+        var to   = row.querySelector('[name*="[end_date]"]');
+        if (!from || !to) { return true; }
+        if (from.value && to.value && to.value < from.value) {
+            to.classList.add('is-invalid');
+            return false;
+        }
+        to.classList.remove('is-invalid');
+        return true;
+    }
     if (availAdd && availTpl && availWrap) {
         availAdd.addEventListener('click', function(){
             var html = availTpl.innerHTML.replace(/__i__/g, String(availIdx++));
             var tmp = document.createElement('div'); tmp.innerHTML = html.trim();
-            availWrap.appendChild(tmp.firstElementChild);
+            var row = tmp.firstElementChild;
+            availWrap.appendChild(row);
+            row.querySelectorAll('input[type="date"]').forEach(function(inp){
+                inp.addEventListener('change', function(){ validateAvailRow(row); });
+            });
         });
         availWrap.addEventListener('click', function(e){
             var x = e.target.closest('.ld-fm-avail-x'); if (!x) { return; }
             var row = x.closest('.ld-fm-avail-row'); if (row) { row.remove(); }
         });
+        availWrap.querySelectorAll('.ld-fm-avail-row').forEach(function(row){
+            row.querySelectorAll('input[type="date"]').forEach(function(inp){
+                inp.addEventListener('change', function(){ validateAvailRow(row); });
+            });
+        });
     }
 
-    // ── iCal "Sync now" (uses the SAVED feed URL on the listing) ──
+    // ── iCal "Sync now" ── syncs the URL currently in the field. If the listing
+    // hasn't been saved yet, an auto-save runs first (which creates the draft
+    // and persists the URL), then the sync fires against that draft.
     var icalBtn = document.getElementById('ld-fm-ical-sync');
     var icalStatus = document.getElementById('ld-fm-ical-status');
     if (icalBtn) {
-        icalBtn.addEventListener('click', function(){
+        function doIcalSync(){
             var pidEl = form.querySelector('[name="post_id"]');
             var pid = pidEl ? pidEl.value : '0';
+            var urlEl = document.getElementById('ld-fm-ical');
+            var url = urlEl ? urlEl.value.trim() : '';
+            if (!url) {
+                if (icalStatus) { icalStatus.textContent = '<?php echo esc_js( __( 'Paste an iCal feed URL first.', 'ovr-core' ) ); ?>'; }
+                return;
+            }
             if (!pid || pid === '0') {
-                if (icalStatus) { icalStatus.textContent = '<?php echo esc_js( __( 'Save the listing first to enable syncing.', 'ovr-core' ) ); ?>'; }
+                if (icalStatus) { icalStatus.textContent = '<?php echo esc_js( __( 'Could not start a draft — please try again.', 'ovr-core' ) ); ?>'; }
                 return;
             }
             icalBtn.disabled = true;
@@ -995,16 +1679,29 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             fd.append('action', 'ovr_ical_sync');
             fd.append('nonce', form.getAttribute('data-nonce'));
             fd.append('post_id', pid);
+            fd.append('ical_url', url);
             fetch(form.getAttribute('data-ajax'), { method:'POST', credentials:'same-origin', body:fd })
                 .then(function(r){ return r.json(); })
                 .then(function(res){
                     if (icalStatus) {
                         icalStatus.textContent = (res && res.data && res.data.message) ? res.data.message
-                            : (res && res.success ? '<?php echo esc_js( __( 'Calendar synced.', 'ovr-core' ) ); ?>' : '<?php echo esc_js( __( 'Sync failed. Check the URL and save first.', 'ovr-core' ) ); ?>');
+                            : (res && res.success ? '<?php echo esc_js( __( 'Calendar synced.', 'ovr-core' ) ); ?>' : '<?php echo esc_js( __( 'Sync failed. Check the URL.', 'ovr-core' ) ); ?>');
                     }
                 })
                 .catch(function(){ if (icalStatus) { icalStatus.textContent = '<?php echo esc_js( __( 'Sync failed. Please try again.', 'ovr-core' ) ); ?>'; } })
                 .then(function(){ icalBtn.disabled = false; });
+        }
+        icalBtn.addEventListener('click', function(){
+            var pidEl = form.querySelector('[name="post_id"]');
+            var pid = pidEl ? pidEl.value : '0';
+            if (!pid || pid === '0') {
+                // Create the draft (and persist the URL) first, then sync.
+                if (icalStatus) { icalStatus.textContent = '<?php echo esc_js( __( 'Saving…', 'ovr-core' ) ); ?>'; }
+                dirty = true;
+                autoSave(function(){ doIcalSync(); });
+                return;
+            }
+            doIcalSync();
         });
     }
 
@@ -1377,7 +2074,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 fd.append('action', 'ovr_upload_listing_media');
                 fd.append('nonce', nonce); fd.append('kind', kind === 'video' ? 'video' : 'pano');
                 fd.append('file', file);
-                fetch(ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+        fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
                     .then(function(r){ return r.json(); })
                     .then(function(res){
                         if (res && res.success && res.data && res.data.id) {
@@ -1436,7 +2133,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             var fd = new FormData();
             fd.append('action', 'ovr_upload_listing_media');
             fd.append('nonce', nonce); fd.append('kind', 'doc'); fd.append('file', file);
-            fetch(ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+        fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
                 .then(function(r){ return r.json(); })
                 .then(function(res){
                     if (res && res.success && res.data && res.data.id) {
@@ -1459,6 +2156,295 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 })
                 .catch(function(){ if (status) { status.textContent = T2.fail; } })
                 .then(function(){ fileIn3.value = ''; });
+        });
+    })();
+
+    // ── Paid Services (admin-only) ──
+    (function(){
+        var addBtn = document.getElementById('ovr-editor-svc-add');
+        if (!addBtn) { return; }
+        var listEl = document.getElementById('ovr-editor-svc-list');
+        var modal  = document.getElementById('ovr-editor-svc-modal');
+        var pid    = addBtn.getAttribute('data-listing-id');
+        var nonce  = document.getElementById('ovr-editor-admin-nonce').value;
+
+        function loadServices(){
+            var fd = new FormData();
+            fd.set('action', 'ovr_admin_get_services');
+            fd.set('nonce', nonce);
+            fd.set('listing_id', pid);
+            fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (!res.success || !res.data || !res.data.services) {
+                        listEl.innerHTML = '<p class="ld-fm-subhint"><?php echo esc_js( __( 'Could not load services.', 'ovr-core' ) ); ?></p>';
+                        return;
+                    }
+                    var active = res.data.services.filter(function(s){ return s.active == '1'; });
+                    if (!active.length) {
+                        listEl.innerHTML = '<p class="ld-fm-subhint"><?php echo esc_js( __( 'No paid services assigned.', 'ovr-core' ) ); ?></p>';
+                        return;
+                    }
+                    var html = '';
+                    active.forEach(function(s){
+                        var expired = s.end_date && s.end_date < '<?php echo esc_js( current_time( 'Y-m-d' ) ); ?>';
+                        html += '<span class="ld-fm-svc-badge' + (expired ? ' is-expired' : '') + '">';
+                        html += escHtml(s.service_name || s.service_slug || 'Service');
+                        html += ' <button type="button" class="ld-fm-svc-remove" data-id="' + s.id + '" title="<?php echo esc_js( __( 'Remove', 'ovr-core' ) ); ?>">&times;</button>';
+                        html += '</span>';
+                    });
+                    listEl.innerHTML = html;
+                })
+                .catch(function(){
+                    listEl.innerHTML = '<p class="ld-fm-subhint"><?php echo esc_js( __( 'Error loading services.', 'ovr-core' ) ); ?></p>';
+                });
+        }
+
+        function escHtml(t){ var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+        function openModal(){
+            document.getElementById('ovr-editor-svc-listing-id').value = pid;
+            document.getElementById('ovr-editor-svc-select').value = '';
+            document.getElementById('ovr-editor-svc-start').value = '<?php echo esc_js( current_time( 'Y-m-d' ) ); ?>';
+            document.getElementById('ovr-editor-svc-end').value = '';
+            document.getElementById('ovr-editor-svc-notes').value = '';
+            modal.style.display = 'flex';
+        }
+
+        function closeModal(){ modal.style.display = 'none'; }
+
+        addBtn.addEventListener('click', openModal);
+
+        modal.addEventListener('click', function(e){
+            if (e.target.classList.contains('ovr-editor-modal-close') || e.target.classList.contains('ovr-editor-modal-backdrop')) {
+                closeModal();
+            }
+        });
+        document.addEventListener('keydown', function(e){
+            if (e.key === 'Escape' && modal.style.display === 'flex') { closeModal(); }
+        });
+
+        document.getElementById('ovr-editor-svc-save').addEventListener('click', function(){
+            var svcId = document.getElementById('ovr-editor-svc-select').value;
+            if (!svcId) { alert('<?php echo esc_js( __( 'Please select a service.', 'ovr-core' ) ); ?>'); return; }
+            var fd = new FormData();
+            fd.set('action', 'ovr_admin_add_listing_service');
+            fd.set('nonce', nonce);
+            fd.set('listing_id', pid);
+            fd.set('service_id', svcId);
+            fd.set('start_date', document.getElementById('ovr-editor-svc-start').value);
+            fd.set('end_date', document.getElementById('ovr-editor-svc-end').value);
+            fd.set('notes', document.getElementById('ovr-editor-svc-notes').value);
+            fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (res.success) {
+                        closeModal();
+                        loadServices();
+                    } else {
+                        alert(res.data && res.data.message ? res.data.message : '<?php echo esc_js( __( 'Failed to assign service.', 'ovr-core' ) ); ?>');
+                    }
+                })
+                .catch(function(){
+                    alert('<?php echo esc_js( __( 'Failed to assign service.', 'ovr-core' ) ); ?>');
+                });
+        });
+
+        listEl.addEventListener('click', function(e){
+            var btn = e.target.closest('.ld-fm-svc-remove');
+            if (!btn) { return; }
+            if (!confirm('<?php echo esc_js( __( 'Remove this service from the listing?', 'ovr-core' ) ); ?>')) { return; }
+            var svcId = btn.getAttribute('data-id');
+            var fd = new FormData();
+            fd.set('action', 'ovr_admin_remove_listing_service');
+            fd.set('nonce', nonce);
+            fd.set('id', svcId);
+            fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (res.success) { loadServices(); }
+                    else { alert(res.data && res.data.message ? res.data.message : '<?php echo esc_js( __( 'Failed to remove service.', 'ovr-core' ) ); ?>'); }
+                })
+                .catch(function(){
+                    alert('<?php echo esc_js( __( 'Failed to remove service.', 'ovr-core' ) ); ?>');
+                });
+        });
+
+        loadServices();
+    })();
+
+    // ── Rich-text editor for the Full Description ──
+    // A self-contained WYSIWYG that keeps its canonical value in the hidden
+    // <textarea name="description"> so the existing FormData auto-save,
+    // wp_kses_post sanitising, and beforeunload guard all keep working. The
+    // same textarea doubles as the "Edit HTML source" view.
+    (function(){
+        var rte = document.getElementById('ld-rte');
+        if (!rte) { return; }
+        var body    = document.getElementById('ld-rte-body');
+        var source  = document.getElementById('ld-fm-desc'); // name="description"
+        var toolbar = rte.querySelector('.ld-rte-toolbar');
+        var blockSel= rte.querySelector('.ld-rte-block');
+        var htmlMode= false;
+
+        function syncFromBody(){ if (!htmlMode) { source.value = body.innerHTML; } }
+        // Bridge used by autoSave() and the Save & Exit handler.
+        window.__ovrSyncRte = syncFromBody;
+
+        function touched(){ syncFromBody(); dirty = true; updateSaveIndicator(); scheduleAutoSave(); }
+
+        // Remember the caret/selection so toolbar controls that steal focus
+        // (the block <select>, and window.prompt for links) still act on it.
+        var savedRange = null;
+        function saveSel(){
+            var s = window.getSelection && window.getSelection();
+            if (s && s.rangeCount && body.contains(s.anchorNode)) { savedRange = s.getRangeAt(0).cloneRange(); }
+        }
+        function restoreSel(){
+            if (!savedRange) { return; }
+            var s = window.getSelection(); s.removeAllRanges(); s.addRange(savedRange);
+        }
+        body.addEventListener('keyup', saveSel);
+        body.addEventListener('mouseup', saveSel);
+        body.addEventListener('input', function(){ saveSel(); touched(); });
+        body.addEventListener('blur', function(){ saveSel(); syncFromBody(); });
+
+        // Keep the caret/selection when pressing a toolbar button.
+        toolbar.addEventListener('mousedown', function(e){
+            if (e.target.closest('.ld-rte-btn')) { e.preventDefault(); }
+        });
+        toolbar.addEventListener('click', function(e){
+            var btn = e.target.closest('.ld-rte-btn'); if (!btn) { return; }
+            if (btn.hasAttribute('data-rte-html')) { toggleHtml(); return; }
+            if (htmlMode) { return; } // formatting only applies in visual mode
+            var cmd = btn.getAttribute('data-cmd');
+            if (cmd === 'createLink') {
+                var url = window.prompt('<?php echo esc_js( __( 'Enter the link web address (URL)', 'ovr-core' ) ); ?>', 'https://');
+                body.focus(); restoreSel();
+                if (url) { try { document.execCommand('createLink', false, url); } catch (err) {} }
+            } else if (cmd) {
+                body.focus(); restoreSel();
+                try { document.execCommand(cmd, false, null); } catch (err) {}
+            }
+            touched();
+        });
+        if (blockSel) {
+            blockSel.addEventListener('change', function(){
+                if (htmlMode) { blockSel.selectedIndex = 0; return; }
+                var tag = blockSel.value || 'p';
+                body.focus(); restoreSel();
+                try { document.execCommand('formatBlock', false, tag); } catch (err) {}
+                touched();
+                blockSel.selectedIndex = 0;
+            });
+        }
+
+        function toggleHtml(){
+            htmlMode = !htmlMode;
+            var htmlBtn = rte.querySelector('[data-rte-html]');
+            if (htmlMode) {
+                source.value = body.innerHTML;         // visual → source
+                body.setAttribute('hidden', '');
+                source.removeAttribute('hidden');
+                rte.classList.add('is-html');
+                if (htmlBtn) { htmlBtn.classList.add('is-active'); }
+                source.focus();
+            } else {
+                body.innerHTML = source.value;         // source → visual
+                source.setAttribute('hidden', '');
+                body.removeAttribute('hidden');
+                rte.classList.remove('is-html');
+                if (htmlBtn) { htmlBtn.classList.remove('is-active'); }
+                body.focus();
+            }
+        }
+
+        // Editing raw HTML directly still marks the form dirty (the textarea is
+        // the submitted value, so no extra sync is needed here).
+        source.addEventListener('input', function(){ if (htmlMode) { dirty = true; updateSaveIndicator(); scheduleAutoSave(); } });
+    })();
+
+    // ── Reassign listing owner (P8 §8, admin-only) ──
+    (function(){
+        var openBtn = document.getElementById('ld-fm-reassign-open');
+        if (!openBtn) { return; }
+        var modal   = document.getElementById('ovr-reassign-modal');
+        var search  = document.getElementById('ovr-reassign-search');
+        var results = document.getElementById('ovr-reassign-results');
+        var status  = document.getElementById('ovr-reassign-status');
+        var confirmBtn = document.getElementById('ovr-reassign-confirm');
+        var selected = document.getElementById('ovr-reassign-selected');
+        var listingId = document.getElementById('ovr-reassign-listing-id');
+        var nonceEl = document.getElementById('ovr-editor-admin-nonce');
+        var ajaxUrl = form.getAttribute('data-ajax');
+        var nonce = nonceEl ? nonceEl.value : '';
+        var _t;
+
+        function openModal(){ modal.style.display = 'flex'; search.value = ''; results.innerHTML = ''; selected.value = ''; confirmBtn.disabled = true; if (status) { status.textContent = ''; } setTimeout(function(){ search.focus(); }, 50); }
+        function closeModal(){ modal.style.display = 'none'; }
+        openBtn.addEventListener('click', openModal);
+        modal.addEventListener('click', function(e){ if (e.target.hasAttribute('data-reassign-close')) { closeModal(); } });
+        document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && modal.style.display === 'flex') { closeModal(); } });
+
+        function escHtml(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+
+        function doSearch(){
+            var term = search.value.trim();
+            selected.value = ''; confirmBtn.disabled = true;
+            if (term.length < 2) { results.innerHTML = ''; return; }
+            var fd = new FormData();
+            fd.set('action', 'ovr_admin_search_users'); fd.set('nonce', nonce); fd.set('term', term);
+            fetch(ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (!res.success || !res.data || !res.data.users || !res.data.users.length) {
+                        results.innerHTML = '<p class="ld-fm-subhint" style="padding:8px 4px"><?php echo esc_js( __( 'No matching users.', 'ovr-core' ) ); ?></p>';
+                        return;
+                    }
+                    var html = '';
+                    res.data.users.forEach(function(u){
+                        html += '<button type="button" class="ovr-reassign-row" data-uid="' + u.id + '">' +
+                            '<span class="ovr-reassign-row-name">' + escHtml(u.name) + '</span>' +
+                            '<span class="ovr-reassign-row-email">' + escHtml(u.email) + '</span></button>';
+                    });
+                    results.innerHTML = html;
+                })
+                .catch(function(){ results.innerHTML = ''; });
+        }
+        search.addEventListener('input', function(){ clearTimeout(_t); _t = setTimeout(doSearch, 300); });
+
+        results.addEventListener('click', function(e){
+            var row = e.target.closest('.ovr-reassign-row'); if (!row) { return; }
+            Array.prototype.forEach.call(results.querySelectorAll('.ovr-reassign-row'), function(r){ r.classList.remove('is-selected'); });
+            row.classList.add('is-selected');
+            selected.value = row.getAttribute('data-uid');
+            confirmBtn.disabled = false;
+        });
+
+        confirmBtn.addEventListener('click', function(){
+            var uid = selected.value;
+            if (!uid) { return; }
+            confirmBtn.disabled = true;
+            if (status) { status.textContent = '<?php echo esc_js( __( 'Transferring…', 'ovr-core' ) ); ?>'; }
+            var fd = new FormData();
+            fd.set('action', 'ovr_admin_reassign_listing'); fd.set('nonce', nonce);
+            fd.set('listing_id', listingId.value); fd.set('user_id', uid);
+            fetch(ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (res.success && res.data) {
+                        var n = document.getElementById('ld-fm-owner-name');
+                        var em = document.getElementById('ld-fm-owner-email');
+                        if (n) { n.textContent = res.data.owner_name || ''; }
+                        if (em) { em.textContent = res.data.owner_email || ''; }
+                        closeModal();
+                        showToast(res.data.message || '<?php echo esc_js( __( 'Ownership transferred.', 'ovr-core' ) ); ?>', 'success');
+                    } else {
+                        if (status) { status.textContent = (res.data && res.data.message) ? res.data.message : '<?php echo esc_js( __( 'Transfer failed.', 'ovr-core' ) ); ?>'; }
+                        confirmBtn.disabled = false;
+                    }
+                })
+                .catch(function(){ if (status) { status.textContent = '<?php echo esc_js( __( 'Transfer failed.', 'ovr-core' ) ); ?>'; } confirmBtn.disabled = false; });
         });
     })();
 

@@ -56,6 +56,7 @@ class PropertyMeta {
         '_ovr_policies'        => [ 'type' => 'string',  'default' => '' ],
         '_ovr_payment_info'    => [ 'type' => 'string',  'default' => '' ],
         '_ovr_gallery_ids'     => [ 'type' => 'string',  'default' => '' ],
+        '_ovr_feature_order'   => [ 'type' => 'string',  'default' => '' ],
     ];
 
     public function init(): void {

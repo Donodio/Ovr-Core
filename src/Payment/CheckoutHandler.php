@@ -20,6 +20,8 @@ namespace OVR\Payment;
 
 use OVR\Subscription\Plans;
 use OVR\Subscription\ListingUpgrades;
+use OVR\Subscription\UserSubscription;
+use OVR\Subscription\SubscriptionManager;
 use OVR\Core\Pages;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
@@ -123,8 +125,6 @@ class CheckoutHandler {
         // permissions, activated upon successful subscription payment".
         $price = (float) ( $plan['price'] ?? 0 );
         if ( 0.0 === $price ) {
-            $user_id = get_current_user_id();
-
             global $wpdb;
             $wpdb->insert( $wpdb->prefix . 'ovr_payments', [
                 'user_id'        => $user_id,
@@ -151,6 +151,10 @@ class CheckoutHandler {
         }
 
         $gateway_slug = sanitize_key( $_POST['gateway'] ?? '' );
+
+        // Mark subscription as pending before gateway redirect.
+        $user_id = get_current_user_id();
+        update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
 
         $result = $this->gateway( $gateway_slug )->start_checkout( [
             'user_id'    => get_current_user_id(),
@@ -424,14 +428,18 @@ class CheckoutHandler {
             wp_send_json_error( [ 'message' => __( 'Invalid plan.', 'ovr-core' ) ], 400 );
         }
 
+        $user_id = get_current_user_id();
         $price = (float) ( $plan['price'] ?? 0 );
         if ( 0.0 === $price ) {
-            update_user_meta( get_current_user_id(), 'ovr_subscription_plan', $plan_slug );
+            // Free plan — no payment needed. Activate directly.
+            SubscriptionManager::activate( $user_id, $plan_slug );
             wp_send_json_success( [
-                'redirect_url' => Pages::get_page_url( 'ovr_page_dashboard' ),
-                'message'      => __( 'Free plan activated.', 'ovr-core' ),
+                'redirect_url' => Pages::get_page_url( 'ovr_page_subscription_select' ),
+                'message'      => __( 'Plan selected. Choose a paid plan for full landlord access.', 'ovr-core' ),
             ] );
         }
+
+        update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
 
         $result = $this->gateway()->start_checkout( [
             'user_id'    => get_current_user_id(),

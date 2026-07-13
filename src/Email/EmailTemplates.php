@@ -119,6 +119,13 @@ class EmailTemplates {
                 'recipient' => 'user',
                 'vars'      => [ 'user_name', 'ticket_id', 'ticket_subject', 'dashboard_url', 'site_name', 'site_url' ],
             ],
+            'review_request' => [
+                'name'      => __( 'Review Request', 'ovr-core' ),
+                'subject'   => __( 'How was your stay at {{property_title}}?', 'ovr-core' ),
+                'html'      => "<h2>We'd love your review</h2><p>Hi {{guest_name}}, thank you for staying at <strong>{{property_title}}</strong>. We'd love to hear about your experience — it only takes a minute.</p><p><a href=\"{{review_url}}\" style=\"display:inline-block;background:#004c4c;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">Write a review</a></p>{$sig}",
+                'recipient' => 'user',
+                'vars'      => [ 'guest_name', 'property_title', 'review_url', 'site_name', 'site_url' ],
+            ],
         ];
     }
 

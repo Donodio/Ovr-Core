@@ -22,9 +22,19 @@ class UsersAdmin {
     public const PAGE_SLUG  = 'ovr-core-users';
     public const PER_PAGE   = 20;
 
+    /** Admin-only user meta introduced for Mark feedback P6.5. */
+    public const META_PRICE_OVERRIDE = 'ovr_subscription_price_override';
+
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
         add_action( 'admin_post_ovr_user_toggle_status', [ $this, 'handle_toggle_status' ] );
+        // P6.2: CSV export must run before any admin HTML is sent.
+        add_action( 'admin_init', [ $this, 'maybe_export_csv' ] );
+        // P6.5: admin-only fields on the user profile editor.
+        add_action( 'show_user_profile', [ $this, 'render_profile_fields' ] );
+        add_action( 'edit_user_profile', [ $this, 'render_profile_fields' ] );
+        add_action( 'personal_options_update', [ $this, 'save_profile_fields' ] );
+        add_action( 'edit_user_profile_update', [ $this, 'save_profile_fields' ] );
     }
 
     public function register_page(): void {
@@ -67,8 +77,13 @@ class UsersAdmin {
             $args['search']         = '*' . $search . '*';
             $args['search_columns'] = [ 'user_login', 'user_nicename', 'user_email', 'display_name' ];
         }
-        if ( $role && in_array( $role, [ 'ovr_landlord', 'administrator', 'subscriber' ], true ) ) {
-            $args['role'] = $role;
+        // P6.3: simplified role filter — Administrators vs. Users (everyone
+        // else). WordPress has many internal roles, but for OVR only these two
+        // distinctions matter.
+        if ( 'administrator' === $role ) {
+            $args['role'] = 'administrator';
+        } elseif ( 'user' === $role ) {
+            $args['role__not_in'] = [ 'administrator' ];
         }
 
         // Subscription type + account status filters (Phase 11), combinable.
@@ -151,6 +166,207 @@ class UsersAdmin {
             'property_managers' => (int) $managers,
             'pending_approvals' => $pending,
         ];
+    }
+
+    /**
+     * P6.2: export all users to CSV. Runs on admin_init (before any HTML) so the
+     * download headers are valid. Columns: User ID, Name, Email, Phone,
+     * Subscription, Balance, Registration Date.
+     */
+    public function maybe_export_csv(): void {
+        if ( empty( $_GET['export_csv'] ) || ( $_GET['page'] ?? '' ) !== self::PAGE_SLUG ) {
+            return;
+        }
+        if ( ! current_user_can( 'ovr_manage_users' ) ) {
+            return;
+        }
+
+        $users = get_users( [
+            'number'  => -1,
+            'orderby' => 'registered',
+            'order'   => 'DESC',
+            'fields'  => 'all',
+        ] );
+
+        nocache_headers();
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="ovr-users-' . gmdate( 'Y-m-d' ) . '.csv"' );
+
+        $out = fopen( 'php://output', 'w' );
+        // UTF-8 BOM so Excel reads accented names/emails correctly.
+        fwrite( $out, "\xEF\xBB\xBF" );
+        fputcsv( $out, [
+            __( 'User ID', 'ovr-core' ),
+            __( 'Name', 'ovr-core' ),
+            __( 'Email', 'ovr-core' ),
+            __( 'Phone', 'ovr-core' ),
+            __( 'Subscription', 'ovr-core' ),
+            __( 'Balance', 'ovr-core' ),
+            __( 'Registration Date', 'ovr-core' ),
+        ] );
+
+        foreach ( $users as $u ) {
+            $plan      = \OVR\Subscription\UserSubscription::get_plan( (int) $u->ID );
+            $plan_name = $plan['name'] ?? \OVR\Subscription\UserSubscription::get_plan_slug( (int) $u->ID );
+            $phone     = (string) get_user_meta( (int) $u->ID, 'ovr_phone', true );
+            $balance   = (float) get_user_meta( (int) $u->ID, \OVR\Payment\Wallet::META_BALANCE, true );
+
+            fputcsv( $out, [
+                (int) $u->ID,
+                $u->display_name,
+                $u->user_email,
+                $phone,
+                $plan_name,
+                number_format( $balance, 2, '.', '' ),
+                $u->user_registered,
+            ] );
+        }
+        fclose( $out );
+        exit;
+    }
+
+    /**
+     * P6.5: admin-only fields on the WordPress user profile editor —
+     * current subscription, a renewal price override (for legacy customers),
+     * phone number, and account balance.
+     */
+    public function render_profile_fields( \WP_User $user ): void {
+        if ( ! current_user_can( 'ovr_manage_users' ) ) {
+            return;
+        }
+        $plan      = \OVR\Subscription\UserSubscription::get_plan( (int) $user->ID );
+        $plan_slug = \OVR\Subscription\UserSubscription::get_plan_slug( (int) $user->ID );
+        $plan_name = $plan['name'] ?? $plan_slug;
+        $expires   = (string) get_user_meta( (int) $user->ID, \OVR\Subscription\UserSubscription::META_EXPIRES, true );
+        $phone     = (string) get_user_meta( (int) $user->ID, 'ovr_phone', true );
+        $balance   = (string) get_user_meta( (int) $user->ID, \OVR\Payment\Wallet::META_BALANCE, true );
+        $override  = (string) get_user_meta( (int) $user->ID, self::META_PRICE_OVERRIDE, true );
+
+        // Plan options (excluding the internal Base Subscriber fallback — P4).
+        $plans = \OVR\Subscription\Plans::get_plans();
+        wp_nonce_field( 'ovr_user_profile_fields', 'ovr_user_profile_nonce' );
+        ?>
+        <h2><?php esc_html_e( 'OVR Subscription & Account', 'ovr-core' ); ?></h2>
+        <table class="form-table" role="presentation">
+            <tr>
+                <th><label for="ovr_subscription_plan"><?php esc_html_e( 'Current Subscription', 'ovr-core' ); ?></label></th>
+                <td>
+                    <select name="ovr_subscription_plan" id="ovr_subscription_plan">
+                        <?php foreach ( (array) $plans as $slug => $p ) :
+                            if ( 'base_subscriber' === $slug ) { continue; } // internal fallback, never selectable (P4)
+                            $label = is_array( $p ) ? ( $p['name'] ?? $slug ) : (string) $p;
+                        ?>
+                            <option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $plan_slug, $slug ); ?>><?php echo esc_html( $label ); ?></option>
+                        <?php endforeach; ?>
+                        <?php if ( 'base_subscriber' === $plan_slug ) : ?>
+                            <option value="base_subscriber" selected><?php esc_html_e( 'Expired (Base Subscriber)', 'ovr-core' ); ?></option>
+                        <?php endif; ?>
+                    </select>
+                    <p class="description">
+                        <?php
+                        printf(
+                            /* translators: 1: current plan name, 2: expiry date */
+                            esc_html__( 'Active plan: %1$s. Expires: %2$s', 'ovr-core' ),
+                            '<strong>' . esc_html( $plan_name ) . '</strong>',
+                            $expires ? esc_html( mysql2date( get_option( 'date_format' ), $expires ) ) : esc_html__( 'n/a', 'ovr-core' )
+                        );
+                        ?>
+                    </p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="ovr_subscription_price_override"><?php esc_html_e( 'Subscription Price Override', 'ovr-core' ); ?></label></th>
+                <td>
+                    <span class="ovr-money-group">
+                        <span class="ovr-money-prefix">$</span>
+                        <input type="number" step="0.01" min="0" name="ovr_subscription_price_override" id="ovr_subscription_price_override" class="ovr-money-input" value="<?php echo esc_attr( $override ); ?>" placeholder="<?php esc_attr_e( 'Public price', 'ovr-core' ); ?>">
+                    </span>
+                    <p class="description"><?php esc_html_e( 'Optional. Charge this renewal price instead of the current public price (for legacy customers). Leave blank to use the standard plan price.', 'ovr-core' ); ?></p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="ovr_phone"><?php esc_html_e( 'Phone Number', 'ovr-core' ); ?></label></th>
+                <td>
+                    <input type="text" name="ovr_phone" id="ovr_phone" class="regular-text" value="<?php echo esc_attr( $phone ); ?>">
+                </td>
+            </tr>
+            <tr>
+                <th><label for="ovr_balance"><?php esc_html_e( 'Account Balance', 'ovr-core' ); ?></label></th>
+                <td>
+                    <span class="ovr-money-group">
+                        <span class="ovr-money-prefix">$</span>
+                        <input type="number" step="0.01" name="ovr_balance" id="ovr_balance" class="ovr-money-input" value="<?php echo esc_attr( '' !== $balance ? $balance : '0' ); ?>">
+                    </span>
+                    <p class="description"><?php esc_html_e( 'Manual credit balance. Used for adjustments and credits applied at renewal.', 'ovr-core' ); ?></p>
+                </td>
+            </tr>
+            <?php $verif = \OVR\Core\Verification::get( (int) $user->ID ); ?>
+            <tr>
+                <th><label for="ovr_verification_status"><?php esc_html_e( 'Verification Status', 'ovr-core' ); ?></label></th>
+                <td>
+                    <select name="ovr_verification_status" id="ovr_verification_status">
+                        <?php foreach ( \OVR\Core\Verification::statuses() as $vkey => $vlabel ) : ?>
+                            <option value="<?php echo esc_attr( $vkey ); ?>" <?php selected( $verif, $vkey ); ?>><?php echo esc_html( $vlabel ); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="description"><?php esc_html_e( 'Shown as a trust badge on every listing this user owns. Combats fraudulent listings.', 'ovr-core' ); ?></p>
+                </td>
+            </tr>
+        </table>
+        <style>
+            .ovr-money-group{display:inline-flex;align-items:stretch;border:1px solid #8c8f94;border-radius:4px;overflow:hidden;background:#fff;max-width:220px}
+            .ovr-money-group:focus-within{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}
+            .ovr-money-prefix{display:inline-flex;align-items:center;padding:0 10px;background:#f0f0f1;color:#50575e;font-weight:600;border-right:1px solid #dcdcde}
+            .ovr-money-input{border:none!important;box-shadow:none!important;outline:none!important;padding:6px 10px;width:150px;margin:0!important}
+            .ovr-money-input:focus{box-shadow:none!important}
+        </style>
+        <?php
+    }
+
+    /**
+     * P6.5: persist the admin-only profile fields.
+     */
+    public function save_profile_fields( int $user_id ): void {
+        if ( ! current_user_can( 'ovr_manage_users' ) ) {
+            return;
+        }
+        if ( ! isset( $_POST['ovr_user_profile_nonce'] ) ||
+             ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ovr_user_profile_nonce'] ) ), 'ovr_user_profile_fields' ) ) {
+            return;
+        }
+
+        if ( isset( $_POST['ovr_subscription_plan'] ) ) {
+            $slug = sanitize_key( wp_unslash( $_POST['ovr_subscription_plan'] ) );
+            if ( '' !== $slug ) {
+                update_user_meta( $user_id, \OVR\Subscription\UserSubscription::META_PLAN, $slug );
+            }
+        }
+
+        if ( isset( $_POST['ovr_subscription_price_override'] ) ) {
+            $raw = trim( (string) wp_unslash( $_POST['ovr_subscription_price_override'] ) );
+            if ( '' === $raw ) {
+                delete_user_meta( $user_id, self::META_PRICE_OVERRIDE );
+            } else {
+                update_user_meta( $user_id, self::META_PRICE_OVERRIDE, number_format( (float) $raw, 2, '.', '' ) );
+            }
+        }
+
+        if ( isset( $_POST['ovr_phone'] ) ) {
+            update_user_meta( $user_id, 'ovr_phone', sanitize_text_field( wp_unslash( $_POST['ovr_phone'] ) ) );
+        }
+
+        if ( isset( $_POST['ovr_balance'] ) ) {
+            $bal = (float) wp_unslash( $_POST['ovr_balance'] );
+            update_user_meta( $user_id, \OVR\Payment\Wallet::META_BALANCE, number_format( $bal, 2, '.', '' ) );
+        }
+
+        // Verification classification (P8 §9).
+        if ( isset( $_POST['ovr_verification_status'] ) ) {
+            $vs = sanitize_key( wp_unslash( $_POST['ovr_verification_status'] ) );
+            if ( isset( \OVR\Core\Verification::statuses()[ $vs ] ) ) {
+                update_user_meta( $user_id, \OVR\Core\Verification::META_KEY, $vs );
+            }
+        }
     }
 
     /**

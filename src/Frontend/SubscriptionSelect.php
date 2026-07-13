@@ -14,6 +14,7 @@ namespace OVR\Frontend;
 
 use OVR\Core\Pages;
 use OVR\Core\TemplateLoader;
+use OVR\Subscription\AccessControl;
 use OVR\Subscription\Plans;
 use OVR\Subscription\UserSubscription;
 
@@ -35,7 +36,7 @@ class SubscriptionSelect {
         $user = wp_get_current_user();
 
         // Already subscribed (or admin) — nothing to do here.
-        if ( UserSubscription::has_listing_access( $user->ID ) || user_can( $user, 'manage_options' ) ) {
+        if ( AccessControl::user_has_access( $user->ID ) ) {
             return '<p style="text-align:center;padding:32px">' .
                 sprintf(
                     wp_kses( __( 'Your subscription is active. Go to your <a href="%s">dashboard</a>.', 'ovr-core' ), [ 'a' => [ 'href' => [] ] ] ),
@@ -50,15 +51,17 @@ class SubscriptionSelect {
         );
         uasort( $plans, static fn( $a, $b ) => ( (int) ( $a['sort_order'] ?? 0 ) ) <=> ( (int) ( $b['sort_order'] ?? 0 ) ) );
 
-        $expired = '' !== (string) get_user_meta( $user->ID, 'ovr_subscription_expires', true )
-            && ! UserSubscription::is_active( $user->ID );
+        $sub_status = UserSubscription::get_status( $user->ID );
+        $is_expired  = ( UserSubscription::STATUS_EXPIRED === $sub_status );
+        $is_pending  = ( UserSubscription::STATUS_PENDING === $sub_status );
 
         return TemplateLoader::get_rendered( 'auth/subscription-select.php', [
             'user'         => $user,
             'plans'        => $plans,
             'checkout_url' => Pages::get_page_url( 'ovr_page_checkout' ),
             'logout_url'   => wp_logout_url( Pages::get_page_url( 'ovr_page_login' ) ),
-            'is_expired'   => $expired,
+            'is_expired'   => $is_expired,
+            'is_pending'   => $is_pending,
         ] );
     }
 }
