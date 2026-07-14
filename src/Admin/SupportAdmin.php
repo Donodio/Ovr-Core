@@ -35,6 +35,18 @@ class SupportAdmin {
         add_action( 'admin_post_ovr_kb_save',        [ $this, 'handle_kb_save' ] );
         add_action( 'admin_post_ovr_kb_status',      [ $this, 'handle_kb_status' ] );
         add_action( 'admin_post_ovr_kb_delete',      [ $this, 'handle_kb_delete' ] );
+        // Run the export before admin-header.php emits HTML, or the download
+        // headers fail "headers already sent" and the CSV is appended to the page.
+        add_action( 'admin_init', [ $this, 'maybe_export' ] );
+    }
+
+    /** Stream the tickets CSV export early (admin_init) so it downloads as a file. */
+    public function maybe_export(): void {
+        if ( ( $_GET['page'] ?? '' ) !== self::PAGE_SLUG || empty( $_GET['export_csv'] ) ) {
+            return;
+        }
+        $this->require_cap();
+        $this->export_tickets_csv();
     }
 
     public function register_page(): void {

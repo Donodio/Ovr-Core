@@ -23,6 +23,26 @@ class AuditLogAdmin {
 
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
+        // Run the export before admin-header.php emits HTML, or the download
+        // headers fail "headers already sent" and the file is appended to the page.
+        add_action( 'admin_init', [ $this, 'maybe_export' ] );
+    }
+
+    /** Stream the CSV/XLSX export early (admin_init) so it downloads as a file. */
+    public function maybe_export(): void {
+        if ( ( $_GET['page'] ?? '' ) !== self::PAGE_SLUG ) {
+            return;
+        }
+        $export = isset( $_GET['export'] ) ? sanitize_key( wp_unslash( $_GET['export'] ) ) : '';
+        if ( '' === $export || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        $list = $this->list_table();
+        if ( 'csv' === $export ) {
+            $list->export_csv( 'ovr-audit-log', $this->columns() );
+        } elseif ( 'xlsx' === $export ) {
+            $list->export_xlsx( 'ovr-audit-log', $this->columns() );
+        }
     }
 
     public function register_page(): void {

@@ -32,6 +32,16 @@ class PaidServicesAdmin {
         add_action( 'admin_post_ovr_paid_service_toggle',  [ $this, 'handle_toggle' ] );
         add_action( 'admin_post_ovr_paid_service_delete',  [ $this, 'handle_delete' ] );
         add_action( 'admin_post_ovr_paid_service_restore', [ $this, 'handle_restore' ] );
+        // Run the export before admin-header.php emits HTML, or the download
+        // headers fail "headers already sent" and the CSV is appended to the page.
+        add_action( 'admin_init', [ $this, 'maybe_export' ] );
+    }
+
+    /** Stream the CSV export early (admin_init) so it downloads as a file. */
+    public function maybe_export(): void {
+        if ( ( $_GET['page'] ?? '' ) === self::PAGE_SLUG && ! empty( $_GET['export_csv'] ) ) {
+            $this->export_csv();
+        }
     }
 
     public function register_page(): void {
