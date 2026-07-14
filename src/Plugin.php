@@ -208,6 +208,12 @@ class Plugin {
         // Boot admin UI (only inside wp-admin / AJAX).
         if ( is_admin() ) {
             $this->boot_admin();
+        } else {
+            // "Log in as user" lands the impersonating admin on the front page,
+            // so the "Return to admin" affordance must be registered here too —
+            // boot_admin() (which normally adds it) never runs on the front end.
+            // The node self-hides unless the HMAC-signed switch cookie is present.
+            add_action( 'admin_bar_menu', [ new UsersAdmin(), 'switch_back_admin_bar' ], 999 );
         }
 
         /**
