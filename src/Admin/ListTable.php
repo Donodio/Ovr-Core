@@ -235,22 +235,42 @@ class ListTable {
         header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( $filename ) . '-' . current_time( 'Y-m-d' ) . '.csv"' );
 
         $out = fopen( 'php://output', 'w' );
+        // UTF-8 BOM so Excel reads accented characters/emoji correctly.
+        fwrite( $out, "\xEF\xBB\xBF" );
         fputcsv( $out, array_keys( $columns ) );
 
         foreach ( $rows as $row ) {
             if ( $mapper ) {
-                fputcsv( $out, $mapper( $row ) );
+                fputcsv( $out, self::csv_safe_row( $mapper( $row ) ) );
                 continue;
             }
             $line = [];
             foreach ( $columns as $key ) {
                 $line[] = $row[ $key ] ?? '';
             }
-            fputcsv( $out, $line );
+            fputcsv( $out, self::csv_safe_row( $line ) );
         }
 
         fclose( $out );
         exit;
+    }
+
+    /**
+     * Neutralise CSV/formula injection: a cell whose first character is a
+     * spreadsheet formula trigger (= + - @, tab, CR) is prefixed with an
+     * apostrophe so Excel/Sheets render it as literal text. fputcsv already
+     * handles comma/quote/newline quoting. Mirrors the bespoke Users/Properties
+     * exporters so every ListTable-backed export (CRM, Support, Bookings,
+     * Payments, Audit Log, Paid Services) is hardened uniformly.
+     *
+     * @param array<int, int|string|null> $row
+     * @return array<int, int|string>
+     */
+    private static function csv_safe_row( array $row ): array {
+        return array_map( static function ( $v ) {
+            $s = (string) $v;
+            return ( '' !== $s && strpbrk( $s[0], "=+-@\t\r" ) !== false ) ? "'" . $s : $v;
+        }, $row );
     }
 
     /**
