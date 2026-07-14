@@ -23,24 +23,31 @@ class PaymentsAdmin {
 
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
+        // Run the export before admin-header.php emits HTML, or the download
+        // headers fail "headers already sent" and the CSV is appended to the page.
+        add_action( 'admin_init', [ $this, 'maybe_export' ] );
     }
 
-    public function register_page(): void {
-        add_submenu_page(
-            'edit.php?post_type=ovr_property',
-            __( 'Payments', 'ovr-core' ),
-            __( 'Payments', 'ovr-core' ),
-            'ovr_manage_payments',
-            self::PAGE_SLUG,
-            [ $this, 'render' ]
-        );
-    }
-
-    public function render(): void {
+    /** Stream the filtered CSV export early (admin_init) so it downloads as a file. */
+    public function maybe_export(): void {
+        if ( ( $_GET['page'] ?? '' ) !== self::PAGE_SLUG || empty( $_GET['export_csv'] ) ) {
+            return;
+        }
         if ( ! current_user_can( 'ovr_manage_payments' ) ) {
             return;
         }
+        [ $table, $where_sql, $args, $orderby, $order ] = array_values( $this->build_query() );
+        $this->export_csv( $table, $where_sql, $args, $orderby, $order );
+    }
 
+    /**
+     * Parse the payment filters from the request into a SQL context shared by the
+     * list view and the CSV export. Returns table, where_sql, prepare args,
+     * orderby and order.
+     *
+     * @return array{table:string, where_sql:string, args:array<int,mixed>, orderby:string, order:string}
+     */
+    private function build_query(): array {
         global $wpdb;
 
         $search  = sanitize_text_field( wp_unslash( $_GET['s'] ?? '' ) );
@@ -49,7 +56,6 @@ class PaymentsAdmin {
         $type    = sanitize_key( wp_unslash( $_GET['type'] ?? '' ) );
         $amt_min = isset( $_GET['amt_min'] ) ? (float) $_GET['amt_min'] : 0.0;
         $amt_max = isset( $_GET['amt_max'] ) ? (float) $_GET['amt_max'] : 0.0;
-        $paged   = max( 1, (int) ( $_GET['paged'] ?? 1 ) );
         $date    = sanitize_key( wp_unslash( $_GET['date'] ?? '30' ) );
         $orderby = sanitize_key( wp_unslash( $_GET['orderby'] ?? 'created_at' ) );
         $order   = strtoupper( sanitize_key( wp_unslash( $_GET['order'] ?? 'DESC' ) ) );
@@ -110,15 +116,60 @@ class PaymentsAdmin {
             $orderby = 'created_at';
         }
 
-        $offset = ( $paged - 1 ) * self::PER_PAGE;
+        return [
+            'table'     => $table,
+            'where_sql' => implode( ' AND ', $where ),
+            'args'      => $args,
+            'orderby'   => $orderby,
+            'order'     => $order,
+            'filters'   => [
+                's'       => $search,
+                'status'  => $status,
+                'method'  => $method,
+                'type'    => $type,
+                'date'    => $date,
+                'amt_min' => $amt_min,
+                'amt_max' => $amt_max,
+            ],
+        ];
+    }
 
-        $where_sql = implode( ' AND ', $where );
+    public function register_page(): void {
+        add_submenu_page(
+            'edit.php?post_type=ovr_property',
+            __( 'Payments', 'ovr-core' ),
+            __( 'Payments', 'ovr-core' ),
+            'ovr_manage_payments',
+            self::PAGE_SLUG,
+            [ $this, 'render' ]
+        );
+    }
 
-        // CSV export of the current (filtered) result set (Phase 13).
-        if ( ! empty( $_GET['export_csv'] ) ) {
-            $this->export_csv( $table, $where_sql, $args, $orderby, $order );
-            // export_csv() exits.
+    public function render(): void {
+        if ( ! current_user_can( 'ovr_manage_payments' ) ) {
+            return;
         }
+
+        global $wpdb;
+
+        $ctx       = $this->build_query();
+        $table     = $ctx['table'];
+        $where_sql = $ctx['where_sql'];
+        $args      = $ctx['args'];
+        $orderby   = $ctx['orderby'];
+        $order     = $ctx['order'];
+        [
+            's'       => $search,
+            'status'  => $status,
+            'method'  => $method,
+            'type'    => $type,
+            'date'    => $date,
+            'amt_min' => $amt_min,
+            'amt_max' => $amt_max,
+        ] = $ctx['filters'];
+
+        $paged  = max( 1, (int) ( $_GET['paged'] ?? 1 ) );
+        $offset = ( $paged - 1 ) * self::PER_PAGE;
 
         $count_sql = "SELECT COUNT(*) FROM {$table} p WHERE {$where_sql}";
         $total     = $args ? (int) $wpdb->get_var( $wpdb->prepare( $count_sql, $args ) ) : (int) $wpdb->get_var( $count_sql );
@@ -187,11 +238,13 @@ class PaymentsAdmin {
         header( 'Content-Disposition: attachment; filename="ovr-payments-' . gmdate( 'Ymd-His' ) . '.csv"' );
 
         $out = fopen( 'php://output', 'w' );
+        // UTF-8 BOM so Excel reads accented characters/emoji correctly.
+        fwrite( $out, "\xEF\xBB\xBF" );
         fputcsv( $out, [ 'Payment ID', 'Date', 'User', 'Email', 'Type', 'Plan/Feature', 'Amount', 'Currency', 'Method', 'Transaction ID', 'Status' ] );
         foreach ( (array) $rows as $r ) {
             $meta = json_decode( (string) ( $r['meta_data'] ?? '' ), true );
             $plan = is_array( $meta ) ? (string) ( $meta['plan_slug'] ?? $meta['feature'] ?? '' ) : '';
-            fputcsv( $out, [
+            fputcsv( $out, self::csv_safe_row( [
                 $r['id'] ?? '',
                 $r['created_at'] ?? '',
                 $r['display_name'] ?? '',
@@ -203,10 +256,25 @@ class PaymentsAdmin {
                 $r['gateway'] ?? '',
                 $r['transaction_id'] ?? '',
                 $r['status'] ?? '',
-            ] );
+            ] ) );
         }
         fclose( $out );
         exit;
+    }
+
+    /**
+     * Neutralise CSV/formula injection: prefix a cell that starts with a
+     * spreadsheet formula trigger (= + - @, tab, CR) with an apostrophe so it
+     * renders as literal text in Excel/Sheets. fputcsv handles the rest.
+     *
+     * @param array<int, int|float|string|null> $row
+     * @return array<int, int|float|string>
+     */
+    private static function csv_safe_row( array $row ): array {
+        return array_map( static function ( $v ) {
+            $s = (string) $v;
+            return ( '' !== $s && strpbrk( $s[0], "=+-@\t\r" ) !== false ) ? "'" . $s : $v;
+        }, $row );
     }
 
     private function get_stats(): array {
