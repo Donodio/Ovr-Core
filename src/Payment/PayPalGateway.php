@@ -184,20 +184,36 @@ class PayPalGateway implements PaymentGateway {
             'body'    => '',
         ] );
 
+        // A transport-level error tells us nothing about the payment itself, so
+        // the row must stay pending and remain retryable — never marked failed.
         if ( is_wp_error( $resp ) ) {
             return [ 'success' => false, 'message' => $resp->get_error_message() ];
         }
 
         $code = (int) wp_remote_retrieve_response_code( $resp );
-        $data = json_decode( wp_remote_retrieve_body( $resp ), true );
+        $body = wp_remote_retrieve_body( $resp );
+        $data = json_decode( $body, true );
 
         // 201 Created on a fresh capture; 422 ORDER_ALREADY_CAPTURED is also "paid".
         $completed = ( in_array( $code, [ 200, 201 ], true ) && 'COMPLETED' === ( $data['status'] ?? '' ) )
-            || ( 422 === $code && false !== strpos( wp_remote_retrieve_body( $resp ), 'ORDER_ALREADY_CAPTURED' ) );
+            || ( 422 === $code && false !== strpos( $body, 'ORDER_ALREADY_CAPTURED' ) );
 
-        return $completed
-            ? [ 'success' => true ]
-            : [ 'success' => false, 'message' => __( 'PayPal did not confirm this payment.', 'ovr-core' ) ];
+        if ( $completed ) {
+            return [ 'success' => true ];
+        }
+
+        // PayPal answered and did not complete the capture. That is a definitive
+        // rejection (payer never approved, instrument declined, order expired),
+        // so the caller should record it as failed rather than leaving the buyer
+        // looking at an "awaiting review" message that will never resolve.
+        $issue = isset( $data['details'][0]['issue'] ) ? (string) $data['details'][0]['issue'] : '';
+
+        return [
+            'success' => false,
+            'failed'  => true,
+            'code'    => $issue,
+            'message' => __( 'PayPal did not confirm this payment.', 'ovr-core' ),
+        ];
     }
 
     public function handle_webhook( array $payload ): array {

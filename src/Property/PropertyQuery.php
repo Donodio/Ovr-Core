@@ -37,9 +37,17 @@ class PropertyQuery {
     }
 
     /**
+     * Owner-side listing statuses that must never appear on the public site:
+     * switched off by the owner, or parked because their subscription lapsed
+     * (SubscriptionManager::expire() writes pending_renewal).
+     */
+    public const HIDDEN_OWNER_STATUSES = [ 'inactive', 'pending_renewal' ];
+
+    /**
      * meta_query clauses that exclude listings hidden from the public site:
-     * owner status = inactive, or admin status in (hidden/suspended/
-     * pending_review). Each clause keeps listings whose meta is absent.
+     * owner status in (inactive/pending_renewal), or admin status in
+     * (hidden/suspended/pending_review). Each clause keeps listings whose meta
+     * is absent.
      *
      * @return array<int, array>
      */
@@ -48,7 +56,7 @@ class PropertyQuery {
             [
                 'relation' => 'OR',
                 [ 'key' => '_ovr_listing_status', 'compare' => 'NOT EXISTS' ],
-                [ 'key' => '_ovr_listing_status', 'value' => 'inactive', 'compare' => '!=' ],
+                [ 'key' => '_ovr_listing_status', 'value' => self::HIDDEN_OWNER_STATUSES, 'compare' => 'NOT IN' ],
             ],
             [
                 'relation' => 'OR',
@@ -64,7 +72,7 @@ class PropertyQuery {
      */
     public static function is_publicly_visible( int $post_id ): bool {
         $owner = (string) get_post_meta( $post_id, '_ovr_listing_status', true );
-        if ( 'inactive' === $owner ) {
+        if ( in_array( $owner, self::HIDDEN_OWNER_STATUSES, true ) ) {
             return false;
         }
         $admin = (string) get_post_meta( $post_id, '_ovr_admin_status', true );

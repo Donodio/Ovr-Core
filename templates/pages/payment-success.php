@@ -17,7 +17,9 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 $completed = ( 'completed' === $status );
+$failed    = in_array( $status, [ 'failed', 'cancelled' ], true );
 $thing     = $is_upgrade ? __( 'upgrade', 'ovr-core' ) : __( 'subscription', 'ovr-core' );
+$retry_url = $is_upgrade ? $listings_url : $subscription_url;
 ?>
 <div class="ovr-wrap ovr-ps">
 
@@ -77,7 +79,7 @@ $thing     = $is_upgrade ? __( 'upgrade', 'ovr-core' ) : __( 'subscription', 'ov
         <span class="ovr-ps-glow<?php echo $completed ? '' : ' is-pending'; ?>" aria-hidden="true"></span>
 
         <div class="ovr-ps-icon <?php echo $completed ? 'ok' : 'pending'; ?>">
-            <span class="material-symbols-outlined fill"><?php echo $completed ? 'check_circle' : 'schedule'; ?></span>
+            <span class="material-symbols-outlined fill"><?php echo $completed ? 'check_circle' : ( $failed ? 'error' : 'schedule' ); ?></span>
         </div>
 
         <?php if ( $completed ) : ?>
@@ -85,6 +87,16 @@ $thing     = $is_upgrade ? __( 'upgrade', 'ovr-core' ) : __( 'subscription', 'ov
             <p class="ovr-ps-lede">
                 <?php printf( esc_html__( 'Thank you for your purchase. Your %s is now active — you can start listing your properties right away.', 'ovr-core' ), esc_html( $thing ) ); ?>
             </p>
+        <?php elseif ( $failed ) : ?>
+            <h1 class="ovr-ps-h1"><?php esc_html_e( 'Payment Not Completed', 'ovr-core' ); ?></h1>
+            <p class="ovr-ps-lede">
+                <?php printf( esc_html__( 'This payment was not completed, so you have not been charged and your %s has not changed. You can safely try again.', 'ovr-core' ), esc_html( $thing ) ); ?>
+            </p>
+            <?php if ( $retry_url ) : ?>
+                <p class="ovr-ps-lede">
+                    <a class="ovr-btn ovr-btn-primary" href="<?php echo esc_url( $retry_url ); ?>"><?php esc_html_e( 'Try again', 'ovr-core' ); ?></a>
+                </p>
+            <?php endif; ?>
         <?php else : ?>
             <h1 class="ovr-ps-h1"><?php esc_html_e( 'Order Received!', 'ovr-core' ); ?></h1>
             <p class="ovr-ps-lede">

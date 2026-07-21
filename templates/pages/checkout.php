@@ -162,16 +162,31 @@ $name      = $user->display_name ?: '';
         <section>
             <h2 class="ovr-co-h"><?php esc_html_e( 'Payment Details', 'ovr-core' ); ?></h2>
 
+            <?php
+            // Which method starts selected is decided by the server default, so
+            // the pre-selected tab, the visible panel and the posted gateway can
+            // never disagree with what the backend would actually charge.
+            $default_gateway = isset( $default_gateway ) ? (string) $default_gateway : 'paypal';
+            $methods         = [
+                'stripe' => [ 'panel' => 'card',   'icon' => 'credit_card',             'label' => __( 'Credit Card', 'ovr-core' ) ],
+                'paypal' => [ 'panel' => 'paypal', 'icon' => 'account_balance',         'label' => __( 'PayPal', 'ovr-core' ) ],
+                'wallet' => [ 'panel' => 'wallet', 'icon' => 'account_balance_wallet',  'label' => __( 'Available Credit', 'ovr-core' ) ],
+            ];
+            if ( ! isset( $methods[ $default_gateway ] ) ) {
+                $default_gateway = 'paypal';
+            }
+            $active_panel = $methods[ $default_gateway ]['panel'];
+            ?>
+
             <div class="ovr-co-methods" role="tablist">
-                <button type="button" class="ovr-co-method is-active" data-gateway="stripe" data-panel="card">
-                    <span class="material-symbols-outlined fill">credit_card</span><span><?php esc_html_e( 'Credit Card', 'ovr-core' ); ?></span>
-                </button>
-                <button type="button" class="ovr-co-method" data-gateway="paypal" data-panel="paypal">
-                    <span class="material-symbols-outlined fill">account_balance</span><span><?php esc_html_e( 'PayPal', 'ovr-core' ); ?></span>
-                </button>
-                <button type="button" class="ovr-co-method" data-gateway="wallet" data-panel="wallet">
-                    <span class="material-symbols-outlined fill">account_balance_wallet</span><span><?php esc_html_e( 'Available Credit', 'ovr-core' ); ?></span>
-                </button>
+                <?php foreach ( $methods as $slug => $m ) : ?>
+                    <button type="button"
+                        class="ovr-co-method<?php echo $slug === $default_gateway ? ' is-active' : ''; ?>"
+                        data-gateway="<?php echo esc_attr( $slug ); ?>"
+                        data-panel="<?php echo esc_attr( $m['panel'] ); ?>">
+                        <span class="material-symbols-outlined fill"><?php echo esc_html( $m['icon'] ); ?></span><span><?php echo esc_html( $m['label'] ); ?></span>
+                    </button>
+                <?php endforeach; ?>
             </div>
 
             <form method="post" action="<?php echo esc_url( $checkout_action ); ?>" id="ovr-co-form">
@@ -179,12 +194,12 @@ $name      = $user->display_name ?: '';
                 <?php foreach ( $fields as $fk => $fv ) : ?>
                     <input type="hidden" name="<?php echo esc_attr( $fk ); ?>" value="<?php echo esc_attr( $fv ); ?>">
                 <?php endforeach; ?>
-                <input type="hidden" name="gateway" id="ovr-co-gateway" value="stripe">
+                <input type="hidden" name="gateway" id="ovr-co-gateway" value="<?php echo esc_attr( $default_gateway ); ?>">
                 <?php wp_nonce_field( 'ovr_checkout_action', 'ovr_checkout_nonce' ); ?>
 
                 <div class="ovr-co-card">
                     <!-- Card panel: Stripe hosts the card form (no card data touches this site). -->
-                    <div data-co-panel="card">
+                    <div data-co-panel="card"<?php echo 'card' === $active_panel ? '' : ' hidden'; ?>>
                         <div class="ovr-co-note">
                             <span class="material-symbols-outlined">lock</span>
                             <span><?php esc_html_e( "You'll be securely redirected to Stripe to enter your card details after you place your order. Your card information is never stored on this site.", 'ovr-core' ); ?></span>
@@ -192,7 +207,7 @@ $name      = $user->display_name ?: '';
                     </div>
 
                     <!-- PayPal panel -->
-                    <div data-co-panel="paypal" hidden>
+                    <div data-co-panel="paypal"<?php echo 'paypal' === $active_panel ? '' : ' hidden'; ?>>
                         <div class="ovr-co-note">
                             <span class="material-symbols-outlined">open_in_new</span>
                             <span><?php esc_html_e( "You'll be securely redirected to PayPal to authorize this payment after you place your order.", 'ovr-core' ); ?></span>
@@ -200,7 +215,7 @@ $name      = $user->display_name ?: '';
                     </div>
 
                     <!-- Wallet panel -->
-                    <div data-co-panel="wallet" hidden>
+                    <div data-co-panel="wallet"<?php echo 'wallet' === $active_panel ? '' : ' hidden'; ?>>
                         <div class="ovr-co-note">
                             <span class="material-symbols-outlined">account_balance_wallet</span>
                             <span>

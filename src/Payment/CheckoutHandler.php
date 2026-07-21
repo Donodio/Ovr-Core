@@ -45,6 +45,9 @@ class CheckoutHandler {
         // Finalize a gateway redirect-back (Stripe/PayPal) before the page renders.
         add_action( 'template_redirect', [ $this, 'maybe_finalize_gateway_return' ] );
 
+        // Close out the payment when the buyer cancels at the gateway.
+        add_action( 'template_redirect', [ $this, 'maybe_mark_checkout_cancelled' ] );
+
         // Admin: manually mark a pending payment paid + activate the subscription.
         add_action( 'admin_post_ovr_complete_payment', [ $this, 'handle_admin_complete_payment' ] );
 
@@ -57,11 +60,28 @@ class CheckoutHandler {
     /**
      * Resolve a gateway by slug. Empty string falls back to the active default.
      */
+    /**
+     * Slug of the gateway a buyer gets when they express no preference.
+     *
+     * Single source of truth: the checkout screen reads this to decide which
+     * method tab starts selected and what the hidden field is seeded with, so
+     * the UI can never drift from what the server would actually charge.
+     * Override with the `ovr_active_gateway` filter.
+     */
+    public static function default_gateway(): string {
+        return (string) apply_filters( 'ovr_active_gateway', 'paypal' );
+    }
+
     public function gateway( string $slug = '' ): PaymentGateway {
         if ( ! $slug ) {
-            $slug = (string) apply_filters( 'ovr_active_gateway', 'stripe' );
+            $slug = self::default_gateway();
         }
-        return $this->gateways[ $slug ] ?? $this->gateways['stripe'];
+        if ( isset( $this->gateways[ $slug ] ) ) {
+            return $this->gateways[ $slug ];
+        }
+        // Unknown slug → fall back to the default rather than a hard-coded
+        // provider, so an unconfigured gateway is never silently selected.
+        return $this->gateways[ self::default_gateway() ] ?? $this->gateways['paypal'];
     }
 
     /**
@@ -119,6 +139,27 @@ class CheckoutHandler {
             exit;
         }
 
+        // Needed by both the free-plan branch below and the gateway branch.
+        $user_id = get_current_user_id();
+
+        // Guard accidental double purchases — double-clicking "Complete
+        // Purchase", re-submitting the form, or going back and submitting
+        // again. Instant gateways (wallet/free) charge on submit, so without
+        // this the buyer is debited twice for one subscription. Show the
+        // receipt for the payment they just made instead of taking another.
+        //
+        // Only applies while the buyer is already active: that is the state a
+        // successful purchase leaves them in, so it is the signal that the
+        // earlier payment did its job. Someone expired or unsubscribed is
+        // trying to *become* active and must never be turned away.
+        if ( UserSubscription::is_active( $user_id ) ) {
+            $duplicate = $this->recent_duplicate_payment( $user_id, $plan_slug, (float) ( $plan['price'] ?? 0 ) );
+            if ( $duplicate ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'completed', $this->success_url( $duplicate ) ) );
+                exit;
+            }
+        }
+
         // Free plan: no payment, but still record a $0 "completed" payment row
         // and fire ovr_payment_completed so Lifecycle restores listings + sets
         // editing_enabled. Brief: "Secondary status controlling editing
@@ -152,12 +193,16 @@ class CheckoutHandler {
 
         $gateway_slug = sanitize_key( $_POST['gateway'] ?? '' );
 
-        // Mark subscription as pending before gateway redirect.
-        $user_id = get_current_user_id();
-        update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
+        // Mark the subscription pending before the gateway redirect — but never
+        // downgrade someone who is already active. Renewing or upgrading means
+        // starting a second checkout, and abandoning it (or cancelling at the
+        // provider) must not strip access that is still paid for and unexpired.
+        if ( ! UserSubscription::is_active( $user_id ) ) {
+            update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
+        }
 
         $result = $this->gateway( $gateway_slug )->start_checkout( [
-            'user_id'    => get_current_user_id(),
+            'user_id'    => $user_id,
             'plan_slug'  => $plan_slug,
             'amount'     => $price,
             'currency'   => $plan['currency'] ?? 'USD',
@@ -166,14 +211,39 @@ class CheckoutHandler {
         ] );
 
         if ( ! empty( $result['redirect_url'] ) ) {
-            wp_safe_redirect( $result['redirect_url'] );
-            exit;
+            $this->redirect_to_gateway( $result['redirect_url'] );
         }
 
         wp_safe_redirect( add_query_arg( [
             'ovr_checkout' => 'error',
             'reason'       => urlencode( $result['message'] ?? 'unknown' ),
         ], $referer ) );
+        exit;
+    }
+
+    /**
+     * Send the buyer to a gateway-supplied URL.
+     *
+     * Approval URLs live on the provider's own domain (checkout.stripe.com,
+     * www.paypal.com …). wp_safe_redirect() rejects off-site hosts and silently
+     * falls back to wp-admin, which strands the buyer after the order has
+     * already been created at the provider. Whitelist just the host we are
+     * about to send them to, so the redirect stays validated rather than open.
+     */
+    private function redirect_to_gateway( string $url ): void {
+        $host = wp_parse_url( $url, PHP_URL_HOST );
+
+        if ( $host ) {
+            add_filter(
+                'allowed_redirect_hosts',
+                static function ( $hosts ) use ( $host ) {
+                    $hosts[] = $host;
+                    return $hosts;
+                }
+            );
+        }
+
+        wp_safe_redirect( $url );
         exit;
     }
 
@@ -280,8 +350,7 @@ class CheckoutHandler {
         ] );
 
         if ( ! empty( $result['redirect_url'] ) ) {
-            wp_safe_redirect( $result['redirect_url'] );
-            exit;
+            $this->redirect_to_gateway( $result['redirect_url'] );
         }
 
         // Gateway refused before any redirect (e.g. wallet balance too low) —
@@ -293,6 +362,49 @@ class CheckoutHandler {
             'ovr_checkout' => $reason,
         ], Pages::get_page_url( 'ovr_page_checkout' ) ) );
         exit;
+    }
+
+    /**
+     * Seconds within which an identical completed purchase is treated as an
+     * accidental re-submit rather than a deliberate second purchase.
+     */
+    private const DUPLICATE_WINDOW = 120;
+
+    /**
+     * Find a just-completed payment for the same user/plan/amount.
+     *
+     * The window is compared using the database's own clock (NOW()), because
+     * `created_at` is filled by the column default in MySQL's timezone, which
+     * is not necessarily the same as PHP's.
+     *
+     * @return int Payment id, or 0 when this is not a duplicate.
+     */
+    private function recent_duplicate_payment( int $user_id, string $plan_slug, float $amount ): int {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_payments';
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, meta_data FROM {$table}
+              WHERE user_id = %d
+                AND payment_type = 'subscription'
+                AND status = 'completed'
+                AND amount = %f
+                AND created_at >= ( NOW() - INTERVAL %d SECOND )
+              ORDER BY id DESC
+              LIMIT 5",
+            $user_id,
+            $amount,
+            self::DUPLICATE_WINDOW
+        ), ARRAY_A );
+
+        foreach ( (array) $rows as $row ) {
+            $meta = json_decode( (string) ( $row['meta_data'] ?? '' ), true );
+            if ( is_array( $meta ) && $plan_slug === ( $meta['plan_slug'] ?? '' ) ) {
+                return (int) $row['id'];
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -347,6 +459,21 @@ class CheckoutHandler {
 
         $res = $gateway->finalize( $row );
         if ( empty( $res['success'] ) ) {
+            // The gateway gave a definitive "no" (declined, never approved,
+            // expired). Record it as failed so the buyer is told the truth and
+            // the row does not linger in the admin queue as if it were awaiting
+            // review. Indeterminate errors (network/auth) stay pending.
+            if ( ! empty( $res['failed'] ) ) {
+                $wpdb->update( $table, [ 'status' => 'failed' ], [ 'id' => (int) $row['id'] ], [ '%s' ], [ '%d' ] );
+                do_action( 'ovr_payment_failed', (int) $row['user_id'], [
+                    'payment_id' => (int) $row['id'],
+                    'gateway'    => $gw,
+                    'code'       => (string) ( $res['code'] ?? '' ),
+                ] );
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'failed', $success_url ) );
+                exit;
+            }
+
             wp_safe_redirect( add_query_arg( 'ovr_checkout', 'pending', $success_url ) );
             exit;
         }
@@ -366,6 +493,39 @@ class CheckoutHandler {
 
         wp_safe_redirect( add_query_arg( 'ovr_checkout', 'completed', $success_url ) );
         exit;
+    }
+
+    /**
+     * The buyer backed out at the gateway (PayPal/Stripe send them to cancel_url
+     * with ovr_checkout=cancelled and the order id as `token`). Close the row out
+     * so an abandoned checkout is not left sitting in the admin queue looking
+     * like a payment that still needs to be actioned.
+     *
+     * Only ever touches a row that is still `pending`, so a completed payment
+     * can never be walked backwards by replaying this URL.
+     */
+    public function maybe_mark_checkout_cancelled(): void {
+        $status = isset( $_GET['ovr_checkout'] ) ? sanitize_key( wp_unslash( $_GET['ovr_checkout'] ) ) : '';
+        $token  = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
+
+        if ( 'cancelled' !== $status || '' === $token ) {
+            return;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_payments';
+
+        $updated = $wpdb->update(
+            $table,
+            [ 'status' => 'cancelled' ],
+            [ 'transaction_id' => $token, 'status' => 'pending' ],
+            [ '%s' ],
+            [ '%s', '%s' ]
+        );
+
+        if ( $updated ) {
+            do_action( 'ovr_checkout_cancelled', $token );
+        }
     }
 
     /**
@@ -490,6 +650,8 @@ class CheckoutHandler {
 
         $messages = [
             'pending'         => __( 'Payment recorded as pending. Admin will follow up to complete activation.', 'ovr-core' ),
+            'cancelled'       => __( 'Checkout cancelled — you have not been charged.', 'ovr-core' ),
+            'failed'          => __( 'Payment was not completed — you have not been charged. Please try again.', 'ovr-core' ),
             'free_activated'  => __( 'Free plan activated — welcome aboard!', 'ovr-core' ),
             'nonce_failed'    => __( 'Security check failed. Please try again.', 'ovr-core' ),
             'invalid_plan'    => __( 'Plan not found.', 'ovr-core' ),

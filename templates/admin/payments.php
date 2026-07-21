@@ -139,6 +139,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
         .ovr-pm-badge--completed{background:var(--green-light);color:var(--green)}
         .ovr-pm-badge--pending{background:var(--gold-light);color:var(--gold)}
         .ovr-pm-badge--declined{background:var(--red-light);color:var(--red)}
+        .ovr-pm-badge--cancelled{background:#eceff3;color:#5a6270}
 
         .ovr-pm-action-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--radius-sm);border:none;cursor:pointer;background:transparent;color:var(--gray-mid);text-decoration:none;transition:all .15s ease}
         .ovr-pm-action-btn:hover{background:var(--gray-light);color:var(--navy);box-shadow:var(--shadow-sm)}
@@ -313,6 +314,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                         <option value="completed" <?php selected( $status, 'completed' ); ?>><?php esc_html_e( 'Completed', 'ovr-core' ); ?></option>
                         <option value="pending" <?php selected( $status, 'pending' ); ?>><?php esc_html_e( 'Pending', 'ovr-core' ); ?></option>
                         <option value="declined" <?php selected( $status, 'declined' ); ?>><?php esc_html_e( 'Declined', 'ovr-core' ); ?></option>
+                        <option value="cancelled" <?php selected( $status, 'cancelled' ); ?>><?php esc_html_e( 'Cancelled', 'ovr-core' ); ?></option>
                     </select>
                 </div>
                 <div class="ovr-pm-field ovr-pm-field--xs">

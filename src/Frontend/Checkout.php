@@ -105,6 +105,7 @@ class Checkout {
         $settings = (array) get_option( 'ovr_settings', [] );
 
         return TemplateLoader::get_rendered( 'pages/checkout.php', [
+            'default_gateway' => \OVR\Payment\CheckoutHandler::default_gateway(),
             'order'           => $order,
             'symbol'          => $settings['currency_symbol'] ?? '$',
             'balance'         => Wallet::get_balance( $user->ID ),

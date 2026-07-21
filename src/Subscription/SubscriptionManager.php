@@ -25,11 +25,33 @@ class SubscriptionManager {
     public static function activate( int $user_id, string $plan_slug ): void {
         $plan   = Plans::get_plan( $plan_slug );
         $period = is_array( $plan ) && isset( $plan['period'] ) ? (string) $plan['period'] : 'annually';
-        $term   = 'monthly' === $period ? '+1 month' : '+1 year';
+
+        // Each billing period must map to its own term. Anything unrecognised
+        // falls back to a year, but quarterly/monthly are named explicitly so a
+        // quarterly plan cannot silently grant twelve months.
+        $terms = [
+            'monthly'   => '+1 month',
+            'quarterly' => '+3 months',
+            'annually'  => '+1 year',
+            'yearly'    => '+1 year',
+        ];
+        $term = $terms[ $period ] ?? '+1 year';
+
+        // Renewing before the current term ends must add to the time already
+        // paid for, not restart from today — otherwise an early renewal quietly
+        // forfeits the remaining days.
+        $base    = time();
+        $current = (string) get_user_meta( $user_id, UserSubscription::META_EXPIRES, true );
+        if ( $current ) {
+            $current_ts = strtotime( $current );
+            if ( $current_ts && $current_ts > $base ) {
+                $base = $current_ts;
+            }
+        }
 
         update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_ACTIVE );
         update_user_meta( $user_id, UserSubscription::META_PLAN, $plan_slug );
-        update_user_meta( $user_id, UserSubscription::META_EXPIRES, gmdate( 'Y-m-d', strtotime( $term ) ) );
+        update_user_meta( $user_id, UserSubscription::META_EXPIRES, gmdate( 'Y-m-d', strtotime( $term, $base ) ) );
         update_user_meta( $user_id, UserSubscription::META_START, current_time( 'mysql' ) );
         update_user_meta( $user_id, UserSubscription::META_EDITING, true );
         delete_user_meta( $user_id, '_ovr_previous_plan' );
