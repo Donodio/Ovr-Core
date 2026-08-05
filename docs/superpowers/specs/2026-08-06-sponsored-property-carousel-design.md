@@ -85,9 +85,12 @@ Extends `Elementor\Widget_Base`, namespace `OVR\Elementor\Widgets`.
 #### Controls
 
 - **Query (CONTENT)**
-  - `count` — NUMBER, default `4`, min `1`, max `120` (cards per view).
-  - `source` — SELECT, default `sponsored`: `sponsored` = "Sponsored first",
-    `all` = "All current listings, sponsored still lead".
+  - `count` — NUMBER, default `4`, min `1`, max `120` (**total** number of cards; the
+    visible cards per view is controlled by `per_view`).
+  - Note: there is deliberately **no `source`/Sponsored-only toggle**. The composition
+    is always *sponsored → curated → most-recent fill* (see "Display order"), so the
+    carousel is never narrower than the widget's count no matter how many sponsored
+    listings exist.
 - **Section Header (CONTENT):**
   - `heading` TEXT (e.g. "Suggested &Featured Properties"), `subheading` TEXTAREA,
     `show_section_header` SWITCHER default `yes`.
@@ -109,7 +112,7 @@ Extends `Elementor\Widget_Base`, namespace `OVR\Elementor\Widgets`.
 #### `render()` (final/intended wiring)
 
 1. Read + validate settings.
-2. `$ids = PropertyQuery::get_carousel_ids($count, $source === 'sponsored')`.
+2. `$ids = PropertyQuery::get_carousel_ids($count);`.
 3. Empty → if Elementor edit mode, output a dashed placeholder and return; else return.
 4. Resolve currency symbol from global settings (`currency_symbol ?? '$'`).
 5. `print_structural_css()` once per request; open the public wrapper `.ovr-pc` with
@@ -154,6 +157,9 @@ parametric while keeping the testimonials widget byte-for-byte unchanged at runt
   `frontend/element_ready/ovr_testimonials_carousel.default` hook; add an analogous
   `frontend/element_ready/ovr_property_carousel.default` hook that calls the parametrized
   init on the new widget's root.
+- The "read more" auto-reveal (`setupReadMore`) is intentionally **out of scope** for the
+  property widget — it queries `${prefix}-readmore`, and the property widget emits none, so
+  it no-ops. Confirm no `.ovr-pc-readmore` markup is rendered.
 - Autoplay pause/hover, keyboard arrows, dots — logic unchanged (already generic to
   track/card markup, but keep drag-swipe generic too).
 
@@ -161,7 +167,10 @@ parametric while keeping the testimonials widget byte-for-byte unchanged at runt
 
 Add a single, testable public static in the following signature:
 
-`PropertyQuery::get_carousel_ids( int $count = 4, bool $sponsored_only = true ): int[]`
+`PropertyQuery::get_carousel_ids( int $count = 4 ): int[]`
+
+The composition is always the same (no "sponsored-only" mode): the widget shows
+`$count` cards from sponsored first, then curated, then recent fill.
 
 Internal:
 
@@ -185,21 +194,23 @@ Notes:
 - Adds submenu page **OVR Properties ▸ Homepage Carousel**, parent
   `edit.php?post_type=ovr_property`, rendered in a pattern matching other OVR admin
   pages (see `PropertyListScreen` / `FeaturedCities`).
-- Capability: use the same capability guard the sibling property admin pages use
-  (e.g. `manage_ovr`-style custom cap), and check `current_user_can` in render + handlers.
+- Capability: gate render + handlers with the property admin capability
+  (`edit_ovr_properties`, from the CPT `capability_type = [ovr_property, ovr_properties]`)
+  and `current_user_can` at the point of use.
 - UI: a table of published properties (thumbnail, title, ID) each with an
   **"Included" toggle** and **up/down** order buttons; a **Save** action writes the
   ordered list of included property IDs to the settings option.
-- Handler: `handle_save()` sanitized list → `update_option( 'ov_settings', … )` with
-  `homepage_carousel_ids` = ordered comma list of absints; redirect back with an admin
-  notice (or AJAX for granular toggle).
+- Handler: `handle_save()` sanitized list → update the plugin's central settings option
+  with `homepage_carousel_ids` = ordered comma list of absints; redirect back with an
+  admin notice (or AJAX for granular toggle).
 - Ordering: persisted order = user's up/down arrangement; not typed numbers.
 - Empty state notice if no published properties (else the screen still renders with a
   notice).
 
 ### 6. Persistence
 
-Store in the plugin's central settings option `ov_settings` (the array `Settings` uses):
+Store in the plugin's central settings option `ovr_settings` (the same option the
+existing `Admin\Settings` and `Property::PropertyQuery` already read):
 
 ```
 'homepage_carousel_ids' => 'int,int,int,…'   // ordered curated picks; empty = none
@@ -229,7 +240,9 @@ PropertyQuery::get_carousel_ids()  ← render()
 ## QA checklist
 
 - [ ] `get_carousel_ids()` composition order (sponsored → curated → recent), duplicate
-  handling, truncation.
+  handling, truncation — covered by a unit test where the project's PHP test harness
+  supports it; otherwise verified via a controlled seed of sponsored/curated/recent
+  listings in the WP-CLI.
 - [ ] Elementor: drop widget, verify 4/3/1 responsive, drag + arrows + dots and autoplay.
 - [ ] Price / size / ID shown correctly; price/size hidden when unset.
 - [ ] Admin page add/remove/reorder persists and reflects in the carousel.
