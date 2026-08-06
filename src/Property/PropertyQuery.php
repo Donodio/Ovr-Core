@@ -595,7 +595,22 @@ class PropertyQuery {
             $like
         ) );
 
-        $ids = array_map( 'absint', array_unique( array_merge( (array) $title_ids, (array) $tax_ids ) ) );
+        // (c) Free-text Village Name meta match. The autocomplete suggestions
+        // are sourced from this meta, so the keyword query MUST be able to
+        // resolve a picked suggestion back to its listings — otherwise a user
+        // selecting e.g. "Spanish Springs" from the dropdown gets zero results.
+        $meta_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT pm.post_id
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key   = '_ovr_village_name'
+               AND p.post_type   = 'ovr_property'
+               AND p.post_status = 'publish'
+               AND pm.meta_value LIKE %s",
+            $like
+        ) );
+
+        $ids = array_map( 'absint', array_unique( array_merge( (array) $title_ids, (array) $tax_ids, (array) $meta_ids ) ) );
         return array_values( array_filter( $ids ) );
     }
 

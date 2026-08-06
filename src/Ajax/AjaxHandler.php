@@ -830,9 +830,13 @@ class AjaxHandler {
 
         $out = [];
         foreach ( $names as $n ) {
-            $clean = strtolower( trim( (string) $n ) );
+            $orig  = trim( (string) $n );
+            $clean = strtolower( $orig );
             if ( '' !== $clean ) {
-                $out[ $clean ] = $clean;
+                // Key by lowercase for de-duplication, but keep the original
+                // casing so suggestions render as "Spanish Springs", not
+                // "spanish springs".
+                $out[ $clean ] = $orig;
             }
         }
 

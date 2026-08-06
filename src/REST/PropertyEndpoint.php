@@ -33,7 +33,7 @@ class PropertyEndpoint {
                 'args'                => [
                     'per_page' => [ 'default' => 12, 'sanitize_callback' => 'absint' ],
                     'page'     => [ 'default' => 1, 'sanitize_callback' => 'absint' ],
-                    'village'  => [ 'default' => '', 'sanitize_callback' => 'sanitize_key' ],
+                    'village'  => [ 'default' => '', 'sanitize_callback' => 'sanitize_text_field' ],
                     'sort'     => [ 'default' => 'newest', 'sanitize_callback' => 'sanitize_key' ],
                     'featured' => [ 'default' => false, 'sanitize_callback' => 'rest_sanitize_boolean' ],
                     'search'   => [ 'default' => '', 'sanitize_callback' => 'sanitize_text_field' ],
