@@ -13,7 +13,8 @@
  * @var int        $total     Total matching users.
  * @var string     $orderby   Current sort column.
  * @var string     $order     Current sort direction.
- * @var string     $page_url  Base URL for this screen.
+ * @var string     $page_url  Base URL for this screen (preserves active filters).
+ * @var string     $base_url  Bare screen URL (drops filters — for Reset).
  * @var array|null $notice    Result notice, or null.
  * @var string     $toggle_url admin-post.php URL for status toggle.
  * @var string     $csv_url   Export CSV URL.
@@ -184,8 +185,8 @@ use OVR\Subscription\UserSubscription;
             .ovr-u-filter select{width:100%;min-width:auto}
             .ovr-u-toolbar .ovr-u-btn{flex:1}
             .ovr-u-total-count{width:100%;text-align:center;margin:0}
-            .ovr-u-table td:nth-child(6),.ovr-u-table th:nth-child(6),
-            .ovr-u-table td:nth-child(7),.ovr-u-table th:nth-child(7){display:none}
+            .ovr-u-table td:nth-child(5),.ovr-u-table th:nth-child(5),
+            .ovr-u-table td:nth-child(6),.ovr-u-table th:nth-child(6){display:none}
             .ovr-u-stat-value{font-size:28px}
         }
         @media (max-width:600px){
@@ -313,7 +314,7 @@ use OVR\Subscription\UserSubscription;
                         <span class="material-symbols-outlined">search</span>
                         <?php esc_html_e( 'Search', 'ovr-core' ); ?>
                     </button>
-                    <a href="<?php echo esc_url( $page_url ); ?>" class="ovr-u-btn ovr-u-btn--subtle" aria-label="<?php esc_attr_e( 'Reset filters', 'ovr-core' ); ?>">
+                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-u-btn ovr-u-btn--subtle" aria-label="<?php esc_attr_e( 'Reset filters', 'ovr-core' ); ?>">
                         <span class="material-symbols-outlined">filter_alt_off</span>
                         <?php esc_html_e( 'Reset', 'ovr-core' ); ?>
                     </a>

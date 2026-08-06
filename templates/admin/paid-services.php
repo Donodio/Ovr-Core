@@ -6,7 +6,8 @@
  * @var array                $data            ListTable::query()-shaped result.
  * @var \OVR\Admin\ListTable $list            List-table engine (sort URLs).
  * @var bool                 $is_trash        Whether the Trash view is active.
- * @var string               $page_url        Base URL.
+ * @var string               $page_url        Base URL (preserves active filters).
+ * @var string               $base_url        Bare screen URL (drops filters — for Reset).
  * @var string               $trash_url       Trash view URL.
  * @var array                $types           Service-type metadata.
  * @var array                $stats           Headline stats.
@@ -169,7 +170,7 @@ $type_label = static function ( string $t ) use ( $types ): string {
         </div>
 
         <div class="ovr-ps-tabs">
-            <a href="<?php echo esc_url( $page_url ); ?>" class="ovr-ps-tab <?php echo $is_trash ? '' : 'is-active'; ?>">
+            <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-ps-tab <?php echo $is_trash ? '' : 'is-active'; ?>">
                 <span class="material-symbols-outlined">list</span><?php esc_html_e( 'All Services', 'ovr-core' ); ?>
             </a>
             <a href="<?php echo esc_url( $trash_url ); ?>" class="ovr-ps-tab <?php echo $is_trash ? 'is-active' : ''; ?>">
@@ -200,6 +201,7 @@ $type_label = static function ( string $t ) use ( $types ): string {
                             <option value="0" <?php selected( $cur_act, '0' ); ?>><?php esc_html_e( 'Disabled', 'ovr-core' ); ?></option>
                         </select>
                         <button type="submit" class="ovr-ps-btn ovr-ps-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
+                        <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-ps-btn ovr-ps-btn--ghost" title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>"><span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
                     </form>
                     <span class="ovr-ps-count"><?php printf( esc_html( _n( '%d service', '%d services', $total, 'ovr-core' ) ), (int) $total ); ?></span>
                 </div>

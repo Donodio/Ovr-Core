@@ -98,6 +98,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
         .ovr-pm-btn .material-symbols-outlined{font-size:19px}
         .ovr-pm-btn--primary{background:var(--navy);color:#fff;box-shadow:0 2px 6px rgba(0,9,97,.15)}
         .ovr-pm-btn--primary:hover{background:var(--navy-hover);box-shadow:0 4px 14px rgba(0,9,97,.25);transform:translateY(-1px);color:#fff}
+        .ovr-pm-btn--ghost{background:var(--surf);color:var(--ink);border-color:var(--gray-border)}
+        .ovr-pm-btn--ghost:hover{background:var(--gray-light);color:var(--navy);transform:translateY(-1px)}
 
         .ovr-pm-card{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
         .ovr-pm-card-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--gray-border);background:var(--bg);gap:12px;flex-wrap:wrap}
@@ -331,6 +333,13 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                     <span class="material-symbols-outlined">filter_alt</span>
                     <?php esc_html_e( 'Apply Filters', 'ovr-core' ); ?>
                 </button>
+                <?php if ( ! empty( $base_url ) ) : ?>
+                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-pm-btn ovr-pm-btn--ghost"
+                       title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>">
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        <?php esc_html_e( 'Reset Filters', 'ovr-core' ); ?>
+                    </a>
+                <?php endif; ?>
                 <?php if ( ! empty( $csv_url ) ) : ?>
                     <a href="<?php echo esc_url( $csv_url ); ?>" class="ovr-pm-btn ovr-pm-btn--primary" style="text-decoration:none">
                         <span class="material-symbols-outlined">download</span>

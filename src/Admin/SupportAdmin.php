@@ -125,6 +125,7 @@ class SupportAdmin {
             'data'          => $data,
             'list'          => $list,
             'page_url'      => $this->page_url(),
+            'base_url'      => $this->base_url(),
             'kb_url'        => add_query_arg( 'tab', 'kb', $this->page_url() ),
             'new_url'       => add_query_arg( 'view', 'new-ticket', $this->page_url() ),
             'csv_url'       => add_query_arg( 'export_csv', '1', $this->page_url() ),
@@ -280,6 +281,7 @@ class SupportAdmin {
             'data'          => $data,
             'list'          => $list,
             'page_url'      => $this->page_url(),
+            'base_url'      => add_query_arg( 'tab', 'kb', $this->base_url() ),
             'tickets_url'   => $this->page_url(),
             'new_url'       => add_query_arg( 'view', 'kb-new', $this->page_url() ),
             'stats'         => array_merge( TicketRepository::stats(), [ 'kb' => KbRepository::stats()['published'] ] ),
@@ -404,10 +406,15 @@ class SupportAdmin {
         return [ 'type' => $map[ $key ][0], 'text' => $map[ $key ][1] ];
     }
 
-    private function page_url(): string {
+    private function base_url(): string {
         return add_query_arg( [
             'post_type' => 'ovr_property',
             'page'      => self::PAGE_SLUG,
+            'tab'       => 'tickets',
         ], admin_url( 'edit.php' ) );
+    }
+
+    private function page_url(): string {
+        return ListTable::preserve_url( $this->base_url() );
     }
 }

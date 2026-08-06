@@ -384,13 +384,44 @@ class ListTable {
         return $letters;
     }
 
-    /**
+/**
      * Build a sortable column-header link that preserves current filters.
      *
      * @return string Full URL for toggling sort on $column.
      */
     public function sort_url( string $base_url, string $column ): string {
         $order = ( $this->state['orderby'] === $column && 'ASC' === $this->state['order'] ) ? 'DESC' : 'ASC';
-        return add_query_arg( [ 'orderby' => $column, 'order' => $order ], $base_url );
+        return self::preserve_url( $base_url, [ 'orderby' => $column, 'order' => $order ] );
+    }
+
+    /**
+     * Merge the current request's active filters/search/pagination into a base
+     * URL so pagination, sorting and post-action redirects never lose them.
+     * Transient/navigation-only params (action notices, edit view + id, export
+     * triggers, nonces, auth) are dropped so they can't leak into other pages.
+     *
+     * @param string              $url   Base URL to append onto.
+     * @param array<string,string> $extra Extra args to force (e.g. a new paged value).
+     * @param string[]            $drop  Additional keys to exclude from the request.
+     * @return string
+     */
+    public static function preserve_url( string $url, array $extra = [], array $drop = [] ): string {
+        $deny = array_merge( [
+            'page', 'paged', 'post_type', 'action', '_wpnonce', 'noheader',
+            'msg', 'ovr_trash', 'settings-updated', 'view', 'id', 'target',
+            'export_csv', 'export_xlsx', 'export', 'login-as', 'switched',
+            'mer', 'cancel_ipn', 'tab',
+        ], $drop );
+
+        $keep = [];
+        foreach ( $_GET as $k => $v ) {
+            $key = (string) $k;
+            if ( in_array( $key, $deny, true ) ) {
+                continue;
+            }
+            $keep[ $key ] = wp_unslash( $v );
+        }
+
+        return add_query_arg( array_merge( $keep, $extra ), $url );
     }
 }

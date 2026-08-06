@@ -312,7 +312,17 @@
     }
 
     function updateHistory(page, orderby, order, search) {
-        var params = new URLSearchParams();
+        var url = new URL(window.location.href);
+        var params = url.searchParams;
+        // Drop the params this filter table manages so the URL stays clean,
+        // but KEEP identifying/navigation params (post_type, page, author, …).
+        // Previously the URL was rebuilt from pathname + filters only, which
+        // silently dropped the screen's `page`/`post_type` — so bookmarked or
+        // shared URLs stopped opening the Properties screen.
+        ['s', 'paged', 'orderby', 'order', 'ovr_filters'].forEach(function (k) {
+            params.delete(k);
+        });
+
         var filters = collectFilters();
         if (Object.keys(filters).length) {
             params.set('ovr_filters', JSON.stringify(filters));
@@ -322,8 +332,7 @@
         if (order && order !== 'ASC') params.set('order', order);
         if (search) params.set('s', search);
 
-        var url = window.location.pathname + '?' + params.toString();
-        window.history.pushState({ ovrFilters: true }, '', url);
+        window.history.pushState({ ovrFilters: true }, '', url.pathname + '?' + params.toString());
     }
 
     function handlePopState() {

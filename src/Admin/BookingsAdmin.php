@@ -105,6 +105,7 @@ class BookingsAdmin {
             'data'          => $data,
             'list'          => $list,
             'page_url'      => $this->page_url(),
+            'base_url'      => $this->base_url(),
             'status_labels' => BookingRepository::status_labels(),
             'stats'         => $this->get_stats(),
             'notice'        => $this->read_notice(),
@@ -357,10 +358,14 @@ class BookingsAdmin {
         return [ 'type' => $map[ $key ][0], 'text' => $map[ $key ][1] ];
     }
 
-    private function page_url(): string {
+    private function base_url(): string {
         return add_query_arg( [
             'post_type' => 'ovr_property',
             'page'      => self::PAGE_SLUG,
         ], admin_url( 'edit.php' ) );
+    }
+
+    private function page_url(): string {
+        return ListTable::preserve_url( $this->base_url() );
     }
 }

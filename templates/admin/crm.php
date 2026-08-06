@@ -5,7 +5,8 @@
  * @package OVR
  * @var array                $data       ListTable::query() result.
  * @var \OVR\Admin\ListTable $list       List engine (sort URLs).
- * @var string               $page_url   Base screen URL.
+ * @var string               $page_url   Base screen URL (preserves active filters).
+ * @var string               $base_url   Bare screen URL (drops filters — for Reset).
  * @var string               $segment    Active segment slug.
  * @var float                $threshold  High-value spend threshold.
  * @var array                $stats      Dashboard segment counts.
@@ -156,6 +157,7 @@ $cards = [
                         <option value="inactive" <?php selected( $cur_status, 'inactive' ); ?>><?php esc_html_e( 'Inactive', 'ovr-core' ); ?></option>
                     </select>
                     <button type="submit" class="ovr-crm-btn ovr-crm-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
+                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-crm-btn ovr-crm-btn--ghost" title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>"><span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
                 </form>
                 <form class="ovr-crm-thresh" method="post" action="<?php echo esc_url( $threshold_action ); ?>">
                     <input type="hidden" name="action" value="ovr_crm_threshold">

@@ -100,6 +100,7 @@ class PaidServicesAdmin {
             'list'            => $list,
             'is_trash'        => $is_trash,
             'page_url'        => $this->page_url(),
+            'base_url'        => $this->base_url(),
             'trash_url'       => add_query_arg( 'status_view', 'trash', $this->page_url() ),
             'types'           => PaidService::TYPES,
             'stats'           => $this->get_stats(),
@@ -318,10 +319,14 @@ class PaidServicesAdmin {
         return [ 'type' => $map[ $key ][0], 'text' => $map[ $key ][1] ];
     }
 
-    private function page_url(): string {
+    private function base_url(): string {
         return add_query_arg( [
             'post_type' => 'ovr_property',
             'page'      => self::PAGE_SLUG,
         ], admin_url( 'edit.php' ) );
+    }
+
+    private function page_url(): string {
+        return ListTable::preserve_url( $this->base_url() );
     }
 }

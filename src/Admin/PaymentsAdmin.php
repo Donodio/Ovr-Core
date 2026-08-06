@@ -216,6 +216,7 @@ class PaymentsAdmin {
             'orderby'   => $orderby,
             'order'     => $order,
             'page_url'  => $this->page_url(),
+            'base_url'  => $this->base_url(),
             'csv_url'   => $csv_url,
         ] );
     }
@@ -301,10 +302,14 @@ class PaymentsAdmin {
         ];
     }
 
-    private function page_url(): string {
+    private function base_url(): string {
         return add_query_arg( [
             'post_type' => 'ovr_property',
             'page'      => self::PAGE_SLUG,
         ], admin_url( 'edit.php' ) );
+    }
+
+    private function page_url(): string {
+        return ListTable::preserve_url( $this->base_url() );
     }
 }

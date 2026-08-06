@@ -5,7 +5,8 @@
  * @package OVR
  * @var array               $data          ListTable::query() result.
  * @var \OVR\Admin\ListTable $list          The list-table engine (for sort URLs).
- * @var string              $page_url      Base URL for this screen.
+ * @var string              $page_url      Base URL for this screen (preserves active filters).
+ * @var string              $base_url      Bare screen URL (drops filters — for Reset).
  * @var array<string,string> $status_labels Status slug => label.
  * @var array               $stats         Headline stat values.
  * @var array|null          $notice        Result notice, or null.
@@ -180,6 +181,7 @@ $symbol    = '$';
                         <?php endforeach; ?>
                     </select>
                     <button type="submit" class="ovr-bk-btn ovr-bk-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
+                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-bk-btn ovr-bk-btn--ghost" title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>"><span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
                 </form>
                 <span class="ovr-bk-count"><?php printf( esc_html( _n( '%d booking', '%d bookings', $total, 'ovr-core' ) ), (int) $total ); ?></span>
             </div>
