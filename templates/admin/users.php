@@ -87,6 +87,11 @@ use OVR\Subscription\UserSubscription;
         .ovr-u-toolbar .ovr-u-btn{height:48px;min-height:48px;padding:0 24px}
         .ovr-u-total-count{font-size:15px;color:var(--gray-mid);white-space:nowrap;font-weight:500;background:var(--surf);padding:6px 16px;border-radius:9999px;border:1px solid var(--gray-border);margin-left:auto}
 
+        /* The card keeps overflow:hidden for its rounded corners, so the table
+           needs its own scroll region — without it the last column (Actions:
+           View listings / Edit / Log in as) is clipped away with no way to
+           reach it on screens narrower than the table's natural width. */
+        .ovr-u-table-wrap{overflow-x:auto}
         .ovr-u-table{width:100%;border-collapse:collapse}
         .ovr-u-table th{text-align:left;padding:15px 20px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:#f8f9fb;border-bottom:2px solid var(--gray-border);white-space:nowrap;user-select:none}
         .ovr-u-table th a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:color .15s}
@@ -331,6 +336,7 @@ use OVR\Subscription\UserSubscription;
                     <p><?php esc_html_e( 'Try adjusting your search or filter criteria.', 'ovr-core' ); ?></p>
                 </div>
             <?php else : ?>
+                <div class="ovr-u-table-wrap">
                 <table class="ovr-u-table">
                     <thead>
                         <tr>
@@ -497,6 +503,7 @@ use OVR\Subscription\UserSubscription;
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
 
                 <?php if ( $max_pages > 1 ) : ?>
                     <div class="ovr-u-pagination">

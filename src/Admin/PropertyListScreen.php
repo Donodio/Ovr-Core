@@ -47,6 +47,9 @@ class PropertyListScreen {
         $this->filter_table->set_labels( __( 'Property', 'ovr-core' ), __( 'Properties', 'ovr-core' ) );
         $this->filter_table->set_query_callback( [ $this, 'build_custom_query' ] );
         $this->filter_table->set_render_cell_callback( [ $this, 'render_table_cell' ] );
+        // ?author=<id> scopes the screen to one owner ("View Listings" on the
+        // Users screen) and must survive the table's AJAX refresh.
+        $this->filter_table->set_context_params( [ 'author' ] );
         $this->filter_table->init();
 
         $engine = $this->filter_table->get_engine();
@@ -458,9 +461,11 @@ class PropertyListScreen {
 
         // P6.4/P8: "View Listings" from the Users screen passes ?author=<id> to
         // show only that owner's properties (admins only; non-admins are already
-        // scoped to themselves above).
-        if ( ! $author_id && current_user_can( 'manage_options' ) && ! empty( $_GET['author'] ) ) {
-            $args['author'] = (int) $_GET['author'];
+        // scoped to themselves above). Read from $_REQUEST, not $_GET: the table
+        // refreshes over admin-ajax POST, where a $_GET-only read would drop the
+        // scope and re-render every listing.
+        if ( ! $author_id && current_user_can( 'manage_options' ) && ! empty( $_REQUEST['author'] ) ) {
+            $args['author'] = (int) $_REQUEST['author'];
         }
 
         // ──────────────────────────────────────────────────────────────

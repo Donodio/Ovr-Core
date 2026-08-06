@@ -119,6 +119,18 @@
             params.set('ovr_filters', JSON.stringify(filters));
         }
 
+        // Screen-scoping args (e.g. ?author=12 from the Users screen's "View
+        // Listings" action) live in the page URL, not in the filter row. Without
+        // forwarding them the server rebuilds the table unscoped and the refresh
+        // silently replaces the filtered rows with every record.
+        const current = new URLSearchParams(window.location.search);
+        (config.contextParams || []).forEach(function (key) {
+            const value = current.get(key);
+            if (value !== null && value !== '') {
+                params.set(key, value);
+            }
+        });
+
         return params;
     }
 

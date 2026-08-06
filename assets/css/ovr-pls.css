@@ -345,6 +345,11 @@
 .ovr-ft-headers th.column-last_updated { width: 92px; }
 .ovr-ft-headers th.column-paid_services { width: 120px; }
 .ovr-ft-headers th.column-views { width: 52px; }
+/* Actions is the only column with no hint, so in a fixed-layout table it was
+   collapsing to 0px once the sized columns used up the row — the row buttons
+   (View / Edit / Duplicate / Delete) were then clipped away by the cell's
+   overflow:hidden. 170px = 4 × 34px buttons + 3 × 6px gaps + cell padding. */
+.ovr-ft-headers th.column-actions { width: 170px; }
 
 /* ─── Filter Row ───
  *  Each filter cell inherits the same width as its header counterpart
@@ -750,6 +755,9 @@ tr:hover .ovr-pls-copy-id {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    /* Never let flex shrink these below their tap target — a squashed icon
+       button is unclickable long before it becomes invisible. */
+    flex: 0 0 auto;
     width: 34px;
     height: 34px;
     border-radius: 4px;

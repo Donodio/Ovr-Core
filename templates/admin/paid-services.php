@@ -74,6 +74,10 @@ $type_label = static function ( string $t ) use ( $types ): string {
         .ovr-ps-search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,9,97,.12)}
         .ovr-ps-toolbar select{background:var(--surf);border:1px solid var(--gray-border);border-radius:var(--r-md);padding:0 38px 0 14px;font-size:15px;font-family:inherit;height:46px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%235F6B7A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;min-width:150px}
         .ovr-ps-count{font-size:14px;color:var(--gray-mid);font-weight:500;background:var(--surf);padding:6px 14px;border-radius:9999px;border:1px solid var(--gray-border);margin-left:auto}
+        /* Card keeps overflow:hidden for its rounded corners, so the table gets
+           its own scroll region — otherwise the Actions column is clipped off
+           and unreachable on narrower screens. */
+        .ovr-ps-table-wrap{overflow-x:auto}
         .ovr-ps-table{width:100%;border-collapse:collapse}
         .ovr-ps-table th{text-align:left;padding:14px 18px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:#f8f9fb;border-bottom:2px solid var(--gray-border);white-space:nowrap}
         .ovr-ps-table th a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
@@ -214,6 +218,7 @@ $type_label = static function ( string $t ) use ( $types ): string {
                     <p><?php echo $is_trash ? esc_html__( 'Deleted services will appear here for recovery.', 'ovr-core' ) : esc_html__( 'Create your first upgrade service to start generating revenue.', 'ovr-core' ); ?></p>
                 </div>
             <?php else : ?>
+                <div class="ovr-ps-table-wrap">
                 <table class="ovr-ps-table">
                     <thead>
                         <tr>
@@ -268,6 +273,7 @@ $type_label = static function ( string $t ) use ( $types ): string {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
 
                 <?php if ( $max_pages > 1 ) : ?>
                     <div class="ovr-ps-pag">

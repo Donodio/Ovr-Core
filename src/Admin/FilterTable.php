@@ -17,6 +17,16 @@ class FilterTable {
     private $query_callback = null;
     private $render_cell_callback = null;
     private string $type = 'post';
+    /**
+     * Query-string keys that scope the whole screen (e.g. `author` for the
+     * Users screen's "View Listings" action). They are not filters, so the
+     * filter row never collects them — but the AJAX refresh still has to send
+     * them or the server rebuilds the table unscoped and the rendered rows are
+     * replaced with the full, unfiltered set.
+     *
+     * @var string[]
+     */
+    private array $context_params = [];
 
     public function __construct( string $screen_id ) {
         $this->screen_id   = $screen_id;
@@ -65,6 +75,15 @@ class FilterTable {
         $this->render_cell_callback = $callback;
     }
 
+    /**
+     * Declare screen-scoping query args that must survive the AJAX refresh.
+     *
+     * @param string[] $params Query-string keys, e.g. [ 'author' ].
+     */
+    public function set_context_params( array $params ): void {
+        $this->context_params = array_values( array_unique( array_map( 'sanitize_key', $params ) ) );
+    }
+
     public function init(): void {
         add_action( "wp_ajax_{$this->ajax_action}", [ $this, 'handle_ajax' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
@@ -82,10 +101,11 @@ class FilterTable {
             true
         );
         wp_localize_script( 'ovr-filter-table', 'ovrFilterTable', [
-            'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-            'action'   => $this->ajax_action,
-            'screenId' => $this->screen_id,
-            'nonce'    => wp_create_nonce( $this->ajax_action ),
+            'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+            'action'        => $this->ajax_action,
+            'screenId'      => $this->screen_id,
+            'nonce'         => wp_create_nonce( $this->ajax_action ),
+            'contextParams' => $this->context_params,
         ] );
         wp_enqueue_style(
             'ovr-filter-table',
