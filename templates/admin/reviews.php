@@ -107,6 +107,9 @@ $initials = static function ( string $name ): string {
         .ovr-rev-tab.is-active:hover{color:#fff}
         .ovr-rev-tab .ovr-rev-badge{background:var(--gold);color:var(--p);font-size:11px;font-weight:700;padding:2px 9px;border-radius:9999px;line-height:1.5}
         .ovr-rev-tab.is-active .ovr-rev-badge{background:rgba(255,255,255,.2);color:#fff}
+        /* Reset sits apart from the status pills so it doesn't read as a filter. */
+        .ovr-rev-tab--reset{margin-left:auto;color:var(--muted,#5f6b7a)}
+        .ovr-rev-tab--reset .material-symbols-outlined{font-size:18px}
 
         /* Bento grid */
         .ovr-rev-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start}
@@ -257,6 +260,7 @@ $initials = static function ( string $name ): string {
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>
+        <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-rev-tab ovr-rev-tab--reset', __( 'Reset', 'ovr-core' ) ); ?>
     </div>
 
     <div class="ovr-rev-grid">

@@ -334,11 +334,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                     <?php esc_html_e( 'Apply Filters', 'ovr-core' ); ?>
                 </button>
                 <?php if ( ! empty( $base_url ) ) : ?>
-                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-pm-btn ovr-pm-btn--ghost"
-                       title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>">
-                        <span class="material-symbols-outlined">filter_alt_off</span>
-                        <?php esc_html_e( 'Reset Filters', 'ovr-core' ); ?>
-                    </a>
+                    <?php \OVR\Admin\FilterControls::render_clear_search( $base_url, 'ovr-pm-btn ovr-pm-btn--ghost' ); ?>
+                    <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-pm-btn ovr-pm-btn--ghost' ); ?>
                 <?php endif; ?>
                 <?php if ( ! empty( $csv_url ) ) : ?>
                     <a href="<?php echo esc_url( $csv_url ); ?>" class="ovr-pm-btn ovr-pm-btn--primary" style="text-decoration:none">

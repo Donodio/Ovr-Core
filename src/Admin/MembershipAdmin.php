@@ -74,7 +74,7 @@ class MembershipAdmin {
         $counts = [];
         $rows   = $wpdb->get_results( $wpdb->prepare(
             "SELECT meta_value AS slug, COUNT(*) AS n FROM {$wpdb->usermeta} WHERE meta_key = %s GROUP BY meta_value",
-            Lifecycle::META_PLAN
+            \OVR\Subscription\UserSubscription::META_PLAN
         ), ARRAY_A );
         foreach ( (array) $rows as $r ) {
             $counts[ (string) $r['slug'] ] = (int) $r['n'];
@@ -108,11 +108,11 @@ class MembershipAdmin {
 
         $paid_members = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value NOT IN ('base_subscriber','')",
-            Lifecycle::META_PLAN
+            \OVR\Subscription\UserSubscription::META_PLAN
         ) );
         $expiring = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value BETWEEN %s AND %s",
-            Lifecycle::META_EXPIRES,
+            \OVR\Subscription\UserSubscription::META_EXPIRES,
             $today,
             $in30
         ) );

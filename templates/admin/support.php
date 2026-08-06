@@ -187,7 +187,8 @@ $cur_cat      = sanitize_text_field( wp_unslash( $_GET['category'] ?? '' ) );
                         <?php endforeach; ?>
                     </select>
                     <button type="submit" class="ovr-sup-btn ovr-sup-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
-                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-sup-btn ovr-sup-btn--ghost" title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>"><span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
+                    <?php \OVR\Admin\FilterControls::render_clear_search( $base_url, 'ovr-sup-btn ovr-sup-btn--ghost' ); ?>
+                    <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-sup-btn ovr-sup-btn--ghost', __( 'Reset', 'ovr-core' ) ); ?>
                 </form>
                 <span class="ovr-sup-count"><?php echo esc_html( number_format_i18n( $total ) ); ?></span>
             </div>

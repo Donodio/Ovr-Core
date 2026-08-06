@@ -181,7 +181,8 @@ $symbol    = '$';
                         <?php endforeach; ?>
                     </select>
                     <button type="submit" class="ovr-bk-btn ovr-bk-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
-                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-bk-btn ovr-bk-btn--ghost" title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>"><span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
+                    <?php \OVR\Admin\FilterControls::render_clear_search( $base_url, 'ovr-bk-btn ovr-bk-btn--ghost' ); ?>
+                    <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-bk-btn ovr-bk-btn--ghost', __( 'Reset', 'ovr-core' ) ); ?>
                 </form>
                 <span class="ovr-bk-count"><?php printf( esc_html( _n( '%d booking', '%d bookings', $total, 'ovr-core' ) ), (int) $total ); ?></span>
             </div>

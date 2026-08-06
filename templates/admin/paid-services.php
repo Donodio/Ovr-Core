@@ -205,7 +205,8 @@ $type_label = static function ( string $t ) use ( $types ): string {
                             <option value="0" <?php selected( $cur_act, '0' ); ?>><?php esc_html_e( 'Disabled', 'ovr-core' ); ?></option>
                         </select>
                         <button type="submit" class="ovr-ps-btn ovr-ps-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
-                        <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-ps-btn ovr-ps-btn--ghost" title="<?php esc_attr_e( 'Clear all filters and search', 'ovr-core' ); ?>"><span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
+                        <?php \OVR\Admin\FilterControls::render_clear_search( $base_url, 'ovr-ps-btn ovr-ps-btn--ghost' ); ?>
+                        <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-ps-btn ovr-ps-btn--ghost', __( 'Reset', 'ovr-core' ) ); ?>
                     </form>
                     <span class="ovr-ps-count"><?php printf( esc_html( _n( '%d service', '%d services', $total, 'ovr-core' ) ), (int) $total ); ?></span>
                 </div>

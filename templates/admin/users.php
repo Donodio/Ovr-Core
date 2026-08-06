@@ -319,10 +319,8 @@ use OVR\Subscription\UserSubscription;
                         <span class="material-symbols-outlined">search</span>
                         <?php esc_html_e( 'Search', 'ovr-core' ); ?>
                     </button>
-                    <a href="<?php echo esc_url( $base_url ); ?>" class="ovr-u-btn ovr-u-btn--subtle" aria-label="<?php esc_attr_e( 'Reset filters', 'ovr-core' ); ?>">
-                        <span class="material-symbols-outlined">filter_alt_off</span>
-                        <?php esc_html_e( 'Reset', 'ovr-core' ); ?>
-                    </a>
+                    <?php \OVR\Admin\FilterControls::render_clear_search( $base_url, 'ovr-u-btn ovr-u-btn--subtle' ); ?>
+                    <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-u-btn ovr-u-btn--subtle', __( 'Reset', 'ovr-core' ) ); ?>
                 </form>
                 <span class="ovr-u-total-count">
                     <?php printf( esc_html__( '%d user(s)', 'ovr-core' ), (int) $total ); ?>

@@ -172,7 +172,7 @@ class AuditLogAdmin {
                             <input type="number" name="object_id" class="ovr-adm-input" style="width:140px" placeholder="<?php esc_attr_e( 'Entity ID', 'ovr-core' ); ?>" value="<?php echo esc_attr( $f( 'object_id' ) ); ?>" aria-label="<?php esc_attr_e( 'Property/Entity ID', 'ovr-core' ); ?>">
                             <input type="number" name="admin_id" class="ovr-adm-input" style="width:110px" placeholder="<?php esc_attr_e( 'Admin ID', 'ovr-core' ); ?>" value="<?php echo esc_attr( $f( 'admin_id' ) ); ?>" aria-label="<?php esc_attr_e( 'Admin ID', 'ovr-core' ); ?>">
                             <button type="submit" class="ovr-adm-btn ovr-adm-btn--ghost"><span class="material-symbols-outlined">filter_alt</span><?php esc_html_e( 'Filter', 'ovr-core' ); ?></button>
-                            <a class="ovr-adm-btn ovr-adm-btn--ghost" href="<?php echo esc_url( $page_url ); ?>"><span class="material-symbols-outlined">restart_alt</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?></a>
+                            <?php FilterControls::render_reset( $page_url, 'ovr-adm-btn ovr-adm-btn--ghost', __( 'Reset', 'ovr-core' ) ); ?>
                         </form>
                         <span class="ovr-adm-count">
                             <?php
