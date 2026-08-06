@@ -24,12 +24,50 @@ class VillageSectionsAdmin {
     public const PAGE_SLUG   = 'ovr-core-village-sections';
     public const SAVE_ACTION = 'ovr_save_village_sections';
 
+    /**
+     * Canonical Village Section slugs (declared in Taxonomies::SECTIONS), in
+     * display order. Used to seed the curated sections option on first run.
+     *
+     * @var string[]
+     */
+    public const CANONICAL_SECTIONS = [
+        'north-of-cr466-spanish-springs-historic-area',
+        'north-of-cr466a-sumter-landing',
+        'south-of-cr466a-brownwood',
+        'south-of-44-east-of-tpke-sawgrass-grove',
+        'south-of-cr44-eastport-middleton',
+    ];
+
     private string $hook_suffix = '';
 
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
         add_action( 'admin_post_' . self::SAVE_ACTION, [ $this, 'handle_save' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue' ] );
+        // Idempotently seed the curated sections so the dynamic homepage
+        // Village Sections widget has content on a fresh install.
+        add_action( 'init', [ $this, 'maybe_seed_sections_option' ] );
+    }
+
+    /**
+     * Seed the `ovr_village_sections` option with the canonical Section terms
+     * (in their declared order) the first time it is empty. Administrators can
+     * reorder / replace them from the Village Sections screen afterwards.
+     */
+    public function maybe_seed_sections_option(): void {
+        if ( false !== get_option( self::OPTION ) ) {
+            return;
+        }
+        $ids = [];
+        foreach ( self::CANONICAL_SECTIONS as $slug ) {
+            $term = get_term_by( 'slug', $slug, 'ovr_village' );
+            if ( $term && ! is_wp_error( $term ) ) {
+                $ids[] = (int) $term->term_id;
+            }
+        }
+        if ( ! empty( $ids ) ) {
+            update_option( self::OPTION, $ids );
+        }
     }
 
     public function register_page(): void {
@@ -115,6 +153,18 @@ class VillageSectionsAdmin {
         }
         $clean = array_values( array_unique( $clean ) );
 
+        // Persist the per-section image each admin assigned via the media
+        // picker (stored as term meta so get_village_image() can resolve it).
+        $images = isset( $_POST['ovr_section_image'] ) ? (array) wp_unslash( $_POST['ovr_section_image'] ) : []; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+        foreach ( $clean as $id ) {
+            $img = isset( $images[ $id ] ) ? (int) $images[ $id ] : 0;
+            if ( $img > 0 ) {
+                update_term_meta( $id, 'ovr_village_image_id', $img );
+            } else {
+                delete_term_meta( $id, 'ovr_village_image_id' );
+            }
+        }
+
         update_option( self::OPTION, $clean );
 
         wp_safe_redirect( add_query_arg( [
@@ -190,7 +240,7 @@ class VillageSectionsAdmin {
                     </div>
                 </form>
 
-                <script id="ovr-section-row-tpl" type="text/template"><?php $this->render_picked_row( '{{ID}}', '{{NAME}}' ); ?></script>
+                <script id="ovr-section-row-tpl" type="text/template"><div class="ovr-section-row" data-term="{{ID}}"><span class="material-symbols-outlined" style="color:var(--ovr-outline-variant)">drag_indicator</span><input type="hidden" name="ovr_sections[]" class="ovr-section-id" value="{{ID}}"><span class="ovr-section-name">{{NAME}}</span><span class="ovr-vs-image"><img class="ovr-vs-image-preview" src="" alt="" style="display:none"><input type="hidden" name="ovr_section_image[{{ID}}]" class="ovr-vs-image-id" value="0"><button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-vs-image-pick"><span class="material-symbols-outlined">image</span><?php esc_html_e( 'Image', 'ovr-core' ); ?></button><button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-vs-image-clear" style="display:none"><span class="material-symbols-outlined">close</span></button></span><span class="ovr-section-controls"><a data-ovr-move="up" title="<?php esc_attr_e( 'Move up', 'ovr-core' ); ?>"><span class="material-symbols-outlined">arrow_upward</span></a><a data-ovr-move="down" title="<?php esc_attr_e( 'Move down', 'ovr-core' ); ?>"><span class="material-symbols-outlined">arrow_downward</span></a></span><a class="ovr-section-remove" role="button"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></a></div></script>
 
                 <style>
                     .ovr-adm .ovr-adm-h2 { margin:0 0 12px; font-size:15px; font-weight:700; }
@@ -207,6 +257,9 @@ class VillageSectionsAdmin {
                     .ovr-adm .ovr-section-remove { color:var(--red); cursor:pointer; display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:600; }
                     .ovr-adm .ovr-section-remove .material-symbols-outlined { font-size:18px; }
                     .ovr-adm .ovr-sections-available { display:flex; flex-wrap:wrap; gap:8px; }
+                    .ovr-adm .ovr-vs-image { display:inline-flex; align-items:center; gap:8px; margin:0 8px; }
+                    .ovr-adm .ovr-vs-image-preview { width:34px; height:34px; object-fit:cover; border-radius:var(--r-sm); border:1px solid var(--gray-border); }
+                    .ovr-adm .ovr-vs-image-clear { padding:2px 6px; color:var(--red); }
                 </style>
 
                 <script>
@@ -269,6 +322,36 @@ class VillageSectionsAdmin {
                         } );
 
                         if ( list.length ) { list.sortable( { handle: '.ovr-section-row' } ); }
+
+                        // Per-section image media picker.
+                        var vsFrame;
+                        $( document ).on( 'click', '.ovr-vs-image-pick', function ( e ) {
+                            e.preventDefault();
+                            var row = $( this ).closest( '.ovr-section-row' );
+                            if ( ! vsFrame ) {
+                                vsFrame = wp.media( {
+                                    title: '<?php echo esc_js( __( 'Select Village Image', 'ovr-core' ) ); ?>',
+                                    button: { text: '<?php echo esc_js( __( 'Use this image', 'ovr-core' ) ); ?>' },
+                                    multiple: false,
+                                    library: { type: 'image' }
+                                } );
+                            }
+                            vsFrame.off( 'select' ).on( 'select', function () {
+                                var att = vsFrame.state().get( 'selection' ).first().toJSON();
+                                row.find( '.ovr-vs-image-id' ).val( att.id );
+                                row.find( '.ovr-vs-image-preview' ).attr( 'src', att.sizes && att.sizes.thumbnail ? att.sizes.thumbnail.url : att.url ).show();
+                                row.find( '.ovr-vs-image-clear' ).show();
+                            } );
+                            vsFrame.open();
+                        } );
+
+                        $( document ).on( 'click', '.ovr-vs-image-clear', function ( e ) {
+                            e.preventDefault();
+                            var row = $( this ).closest( '.ovr-section-row' );
+                            row.find( '.ovr-vs-image-id' ).val( 0 );
+                            row.find( '.ovr-vs-image-preview' ).attr( 'src', '' ).hide();
+                            $( this ).hide();
+                        } );
                     } );
                 </script>
             </div>
@@ -287,11 +370,19 @@ class VillageSectionsAdmin {
         } else {
             $name = (string) $name;
         }
+        $image_id = (int) get_term_meta( (int) $term_id, 'ovr_village_image_id', true );
+        $preview  = $image_id ? wp_get_attachment_image_url( $image_id, 'thumbnail' ) : '';
         ?>
-        <div class="ovr-section-row">
+        <div class="ovr-section-row" data-term="<?php echo esc_attr( (string) $term_id ); ?>">
             <span class="material-symbols-outlined" style="color:var(--ovr-outline-variant)">drag_indicator</span>
             <input type="hidden" name="ovr_sections[]" class="ovr-section-id" value="<?php echo esc_attr( (string) $term_id ); ?>">
             <span class="ovr-section-name"><?php echo esc_html( $name ); ?></span>
+            <span class="ovr-vs-image">
+                <img class="ovr-vs-image-preview" src="<?php echo esc_url( $preview ); ?>" alt="" style="<?php echo $preview ? '' : 'display:none'; ?>">
+                <input type="hidden" name="ovr_section_image[<?php echo esc_attr( (string) $term_id ); ?>]" class="ovr-vs-image-id" value="<?php echo esc_attr( (string) $image_id ); ?>">
+                <button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-vs-image-pick"><span class="material-symbols-outlined">image</span><?php esc_html_e( 'Image', 'ovr-core' ); ?></button>
+                <button type="button" class="ovr-adm-btn ovr-adm-btn--ghost ovr-vs-image-clear" style="<?php echo $preview ? '' : 'display:none'; ?>"><span class="material-symbols-outlined">close</span></button>
+            </span>
             <span class="ovr-section-controls">
                 <a data-ovr-move="up" title="<?php esc_attr_e( 'Move up', 'ovr-core' ); ?>"><span class="material-symbols-outlined">arrow_upward</span></a>
                 <a data-ovr-move="down" title="<?php esc_attr_e( 'Move down', 'ovr-core' ); ?>"><span class="material-symbols-outlined">arrow_downward</span></a>
