@@ -71,6 +71,10 @@ class PropertyQuery {
      * admins can always view their own listing regardless of status.
      */
     public static function is_publicly_visible( int $post_id ): bool {
+        // Soft-deleted (trashed) listings must never render publicly.
+        if ( 'trash' === get_post_status( $post_id ) ) {
+            return false;
+        }
         $owner = (string) get_post_meta( $post_id, '_ovr_listing_status', true );
         if ( in_array( $owner, self::HIDDEN_OWNER_STATUSES, true ) ) {
             return false;
@@ -701,6 +705,7 @@ class PropertyQuery {
                 'orderby'        => 'post__in',
                 'fields'         => 'ids',
                 'no_found_rows'  => true,
+                'meta_query'     => array_merge( [ 'relation' => 'AND' ], self::visibility_clauses() ),
             ] ) )->posts );
         }
 
@@ -719,6 +724,7 @@ class PropertyQuery {
                 'post__not_in'   => $combined ? array_keys( $combined ) : [ 0 ],
                 'fields'         => 'ids',
                 'no_found_rows'  => true,
+                'meta_query'     => array_merge( [ 'relation' => 'AND' ], self::visibility_clauses() ),
                 'orderby'        => 'date',
                 'order'          => 'DESC',
             ] ) )->posts );

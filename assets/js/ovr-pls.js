@@ -48,6 +48,65 @@
             });
     });
 
+    /* ---- Restore soft-deleted listing (row action) ---- */
+    doc.addEventListener('click', function (e) {
+        var btn = e.target.closest('.ovr-pls-act--restore');
+        if (!btn) return;
+        e.preventDefault();
+        if (!confirm('Restore this property? It will become visible again.')) return;
+
+        var pid = btn.getAttribute('data-pid');
+        var nonce = btn.getAttribute('data-nonce');
+        if (!pid || !nonce) return;
+
+        btn.disabled = true;
+        postAdmin('ovr_admin_restore_property', pid, nonce, btn, 'Could not restore this property.');
+    });
+
+    /* ---- Permanently delete soft-deleted listing (row action) ----
+     * Irreversible; requires explicit confirmation before any request is sent.
+     */
+    doc.addEventListener('click', function (e) {
+        var btn = e.target.closest('.ovr-pls-act--perma');
+        if (!btn) return;
+        e.preventDefault();
+        if (!confirm('Permanently delete this property?\n\nThis action cannot be undone.')) return;
+
+        var pid = btn.getAttribute('data-pid');
+        var nonce = btn.getAttribute('data-nonce');
+        if (!pid || !nonce) return;
+
+        btn.disabled = true;
+        postAdmin('ovr_admin_perma_delete_property', pid, nonce, btn, 'Could not delete this property.');
+    });
+
+    /* ---- Shared POST helper for row actions that refresh the list ---- */
+    function postAdmin(action, pid, nonce, btn, failMsg) {
+        fetch(pls.ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                action: action,
+                nonce: nonce,
+                listing_id: pid,
+            }).toString(),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (resp) {
+                btn.disabled = false;
+                if (resp.success) {
+                    refreshTable();
+                    if (resp.data && resp.data.message) alert(resp.data.message);
+                } else {
+                    alert(resp.data && resp.data.message ? resp.data.message : failMsg);
+                }
+            })
+            .catch(function () {
+                btn.disabled = false;
+                alert('Network error.');
+            });
+    }
+
     /* ---- Copy Property ID ---- */
     doc.addEventListener('click', function (e) {
         var btn = e.target.closest('.ovr-pls-copy-id');
@@ -249,7 +308,14 @@
         var btn = e.target.closest('#ovr-pls-reset-filters');
         if (!btn) return;
         e.preventDefault();
-        window.location.href = window.location.pathname + '?page=ovr-properties';
+        // Reset clears every list/filter param but keeps the screen identity
+        // (post_type + page), so the resulting URL always reopens this screen.
+        var url = new URL(window.location.href);
+        ['s', 'paged', 'orderby', 'order', 'ovr_filters', 'display_status', 'author', 'service_type', 'status'].forEach(function (k) {
+            url.searchParams.delete(k);
+        });
+        url.searchParams.set('page', 'ovr-properties');
+        window.location.href = url.toString();
     });
 
     /* ---- Refresh Table After External Change ---- */

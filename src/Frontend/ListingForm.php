@@ -89,6 +89,14 @@ class ListingForm {
         }
 
         wp_trash_post( $post_id );
+        // Tag the soft-delete so admins know who removed it and why (Phase 9:
+        // soft-delete workflow). Nothing is destroyed - media, metadata and the
+        // post row all stay; only post_status becomes 'trash', which every public
+        // query already excludes.
+        update_post_meta( $post_id, '_ovr_deleted_by', 'owner' );
+        update_post_meta( $post_id, '_ovr_deleted_at', current_time( 'mysql' ) );
+        \OVR\Core\AuditLog::record( 'listing.deleted', 'listing', $post_id, [ 'deleted_by' => 'owner' ], get_current_user_id() );
+
         do_action( 'ovr_listing_deleted', $post_id, get_current_user_id() );
 
         wp_safe_redirect( add_query_arg( 'ovr_listing', 'deleted', $props ) );

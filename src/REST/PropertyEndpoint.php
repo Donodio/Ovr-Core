@@ -161,6 +161,16 @@ class PropertyEndpoint {
             return new \WP_REST_Response( [ 'message' => __( 'Failed to delete property.', 'ovr-core' ) ], 500 );
         }
 
+        // Non-forced delete = soft delete. Tag the reason so the admin Trash and
+        // Deleted Listings screens know this came from the API/landlord.
+        if ( ! $force ) {
+            update_post_meta( $id, '_ovr_deleted_by', 'owner' );
+            update_post_meta( $id, '_ovr_deleted_at', current_time( 'mysql' ) );
+            if ( class_exists( '\OVR\Core\AuditLog' ) ) {
+                \OVR\Core\AuditLog::record( 'listing.deleted', 'listing', $id, [ 'deleted_by' => 'owner', 'via' => 'rest' ], get_current_user_id() );
+            }
+        }
+
         return new \WP_REST_Response( [ 'deleted' => true, 'id' => $id ], 200 );
     }
 

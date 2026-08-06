@@ -57,6 +57,7 @@ class PropertyListScreen {
             'options'  => [
                 'approved' => __( 'ACTIVE', 'ovr-core' ),
                 'hidden'   => __( 'HIDDEN', 'ovr-core' ),
+                'deleted'  => __( 'SOFT DELETED', 'ovr-core' ),
             ],
             'meta_key' => '_ovr_admin_status',
         ] );
@@ -126,6 +127,8 @@ class PropertyListScreen {
         add_action( 'wp_ajax_ovr_admin_get_services',  [ $this, 'ajax_get_services' ] );
         add_action( 'wp_ajax_ovr_admin_bulk_action',    [ $this, 'ajax_bulk_action' ] );
         add_action( 'wp_ajax_ovr_admin_duplicate_property', [ $this, 'ajax_duplicate_property' ] );
+        add_action( 'wp_ajax_ovr_admin_restore_property', [ $this, 'ajax_restore_property' ] );
+        add_action( 'wp_ajax_ovr_admin_perma_delete_property', [ $this, 'ajax_perma_delete_property' ] );
         // P8 §8 — Admin tab: owner reassignment + user search.
         add_action( 'wp_ajax_ovr_admin_search_users',      [ $this, 'ajax_search_users' ] );
         add_action( 'wp_ajax_ovr_admin_reassign_listing',  [ $this, 'ajax_reassign_listing' ] );
@@ -526,6 +529,12 @@ class PropertyListScreen {
         $disp = (string) ( $filters['display_status'] ?? '' );
         unset( $filters['display_status'] );
 
+        // Soft-deleted = trashed post. Scoping the base query to trash gives a
+        // clean "recycle bin" view on the same screen.
+        if ( 'deleted' === $disp ) {
+            $args['post_status'] = 'trash';
+        }
+
         // Intersect the collected constraint sets.
         if ( ! empty( $author_in_sets ) ) {
             $inter = array_shift( $author_in_sets );
@@ -799,6 +808,18 @@ class PropertyListScreen {
     }
 
     private function render_display_status_cell( int $pid ): void {
+        if ( 'trash' === get_post_status( $pid ) ) {
+            $by    = get_post_meta( $pid, '_ovr_deleted_by', true );
+            $title = 'owner' === $by
+                ? __( 'Deleted by Landlord — restore to bring it back', 'ovr-core' )
+                : __( 'Soft deleted by administrator', 'ovr-core' );
+            printf(
+                '<span class="ovr-pls-status ovr-pls-status--deleted" title="%s">%s</span>',
+                esc_attr( $title ),
+                esc_html__( 'SOFT DELETED', 'ovr-core' )
+            );
+            return;
+        }
         $status = get_post_meta( $pid, '_ovr_admin_status', true ) ?: 'approved';
         if ( 'approved' === $status ) {
             echo '<span class="ovr-pls-status ovr-pls-status--active">' . esc_html__( 'ACTIVE', 'ovr-core' ) . '</span>';
@@ -929,8 +950,42 @@ class PropertyListScreen {
         $view_url   = get_permalink( $pid );
         $delete_url = get_delete_post_link( $pid );
         $duplicate_nonce = wp_create_nonce( 'ovr_duplicate_property' );
+        $is_trashed = 'trash' === get_post_status( $pid );
 
         echo '<div class="ovr-pls-actions">';
+
+        if ( $is_trashed ) {
+            // Soft-deleted rows: Restore + Permanently Delete (both confirmed in
+            // JS). Editing a trashed listing is blocked by core, so we swap the
+            // usual edit/duplicate actions for recovery ones.
+            $restore_nonce = wp_create_nonce( 'ovr_restore_property_' . $pid );
+            $purge_nonce   = wp_create_nonce( 'ovr_perma_delete_property_' . $pid );
+
+            if ( $view_url ) {
+                printf(
+                    '<a href="%s" class="ovr-pls-act ovr-pls-act--view" title="%s" target="_blank"><span class="material-symbols-outlined">visibility</span></a>',
+                    esc_url( $view_url ),
+                    esc_attr__( 'View', 'ovr-core' )
+                );
+            }
+
+            printf(
+                '<button type="button" class="ovr-pls-act ovr-pls-act--restore" data-pid="%d" data-nonce="%s" title="%s"><span class="material-symbols-outlined">restore_from_trash</span></button>',
+                $pid,
+                esc_attr( $restore_nonce ),
+                esc_attr__( 'Restore Property', 'ovr-core' )
+            );
+
+            printf(
+                '<button type="button" class="ovr-pls-act ovr-pls-act--perma" data-pid="%d" data-nonce="%s" title="%s"><span class="material-symbols-outlined">delete_forever</span></button>',
+                $pid,
+                esc_attr( $purge_nonce ),
+                esc_attr__( 'Permanently Delete Property', 'ovr-core' )
+            );
+
+            echo '</div>';
+            return;
+        }
 
         if ( $view_url ) {
             printf(
@@ -1352,6 +1407,68 @@ class PropertyListScreen {
         ] );
     }
 
+    /**
+     * Restore a soft-deleted (trashed) listing back to publish. Mirrors the
+     * Deleted Listings screen behaviour so admins can act directly from the
+     * Properties management grid.
+     */
+    public function ajax_restore_property(): void {
+        $post_id = absint( $_POST['listing_id'] ?? 0 );
+
+        if ( ! current_user_can( 'manage_options' )
+             || ! check_ajax_referer( 'ovr_restore_property_' . $post_id, 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied.', 'ovr-core' ) ], 403 );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post || self::PT !== $post->post_type ) {
+            wp_send_json_error( [ 'message' => __( 'Listing not found.', 'ovr-core' ) ], 404 );
+        }
+        if ( 'trash' !== $post->post_status ) {
+            wp_send_json_error( [ 'message' => __( 'This listing is not soft-deleted.', 'ovr-core' ) ], 400 );
+        }
+
+        wp_untrash_post( $post_id );
+        wp_update_post( [ 'ID' => $post_id, 'post_status' => 'publish' ] );
+
+        // Clear the soft-delete reason markers.
+        delete_post_meta( $post_id, '_ovr_deleted_by' );
+        delete_post_meta( $post_id, '_ovr_deleted_at' );
+
+        AuditLog::record( 'listing.restored', 'listing', $post_id, [ 'deleted_by' => get_post_meta( $post_id, '_ovr_deleted_by', true ) ], get_current_user_id() );
+
+        wp_send_json_success( [ 'message' => __( 'Property restored and visible again.', 'ovr-core' ) ] );
+    }
+
+    /**
+     * Permanently delete a soft-deleted listing: removes the post, its metadata
+     * and attached media. Requires a fresh nonce (JS confirmation first).
+     */
+    public function ajax_perma_delete_property(): void {
+        $post_id = absint( $_POST['listing_id'] ?? 0 );
+
+        if ( ! current_user_can( 'manage_options' )
+             || ! check_ajax_referer( 'ovr_perma_delete_property_' . $post_id, 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied.', 'ovr-core' ) ], 403 );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post || self::PT !== $post->post_type ) {
+            wp_send_json_error( [ 'message' => __( 'Listing not found.', 'ovr-core' ) ], 404 );
+        }
+        if ( 'trash' !== $post->post_status ) {
+            wp_send_json_error( [ 'message' => __( 'Only soft-deleted listings can be permanently removed.', 'ovr-core' ) ], 400 );
+        }
+
+        $deleted_by = get_post_meta( $post_id, '_ovr_deleted_by', true );
+        $title      = $post->post_title;
+
+        wp_delete_post( $post_id, true );
+        AuditLog::record( 'listing.permanent_delete', 'listing', $post_id, [ 'was_deleted_by' => $deleted_by, 'title' => $title ], get_current_user_id() );
+
+        wp_send_json_success( [ 'message' => __( 'Property permanently deleted.', 'ovr-core' ) ] );
+    }
+
     public function ajax_bulk_action(): void {
         if ( ! check_ajax_referer( 'ovr_admin_nonce', 'nonce', false )
              || ! current_user_can( 'manage_options' ) ) {
@@ -1394,6 +1511,8 @@ class PropertyListScreen {
                     break;
                 case 'delete':
                     wp_trash_post( $lid );
+                    update_post_meta( $lid, '_ovr_deleted_by', 'admin' );
+                    update_post_meta( $lid, '_ovr_deleted_at', current_time( 'mysql' ) );
                     break;
             }
 

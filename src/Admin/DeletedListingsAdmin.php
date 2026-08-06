@@ -180,7 +180,9 @@ class DeletedListingsAdmin {
                         <?php foreach ( $trashed as $p ) :
                             $trash_time = (int) get_post_meta( $p->ID, '_wp_trash_meta_time', true );
                             $owner      = get_userdata( (int) $p->post_author );
+                            $deleted_by = get_post_meta( $p->ID, '_ovr_deleted_by', true );
                             $purge_ts   = $trash_time ? $trash_time + $retention * DAY_IN_SECONDS : 0;
+                            $by_label   = 'owner' === $deleted_by ? __( 'Landlord', 'ovr-core' ) : ( 'admin' === $deleted_by ? __( 'Admin', 'ovr-core' ) : '' );
 
                             $restore_url = wp_nonce_url(
                                 admin_url( 'admin-post.php?action=ovr_listing_restore&post=' . $p->ID ),
@@ -193,7 +195,7 @@ class DeletedListingsAdmin {
                         ?>
                             <tr>
                                 <td class="ovr-adm-mono">#<?php echo (int) $p->ID; ?></td>
-                                <td><div class="ovr-adm-name"><?php echo esc_html( $p->post_title ?: __( '(untitled)', 'ovr-core' ) ); ?></div></td>
+								<td><div class="ovr-adm-name"><?php echo esc_html( $p->post_title ?: __( '(untitled)', 'ovr-core' ) ); ?><?php if ( $by_label ) : ?><span class="ovr-adm-badge ovr-adm-badge--<?php echo 'owner' === $deleted_by ? 'red' : 'blue'; ?>"><?php printf( esc_html__( 'Deleted by %s', 'ovr-core' ), esc_html( $by_label ) ); ?></span><?php endif; ?></div></td>
                                 <td><?php echo esc_html( $owner ? $owner->display_name : '—' ); ?></td>
                                 <td><?php echo $trash_time ? esc_html( date_i18n( 'M j, Y', $trash_time ) ) : '—'; ?></td>
                                 <td>
@@ -242,11 +244,18 @@ class DeletedListingsAdmin {
         }
         $post = get_post( $post_id );
         if ( $post && 'ovr_property' === $post->post_type ) {
+            $deleted_by = get_post_meta( $post_id, '_ovr_deleted_by', true );
+
             wp_untrash_post( $post_id );
             // wp_untrash_post restores to 'draft' on some setups; force publish
             // so the listing returns to its live state (visibility still gated
             // by _ovr_listing_status / _ovr_admin_status).
             wp_update_post( [ 'ID' => $post_id, 'post_status' => 'publish' ] );
+
+            delete_post_meta( $post_id, '_ovr_deleted_by' );
+            delete_post_meta( $post_id, '_ovr_deleted_at' );
+
+            \OVR\Core\AuditLog::record( 'listing.restored', 'listing', $post_id, [ 'deleted_by' => $deleted_by ], get_current_user_id() );
         }
         wp_safe_redirect( add_query_arg( 'ovr_trash', 'restored', $this->page_url() ) );
         exit;
@@ -264,7 +273,10 @@ class DeletedListingsAdmin {
         }
         $post = get_post( $post_id );
         if ( $post && 'ovr_property' === $post->post_type ) {
+            $title      = $post->post_title;
+            $deleted_by = get_post_meta( $post_id, '_ovr_deleted_by', true );
             wp_delete_post( $post_id, true );
+            \OVR\Core\AuditLog::record( 'listing.permanent_delete', 'listing', $post_id, [ 'was_deleted_by' => $deleted_by, 'title' => $title ], get_current_user_id() );
         }
         wp_safe_redirect( add_query_arg( 'ovr_trash', 'purged', $this->page_url() ) );
         exit;

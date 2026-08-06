@@ -623,6 +623,12 @@ tr:hover .ovr-pls-copy-id {
     color: #b32d2e;
 }
 
+.ovr-pls-status--deleted {
+    background: #fbe3e7;
+    color: #c2185b;
+    border: 1px dashed #c2185b;
+}
+
 .ovr-pls-price {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -764,6 +770,8 @@ tr:hover .ovr-pls-copy-id {
 .ovr-pls-act--edit:hover { background: #f0f6fc; color: #043959; }
 .ovr-pls-act--dup:hover { background: #e6f7e6; color: #008a20; }
 .ovr-pls-act--delete:hover { background: #fce8e8; color: #b32d2e; }
+.ovr-pls-act--restore:hover { background: #e6f0fa; color: #2271b1; }
+.ovr-pls-act--perma:hover { background: #fce8e8; color: #b32d2e; }
 
 .ovr-pls-na {
     color: #8c8f94;
