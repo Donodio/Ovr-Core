@@ -168,30 +168,10 @@ class PropertyMetaBoxes {
      * Save handler.
      */
     public function save( int $post_id, \WP_Post $post ): void {
-        // Nonce.
-        if ( ! isset( $_POST[ self::NONCE_NAME ] ) ||
-             ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_NAME ] ) ), self::NONCE_ACTION ) ) {
-            return;
-        }
 
-        // Skip autosave / quick edit.
-        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
-        if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) return;
-
-        // Capability.
-        if ( ! current_user_can( 'edit_post', $post_id ) ) return;
-
-        // Pull payload.
-        $raw = $_POST['ovr_meta'] ?? [];
-        if ( ! is_array( $raw ) ) {
-            $raw = [];
-        }
-
-        // Integer fields.
-        foreach ( self::NUMERIC_INT as $key ) {
-            $val = isset( $raw[ $key ] ) ? absint( $raw[ $key ] ) : 0;
-            update_post_meta( $post_id, '_ovr_' . $key, $val );
-        }
+        // Capture the status before this save so notification listeners can
+        // detect approval (pending/draft → publish) and rejection transitions.
+        update_post_meta( $post_id, '_ovr_pre_save_status', $post->post_status );
 
         // Decimal fields.
         foreach ( self::NUMERIC_DEC as $key ) {

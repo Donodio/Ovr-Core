@@ -181,11 +181,18 @@ class SupportAdmin {
             'priority' => sanitize_key( wp_unslash( $_POST['priority'] ?? 'normal' ) ),
             'message'  => sanitize_textarea_field( wp_unslash( $_POST['message'] ?? '' ) ),
         ];
+        $user = get_userdata( (int) ( $_POST['user_id'] ?? 0 ) );
         if ( '' === $data['subject'] || '' === $data['message'] ) {
             wp_safe_redirect( add_query_arg( [ 'view' => 'new-ticket', 'msg' => 'invalid' ], $this->page_url() ) );
             exit;
         }
         $id = TicketRepository::create( $data );
+        do_action( 'ovr_support_ticket_created', $id, [
+            'subject'   => $data['subject'] ?? '',
+            'message'   => $data['message'] ?? '',
+            'user_name' => $user ? $user->display_name : '',
+            'user_email'=> $user ? $user->user_email : '',
+        ] );
         wp_safe_redirect( add_query_arg( [ 'view' => 'ticket', 'id' => $id, 'msg' => 'created' ], $this->page_url() ) );
         exit;
     }
@@ -198,6 +205,7 @@ class SupportAdmin {
         $message = sanitize_textarea_field( wp_unslash( $_POST['message'] ?? '' ) );
         if ( '' !== $message ) {
             TicketRepository::add_reply( $id, $message, true );
+            do_action( 'ovr_support_ticket_reply', $id, $message );
             // A staff reply moves an untouched/open ticket into progress.
             $ticket = TicketRepository::get( $id );
             if ( $ticket && 'open' === $ticket['status'] ) {
