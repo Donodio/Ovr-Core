@@ -279,7 +279,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                     <label class="ovr-pm-field-label" for="pm-search"><?php esc_html_e( 'Search Transactions', 'ovr-core' ); ?></label>
                     <div class="ovr-pm-field-input">
                         <span class="material-symbols-outlined">search</span>
-                        <input type="text" id="pm-search" name="s" placeholder="<?php esc_attr_e( 'Transaction ID, user, or listing...', 'ovr-core' ); ?>" value="<?php echo esc_attr( $search ); ?>">
+                        <input type="search" id="pm-search" name="s" placeholder="<?php esc_attr_e( 'Transaction ID, user, or listing...', 'ovr-core' ); ?>" value="<?php echo esc_attr( $search ); ?>">
                     </div>
                 </div>
                 <div class="ovr-pm-field ovr-pm-field--short">
@@ -335,7 +335,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                 </button>
                 <?php if ( ! empty( $base_url ) ) : ?>
                     <?php \OVR\Admin\FilterControls::render_clear_search( $base_url, 'ovr-pm-btn ovr-pm-btn--ghost' ); ?>
-                    <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-pm-btn ovr-pm-btn--ghost' ); ?>
+                    <?php \OVR\Admin\FilterControls::render_reset( $base_url, 'ovr-pm-btn ovr-pm-btn--ghost', __( 'Reset', 'ovr-core' ) ); ?>
                 <?php endif; ?>
                 <?php if ( ! empty( $csv_url ) ) : ?>
                     <a href="<?php echo esc_url( $csv_url ); ?>" class="ovr-pm-btn ovr-pm-btn--primary" style="text-decoration:none">
@@ -363,13 +363,23 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                 <table class="ovr-pm-table">
                     <thead>
                         <tr>
+                            <?php
+                            $ob  = sanitize_key( wp_unslash( $_GET['orderby'] ?? 'created_at' ) );
+                            $o   = strtoupper( sanitize_key( wp_unslash( $_GET['order'] ?? 'DESC' ) ) );
+                            $srt = static function ( string $col, string $label ) use ( $base_url, $ob, $o ): string {
+                                $next = ( $ob === $col && 'ASC' === $o ) ? 'DESC' : 'ASC';
+                                $url  = add_query_arg( [ 'orderby' => $col, 'order' => $next ], $base_url );
+                                $ind  = $ob === $col ? ' <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">' . ( 'ASC' === $o ? 'arrow_upward' : 'arrow_downward' ) . '</span>' : '';
+                                return '<th' . ( 'Amount' === $label ? ' style="text-align:right"' : '' ) . '><a href="' . esc_url( $url ) . '" class="ovr-pm-sort">' . esc_html( $label ) . $ind . '</a></th>';
+                            };
+                            ?>
                             <th><?php esc_html_e( 'Transaction', 'ovr-core' ); ?></th>
-                            <th><?php esc_html_e( 'Date', 'ovr-core' ); ?></th>
+                            <?php echo $srt( 'created_at', __( 'Date', 'ovr-core' ) ); ?>
                             <th><?php esc_html_e( 'User', 'ovr-core' ); ?></th>
                             <th><?php esc_html_e( 'Type', 'ovr-core' ); ?></th>
                             <th><?php esc_html_e( 'Method', 'ovr-core' ); ?></th>
-                            <th style="text-align:right"><?php esc_html_e( 'Amount', 'ovr-core' ); ?></th>
-                            <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
+                            <?php echo $srt( 'amount', __( 'Amount', 'ovr-core' ) ); ?>
+                            <?php echo $srt( 'status', __( 'Status', 'ovr-core' ) ); ?>
                             <th style="text-align:center"></th>
                         </tr>
                     </thead>

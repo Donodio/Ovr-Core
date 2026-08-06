@@ -99,10 +99,16 @@ class DeletedListingsAdmin {
             wp_die( esc_html__( 'You do not have permission to manage deleted listings.', 'ovr-core' ) );
         }
 
+        $per_page = 20;
+        $paged    = max( 1, isset( $_GET['paged'] ) ? absint( $_GET['paged'] ) : 1 );
+        $offset   = ( $paged - 1 ) * $per_page;
+
+        $total = (int) wp_count_posts( 'ovr_property' )->trash;
         $trashed = get_posts( [
             'post_type'      => 'ovr_property',
             'post_status'    => 'trash',
-            'posts_per_page' => 200,
+            'posts_per_page' => $per_page,
+            'offset'         => $offset,
             'orderby'        => 'modified',
             'order'          => 'DESC',
         ] );
@@ -225,6 +231,23 @@ class DeletedListingsAdmin {
                         <?php endforeach; ?>
                         </tbody>
                     </table>
+                    <?php
+                    $max_pages = (int) ceil( $total / $per_page );
+                    if ( $max_pages > 1 ) :
+                        $make = static function ( int $p ) use ( $page_url ): string {
+                            return ( $p > 1 )
+                                ? esc_url( add_query_arg( 'paged', $p, $page_url ) )
+                                : esc_url( $page_url );
+                        };
+                        ?>
+                        <div class="ovr-adm-pag">
+                            <?php if ( $paged > 1 ) : ?><a class="ovr-adm-page" href="<?php echo $make( $paged - 1 ); ?>">←</a><?php endif; ?>
+                            <?php for ( $i = 1; $i <= $max_pages; $i++ ) : ?>
+                                <a class="ovr-adm-page<?php echo $i === $paged ? ' is-current' : ''; ?>" href="<?php echo $make( $i ); ?>"><?php echo (int) $i; ?></a>
+                            <?php endfor; ?>
+                            <?php if ( $paged < $max_pages ) : ?><a class="ovr-adm-page" href="<?php echo $make( $paged + 1 ); ?>">→</a><?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
                 </div>
             </div>

@@ -142,6 +142,8 @@ $initials = static function ( string $name ): string {
         .ovr-cbtn--approve:hover{background:var(--sec-dark);color:#fff}
         .ovr-cbtn--reject{background:var(--surf);color:var(--err);border-color:var(--err)}
         .ovr-cbtn--reject:hover{background:var(--errc);color:var(--err)}
+        .ovr-cbtn--delete{background:var(--surf);color:var(--err);border-color:var(--ov)}
+        .ovr-cbtn--delete:hover{background:var(--errc);color:var(--err)}
 
         /* Empty state */
         .ovr-rev-empty{background:var(--surf);border:1px dashed var(--ov);border-radius:12px;padding:64px 24px;text-align:center;color:var(--sv)}
@@ -242,11 +244,17 @@ $initials = static function ( string $name ): string {
             <input type="hidden" name="ovr_reviews_action" value="bulk">
             <input type="hidden" name="status" value="<?php echo esc_attr( $status ); ?>">
             <input type="hidden" name="paged" value="<?php echo esc_attr( $paged ); ?>">
+            <label class="ovr-rev-selectall">
+                <input type="checkbox" id="ovr-rev-selectall"> <span><?php esc_html_e( 'Select all', 'ovr-core' ); ?></span>
+            </label>
             <button type="submit" name="bulk_op" value="reject" class="ovr-btn ovr-btn--ghost">
                 <span class="material-symbols-outlined">block</span><?php esc_html_e( 'Bulk Reject', 'ovr-core' ); ?>
             </button>
             <button type="submit" name="bulk_op" value="approve" class="ovr-btn ovr-btn--primary">
                 <span class="material-symbols-outlined">done_all</span><?php esc_html_e( 'Bulk Approve', 'ovr-core' ); ?>
+            </button>
+            <button type="submit" name="bulk_op" value="delete" class="ovr-btn ovr-btn--danger" onclick="return confirm('<?php echo esc_js( __( 'Permanently delete the selected reviews?', 'ovr-core' ) ); ?>');">
+                <span class="material-symbols-outlined">delete_forever</span><?php esc_html_e( 'Bulk Delete', 'ovr-core' ); ?>
             </button>
         </form>
     </div>
@@ -342,6 +350,16 @@ $initials = static function ( string $name ): string {
                                     </button>
                                 </form>
                             <?php endif; ?>
+                            <form method="post" onsubmit="return confirm('<?php echo esc_js( __( 'Permanently delete this review?', 'ovr-core' ) ); ?>');">
+                                <?php wp_nonce_field( $nonce_action ); ?>
+                                <input type="hidden" name="ovr_reviews_action" value="single">
+                                <input type="hidden" name="review_id" value="<?php echo esc_attr( $rid ); ?>">
+                                <input type="hidden" name="status" value="<?php echo esc_attr( $status ); ?>">
+                                <input type="hidden" name="paged" value="<?php echo esc_attr( $paged ); ?>">
+                                <button type="submit" name="op" value="delete" class="ovr-cbtn ovr-cbtn--delete">
+                                    <span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Delete', 'ovr-core' ); ?>
+                                </button>
+                            </form>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -499,3 +517,11 @@ $initials = static function ( string $name ): string {
         </aside>
     </div>
 </div>
+
+<script>
+    jQuery( function ( $ ) {
+        $( '#ovr-rev-selectall' ).on( 'change', function () {
+            $( '.ovr-rc-check' ).prop( 'checked', this.checked );
+        } );
+    } );
+</script>

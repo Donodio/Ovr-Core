@@ -359,6 +359,10 @@ class PropertyListScreen {
         <div class="ovr-pls-toolbar">
             <div class="ovr-pls-toolbar-left">
                 <div class="ovr-pls-toolbar-actions">
+                    <div class="ovr-table-search">
+                        <span class="material-symbols-outlined">search</span>
+                        <input type="search" name="s" placeholder="<?php esc_attr_e( 'Search properties…', 'ovr-core' ); ?>" value="<?php echo esc_attr( $this->filter_table->get_current_search() ); ?>" aria-label="<?php esc_attr_e( 'Search', 'ovr-core' ); ?>">
+                    </div>
                     <select name="action" id="ovr-pls-bulk-action">
                         <option value=""><?php esc_html_e( 'Bulk Actions', 'ovr-core' ); ?></option>
                         <?php foreach ( $this->filter_table->get_bulk_actions() as $val => $label ) : ?>

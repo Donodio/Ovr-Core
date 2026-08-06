@@ -390,7 +390,8 @@ class ListTable {
      * @return string Full URL for toggling sort on $column.
      */
     public function sort_url( string $base_url, string $column ): string {
-        $order = ( $this->state['orderby'] === $column && 'ASC' === $this->state['order'] ) ? 'DESC' : 'ASC';
+        $current = (string) ( $this->state['orderby'] ?? '' );
+        $order   = ( $current === $column && 'ASC' === ( $this->state['order'] ?? '' ) ) ? 'DESC' : 'ASC';
         return self::preserve_url( $base_url, [ 'orderby' => $column, 'order' => $order ] );
     }
 

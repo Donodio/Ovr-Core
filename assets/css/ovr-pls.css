@@ -168,6 +168,38 @@
     gap: 8px;
 }
 
+.ovr-pls-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ovr-table-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 8px;
+    background: #fff;
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+}
+
+.ovr-table-search .material-symbols-outlined {
+    font-size: 18px;
+    color: #8c8f94;
+}
+
+.ovr-table-search input[type="search"] {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 13px;
+    width: 200px;
+    max-width: 50vw;
+}
+
 .ovr-pls-toolbar-left select {
     height: 32px;
     font-size: 13px;

@@ -105,6 +105,7 @@ class AuditLogAdmin {
         }
 
         $list = $this->list_table();
+        $list->parse_request();
 
         // Exports short-circuit before any output.
         $export = isset( $_GET['export'] ) ? sanitize_key( wp_unslash( $_GET['export'] ) ) : '';
@@ -155,6 +156,7 @@ class AuditLogAdmin {
                         <form method="get" action="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>">
                             <input type="hidden" name="post_type" value="ovr_property">
                             <input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE_SLUG ); ?>">
+                            <input type="search" name="s" class="ovr-adm-input" style="width:200px" placeholder="<?php esc_attr_e( 'Search action, entity, IP…', 'ovr-core' ); ?>" value="<?php echo esc_attr( $f( 's' ) ); ?>" aria-label="<?php esc_attr_e( 'Search', 'ovr-core' ); ?>">
                             <input type="date" name="date_from" class="ovr-adm-select" value="<?php echo esc_attr( $f( 'date_from' ) ); ?>" aria-label="<?php esc_attr_e( 'From date', 'ovr-core' ); ?>">
                             <input type="date" name="date_to" class="ovr-adm-select" value="<?php echo esc_attr( $f( 'date_to' ) ); ?>" aria-label="<?php esc_attr_e( 'To date', 'ovr-core' ); ?>">
                             <select name="action" class="ovr-adm-select" aria-label="<?php esc_attr_e( 'Action', 'ovr-core' ); ?>">
@@ -192,8 +194,19 @@ class AuditLogAdmin {
                         <table class="ovr-adm-table">
                             <thead>
                                 <tr>
-                                    <th><?php esc_html_e( 'Time', 'ovr-core' ); ?></th>
-                                    <th><?php esc_html_e( 'Action', 'ovr-core' ); ?></th>
+                                    <?php
+                                    $lt = $this->list_table();
+                                    $sort_ind = static function ( string $col ) use ( $page_url ): string {
+                                        $ob = sanitize_key( wp_unslash( $_GET['orderby'] ?? '' ) );
+                                        $o  = strtoupper( sanitize_key( wp_unslash( $_GET['order'] ?? '' ) ) );
+                                        if ( $ob !== $col ) {
+                                            return '';
+                                        }
+                                        return ' <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">' . ( 'ASC' === $o ? 'arrow_upward' : 'arrow_downward' ) . '</span>';
+                                    };
+                                    ?>
+                                    <th><a href="<?php echo esc_url( $lt->sort_url( $page_url, 'created_at' ) ); ?>" class="ovr-adm-sort"><?php esc_html_e( 'Time', 'ovr-core' ); ?><?php echo $sort_ind( 'created_at' ); ?></a></th>
+                                    <th><a href="<?php echo esc_url( $lt->sort_url( $page_url, 'action' ) ); ?>" class="ovr-adm-sort"><?php esc_html_e( 'Action', 'ovr-core' ); ?><?php echo $sort_ind( 'action' ); ?></a></th>
                                     <th><?php esc_html_e( 'Entity', 'ovr-core' ); ?></th>
                                     <th><?php esc_html_e( 'Subject', 'ovr-core' ); ?></th>
                                     <th><?php esc_html_e( 'Admin', 'ovr-core' ); ?></th>

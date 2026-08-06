@@ -93,13 +93,14 @@ class PaidServicesAdmin {
         $is_trash = 'trash' === sanitize_key( wp_unslash( $_GET['status_view'] ?? '' ) );
 
         $list = $this->list_table();
-        $data = $is_trash ? $this->trashed() : $list->query();
+        $paged = max( 1, isset( $_GET['paged'] ) ? absint( $_GET['paged'] ) : 1 );
+        $data  = $is_trash ? $this->trashed( $paged ) : $list->query();
 
         TemplateLoader::render( 'admin/paid-services.php', [
             'data'            => $data,
             'list'            => $list,
             'is_trash'        => $is_trash,
-            'page_url'        => $this->page_url(),
+            'page_url'        => $is_trash ? add_query_arg( 'status_view', 'trash', $this->page_url() ) : $this->page_url(),
             'base_url'        => $this->base_url(),
             'trash_url'       => add_query_arg( 'status_view', 'trash', $this->page_url() ),
             'types'           => PaidService::TYPES,
@@ -117,16 +118,26 @@ class PaidServicesAdmin {
      *
      * @return array<string, mixed>
      */
-    private function trashed(): array {
+    private function trashed( int $paged = 1 ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_paid_services';
-        $rows  = $wpdb->get_results( "SELECT * FROM {$table} WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC", ARRAY_A );
+        $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE deleted_at IS NOT NULL" );
+        $paged = max( 1, $paged );
+        $offset = ( $paged - 1 ) * self::PER_PAGE;
+        $rows  = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM {$table} WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT %d OFFSET %d",
+                self::PER_PAGE,
+                $offset
+            ),
+            ARRAY_A
+        );
         return [
             'rows'      => $rows ?: [],
-            'total'     => count( $rows ?: [] ),
+            'total'     => $total,
             'per_page'  => self::PER_PAGE,
-            'paged'     => 1,
-            'max_pages' => 1,
+            'paged'     => $paged,
+            'max_pages' => (int) ceil( $total / self::PER_PAGE ),
             'search'    => '',
             'orderby'   => 'deleted_at',
             'order'     => 'DESC',
