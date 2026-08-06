@@ -79,41 +79,43 @@ $has_active_filters = (
     'newest' !== ( $filters['sort'] ?? 'newest' )
 );
 
-// Featured Cities strip: admin-managed entries (Featured Cities portal) link to
-// a keyword search; if none are configured, fall back to the village list.
-// Skipped entirely when scoped to a single owner — it's cross-owner browsing
-// chrome that has no place on a "Listings by [owner]" view.
-$cities = [];
+// Village Section strip (client request): the row of chips at the top of the
+// results filters by Village Section. Clicking a section shows only its
+// listings; clicking the already-active one clears the section filter. Skipped
+// on single-owner views ("Listings by [owner]"), where it has no place.
+$section_chips = [];
 if ( ! $owner_active ) {
-    $cities = FeaturedCities::get_items(); // [ ['name','image'], … ]
-    if ( ! empty( $cities ) ) {
-        foreach ( $cities as &$city ) {
-            $city['url'] = $build_url( [ 'keyword' => $city['name'], 'village' => [], 'paged' => 1 ] );
-        }
-        unset( $city );
-    } else {
-        foreach ( array_slice( $villages, 0, 6 ) as $v ) {
-            $cities[] = [
-                'name'  => $v->name,
-                'image' => SearchFilters::get_village_image( $v ),
-                'url'   => $build_url( [ 'village' => [ $v->slug ], 'paged' => 1 ] ),
-            ];
-        }
+    $sel_sections = array_map( 'strval', (array) ( $filters['village_section'] ?? [] ) );
+    foreach ( $villages as $v ) {
+        $active = in_array( (string) $v->slug, $sel_sections, true );
+        $section_chips[] = [
+            'name'   => $v->name,
+            'image'  => SearchFilters::get_village_image( $v ),
+            'active' => $active,
+            'url'    => $active
+                ? $build_url( [ 'village_section' => [], 'paged' => 1 ] )
+                : $build_url( [ 'village_section' => [ $v->slug ], 'village' => [], 'paged' => 1 ] ),
+        ];
     }
 }
 ?>
 <div class="ovr-wrap ovr-search-stitch">
 
-    <!-- Featured Cities strip -->
-    <?php if ( ! empty( $cities ) ) : ?>
-        <section class="ovr-ss-villages" aria-label="<?php esc_attr_e( 'Featured cities', 'ovr-core' ); ?>">
+    <!-- Village Section filter strip -->
+    <?php if ( ! empty( $section_chips ) ) : ?>
+        <style>
+            .ovr-ss-village.is-active{position:relative}
+            .ovr-ss-village.is-active .ovr-ss-village-img{outline:3px solid var(--ovr-primary,#000961);outline-offset:2px;border-radius:9999px}
+            .ovr-ss-village.is-active .ovr-ss-village-name{color:var(--ovr-primary,#000961);font-weight:700}
+        </style>
+        <section class="ovr-ss-villages" aria-label="<?php esc_attr_e( 'Filter by village section', 'ovr-core' ); ?>">
             <div class="ovr-ss-villages-inner">
-                <?php foreach ( $cities as $city ) : ?>
-                    <a class="ovr-ss-village" href="<?php echo esc_url( $city['url'] ); ?>">
+                <?php foreach ( $section_chips as $chip ) : ?>
+                    <a class="ovr-ss-village<?php echo $chip['active'] ? ' is-active' : ''; ?>" href="<?php echo esc_url( $chip['url'] ); ?>"<?php echo $chip['active'] ? ' aria-current="true"' : ''; ?>>
                         <span class="ovr-ss-village-img">
-                            <img src="<?php echo esc_url( $city['image'] ); ?>" alt="<?php echo esc_attr( $city['name'] ); ?>" loading="lazy">
+                            <img src="<?php echo esc_url( $chip['image'] ); ?>" alt="<?php echo esc_attr( $chip['name'] ); ?>" loading="lazy">
                         </span>
-                        <span class="ovr-ss-village-name"><?php echo esc_html( $city['name'] ); ?></span>
+                        <span class="ovr-ss-village-name"><?php echo esc_html( $chip['name'] ); ?></span>
                     </a>
                 <?php endforeach; ?>
             </div>

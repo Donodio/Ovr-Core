@@ -7,6 +7,47 @@
     var doc = document;
     var modalVisible = false;
 
+    /* ---- Duplicate Listing (row action) ----
+     * Duplicates the property server-side via the admin action the duplicate
+     * nonce was created for, then reloads the list so the new copy shows up.
+     */
+    doc.addEventListener('click', function (e) {
+        var btn = e.target.closest('.ovr-pls-act--dup');
+        if (!btn) return;
+        e.preventDefault();
+        if (!confirm('Duplicate this listing?')) return;
+
+        var pid = btn.getAttribute('data-pid');
+        var nonce = btn.getAttribute('data-nonce');
+        if (!pid || !nonce) return;
+
+        btn.disabled = true;
+
+        fetch(pls.ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                action: 'ovr_admin_duplicate_property',
+                nonce: nonce,
+                listing_id: pid,
+            }).toString(),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (resp) {
+                btn.disabled = false;
+                if (resp.success) {
+                    refreshTable();
+                    if (resp.data && resp.data.message) alert(resp.data.message);
+                } else {
+                    alert(resp.data && resp.data.message ? resp.data.message : 'Could not duplicate this listing.');
+                }
+            })
+            .catch(function () {
+                btn.disabled = false;
+                alert('Network error.');
+            });
+    });
+
     /* ---- Copy Property ID ---- */
     doc.addEventListener('click', function (e) {
         var btn = e.target.closest('.ovr-pls-copy-id');
@@ -134,7 +175,14 @@
             });
     });
 
-    /* ---- Bulk Actions ---- */
+    /* ---- Bulk Actions ----
+     * THIS is the authoritative bulk handler for the "All Properties" screen
+     * (admin.php?page=ovr-properties, rendered by PropertyListScreen + FilterTable).
+     * The similar inline script in templates/admin/property-list.php belongs to a
+     * DIFFERENT screen and is not enqueued here — verified in the browser: on this
+     * page only ovr-pls.js is loaded. Do not remove this block; doing so leaves the
+     * Apply button completely inert (0 confirms, 0 requests).
+     */
     doc.addEventListener('click', function (e) {
         var btn = e.target.closest('#ovr-pls-bulk-apply');
         if (!btn) return;
@@ -142,30 +190,36 @@
         var select = doc.getElementById('ovr-pls-bulk-action');
         if (!select || !select.value) return;
 
-        var checkboxes = doc.querySelectorAll('.ovr-pls-cb:checked');
-        var ids = Array.from(checkboxes).map(function (cb) { return cb.value; });
+        // Only real row checkboxes: a select-all toggle carries value "on", which
+        // must never be posted as a listing id.
+        var ids = Array.from(doc.querySelectorAll('.ovr-pls-cb:checked'))
+            .map(function (cb) { return cb.value; })
+            .filter(function (v) { return /^\d+$/.test(v); });
+
         if (!ids.length) {
             alert('Please select properties.');
             return;
         }
 
-        if (select.value === 'delete' && !confirm('Delete selected properties? This cannot be undone.')) {
+        // 'delete' calls wp_trash_post() server-side, so it is reversible.
+        if (select.value === 'delete' && !confirm('Move selected listings to trash?')) {
             return;
         }
 
-        var data = {
-            action: 'ovr_admin_bulk_action',
-            nonce: pls.nonce,
-            bulk_action: select.value,
-            listing_ids: ids,
-        };
+        // listing_ids must be posted as a repeated listing_ids[] array; passing the
+        // array through URLSearchParams once flattened it to "1,2,3".
+        var body = new URLSearchParams();
+        body.set('action', 'ovr_admin_bulk_action');
+        body.set('nonce', pls.nonce);
+        body.set('bulk_action', select.value);
+        ids.forEach(function (id) { body.append('listing_ids[]', id); });
 
         btn.disabled = true;
 
         fetch(pls.ajaxUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(data).toString(),
+            body: body.toString(),
         })
             .then(function (r) { return r.json(); })
             .then(function (resp) {

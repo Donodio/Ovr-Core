@@ -762,8 +762,8 @@ class Settings {
             <th><label for="ovr-retention-days"><?php esc_html_e( 'Deleted Listing Retention (days)', 'ovr-core' ); ?></label></th>
             <td>
                 <input id="ovr-retention-days" name="<?php echo $opt; ?>[listing_retention_days]" type="number" min="1" step="1"
-                       value="<?php echo esc_attr( (string) ( $s['listing_retention_days'] ?? 90 ) ); ?>" class="small-text">
-                <p class="description"><?php esc_html_e( 'Soft-deleted listings are recoverable for this long, then permanently removed by a daily cleanup. Default 90 days.', 'ovr-core' ); ?></p>
+                       value="<?php echo esc_attr( (string) ( $s['listing_retention_days'] ?? 180 ) ); ?>" class="small-text">
+                <p class="description"><?php esc_html_e( 'Soft-deleted listings are recoverable for this long, then permanently removed by a daily cleanup. Default 180 days (6 months).', 'ovr-core' ); ?></p>
             </td>
         </tr>
         <tr>

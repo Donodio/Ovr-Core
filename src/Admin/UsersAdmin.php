@@ -26,6 +26,9 @@ class UsersAdmin {
     /** Admin-only user meta introduced for Mark feedback P6.5. */
     public const META_PRICE_OVERRIDE = 'ovr_subscription_price_override';
 
+    /** Free-text admin notes shown only to admins on the user editor. */
+    public const META_ADMIN_NOTES = 'ovr_admin_notes';
+
     /** HMAC-signed cookie remembering the admin behind a "Log in as user" session. */
     public const SWITCH_COOKIE = 'ovr_switch_back';
 
@@ -43,6 +46,39 @@ class UsersAdmin {
         add_action( 'edit_user_profile', [ $this, 'render_profile_fields' ] );
         add_action( 'personal_options_update', [ $this, 'save_profile_fields' ] );
         add_action( 'edit_user_profile_update', [ $this, 'save_profile_fields' ] );
+        // Streamline the WordPress user editor: hide default fields the platform
+        // does not use (Website, Bio, personal options, application passwords).
+        add_action( 'admin_head-user-edit.php', [ $this, 'hide_default_profile_fields' ] );
+        add_action( 'admin_head-profile.php',   [ $this, 'hide_default_profile_fields' ] );
+    }
+
+    /**
+     * Hide WordPress' default profile fields the OVR platform does not use, so
+     * the edit-user screen shows only the relevant account + OVR fields.
+     */
+    public function hide_default_profile_fields(): void {
+        if ( ! current_user_can( 'ovr_manage_users' ) ) {
+            return;
+        }
+        ?>
+        <style>
+            /* Personal Options block (visual editor, syntax highlighting, admin
+               colour scheme, keyboard shortcuts, toolbar) */
+            .user-rich-editing-wrap,
+            .user-syntax-highlighting-wrap,
+            .user-admin-color-wrap,
+            .user-comment-shortcuts-wrap,
+            .user-admin-bar-front-wrap,
+            .user-language-wrap,
+            /* Contact / about */
+            .user-url-wrap,
+            .user-description-wrap,
+            /* Application passwords */
+            .application-passwords { display: none !important; }
+            /* Drop the now-empty "Personal Options" heading above the name section. */
+            #your-profile > h2:first-of-type { display: none; }
+        </style>
+        <?php
     }
 
     public function register_page(): void {
@@ -125,15 +161,37 @@ class UsersAdmin {
         } elseif ( $verif ) {
             $meta_query[] = [ 'key' => Verification::META_KEY, 'value' => $verif ];
         }
-        if ( 'inactive' === $status ) {
-            $meta_query[] = [ 'key' => 'ovr_account_status', 'value' => 'inactive' ];
-        } elseif ( 'active' === $status ) {
-            // Active = explicitly active OR no status set yet (default).
-            $meta_query[] = [
+        // Account status ("active" = explicitly active OR no meta yet) combined
+        // with subscription renewal state ("pending renewal" = an expired
+        // subscription awaiting renewal). Four selectable states.
+        if ( $status ) {
+            $acct_active = [
                 'relation' => 'OR',
                 [ 'key' => 'ovr_account_status', 'value' => 'active' ],
                 [ 'key' => 'ovr_account_status', 'compare' => 'NOT EXISTS' ],
             ];
+            $acct_inactive = [ 'key' => 'ovr_account_status', 'value' => 'inactive' ];
+            $expired       = [ 'key' => \OVR\Subscription\UserSubscription::META_STATUS, 'value' => \OVR\Subscription\UserSubscription::STATUS_EXPIRED ];
+            $not_expired   = [
+                'relation' => 'OR',
+                [ 'key' => \OVR\Subscription\UserSubscription::META_STATUS, 'value' => \OVR\Subscription\UserSubscription::STATUS_EXPIRED, 'compare' => '!=' ],
+                [ 'key' => \OVR\Subscription\UserSubscription::META_STATUS, 'compare' => 'NOT EXISTS' ],
+            ];
+
+            switch ( $status ) {
+                case 'active':
+                    $meta_query[] = [ 'relation' => 'AND', $acct_active, $not_expired ];
+                    break;
+                case 'inactive':
+                    $meta_query[] = [ 'relation' => 'AND', $acct_inactive, $not_expired ];
+                    break;
+                case 'active_pending':
+                    $meta_query[] = [ 'relation' => 'AND', $acct_active, $expired ];
+                    break;
+                case 'inactive_pending':
+                    $meta_query[] = [ 'relation' => 'AND', $acct_inactive, $expired ];
+                    break;
+            }
         }
         if ( $meta_query ) {
             $args['meta_query'] = $meta_query;
@@ -188,19 +246,25 @@ class UsersAdmin {
 
         $managers = $users_data['avail_roles']['ovr_landlord'] ?? 0;
 
-        $pending = (int) $wpdb->get_var(
+        $total_users = (int) ( $users_data['total_users'] ?? 0 );
+
+        // "Not Yet Verified" — users who have not been marked as a verified
+        // homeowner or registered PM (i.e. total minus the positively verified).
+        $verified = (int) $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s",
-                'ovr_property',
-                'pending'
+                "SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value IN ( %s, %s )",
+                Verification::META_KEY,
+                Verification::VERIFIED_HOMEOWNER,
+                Verification::REGISTERED_PM
             )
         );
+        $not_verified = max( 0, $total_users - $verified );
 
         return [
-            'total_users'    => (int) ( $users_data['total_users'] ?? 0 ),
+            'total_users'    => $total_users,
             'active_subs'    => max( 0, (int) $active ),
             'property_managers' => (int) $managers,
-            'pending_approvals' => $pending,
+            'not_verified'   => $not_verified,
         ];
     }
 
@@ -304,15 +368,29 @@ class UsersAdmin {
                 <th><label for="ovr_subscription_plan"><?php esc_html_e( 'Current Subscription', 'ovr-core' ); ?></label></th>
                 <td>
                     <select name="ovr_subscription_plan" id="ovr_subscription_plan">
+                        <?php
+                        // A member who has never subscribed has an EMPTY plan slug, so no
+                        // <option> matched and the browser silently selected the first paid
+                        // plan in the list. Saving any unrelated field (a phone number) then
+                        // posted that plan — which now activates a real subscription via
+                        // SubscriptionManager::activate(). This explicit non-paid option is
+                        // rendered first and selected for both the "never subscribed" and
+                        // "expired" states, so the default submission stays inert.
+                        $no_paid_plan = ( '' === $plan_slug || 'base_subscriber' === $plan_slug );
+                        ?>
+                        <option value="base_subscriber" <?php selected( $no_paid_plan ); ?>>
+                            <?php
+                            echo '' === $plan_slug
+                                ? esc_html__( 'No subscription', 'ovr-core' )
+                                : esc_html__( 'Expired (Base Subscriber)', 'ovr-core' );
+                            ?>
+                        </option>
                         <?php foreach ( (array) $plans as $slug => $p ) :
                             if ( 'base_subscriber' === $slug ) { continue; } // internal fallback, never selectable (P4)
                             $label = is_array( $p ) ? ( $p['name'] ?? $slug ) : (string) $p;
                         ?>
                             <option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $plan_slug, $slug ); ?>><?php echo esc_html( $label ); ?></option>
                         <?php endforeach; ?>
-                        <?php if ( 'base_subscriber' === $plan_slug ) : ?>
-                            <option value="base_subscriber" selected><?php esc_html_e( 'Expired (Base Subscriber)', 'ovr-core' ); ?></option>
-                        <?php endif; ?>
                     </select>
                     <p class="description">
                         <?php
@@ -364,6 +442,14 @@ class UsersAdmin {
                     <p class="description"><?php esc_html_e( 'Shown as a trust badge on every listing this user owns. Combats fraudulent listings.', 'ovr-core' ); ?></p>
                 </td>
             </tr>
+            <?php $admin_notes = (string) get_user_meta( (int) $user->ID, self::META_ADMIN_NOTES, true ); ?>
+            <tr>
+                <th><label for="ovr_admin_notes"><?php esc_html_e( 'Admin Notes', 'ovr-core' ); ?></label></th>
+                <td>
+                    <textarea name="ovr_admin_notes" id="ovr_admin_notes" class="large-text" rows="4"><?php echo esc_textarea( $admin_notes ); ?></textarea>
+                    <p class="description"><?php esc_html_e( 'Internal notes about this account. Visible to administrators only — never shown to the user or on the site.', 'ovr-core' ); ?></p>
+                </td>
+            </tr>
         </table>
         <style>
             .ovr-money-group{display:inline-flex;align-items:stretch;border:1px solid #8c8f94;border-radius:4px;overflow:hidden;background:#fff;max-width:220px}
@@ -390,7 +476,24 @@ class UsersAdmin {
         if ( isset( $_POST['ovr_subscription_plan'] ) ) {
             $slug = sanitize_key( wp_unslash( $_POST['ovr_subscription_plan'] ) );
             if ( '' !== $slug ) {
-                update_user_meta( $user_id, \OVR\Subscription\UserSubscription::META_PLAN, $slug );
+                // Writing META_PLAN alone left status='none' and no expiry, so
+                // is_active() — and therefore has_listing_access() — stayed false:
+                // an admin could assign a paid plan and the member still got
+                // "subscription" as their block reason. Route through the canonical
+                // activation path instead, which sets status/start/expiry, grants the
+                // landlord role and restores pending_renewal listings.
+                $current = \OVR\Subscription\UserSubscription::get_plan_slug( $user_id );
+                $is_paid = \OVR\Subscription\UserSubscription::is_paid_plan( $slug );
+                $active  = \OVR\Subscription\UserSubscription::is_active( $user_id );
+
+                if ( $is_paid && ( $slug !== $current || ! $active ) ) {
+                    // Only when the plan actually changes or the member is not
+                    // currently active — re-saving an unrelated field (phone,
+                    // balance) must not silently extend an existing expiry date.
+                    \OVR\Subscription\SubscriptionManager::activate( $user_id, $slug );
+                } else {
+                    update_user_meta( $user_id, \OVR\Subscription\UserSubscription::META_PLAN, $slug );
+                }
             }
         }
 
@@ -410,6 +513,15 @@ class UsersAdmin {
         if ( isset( $_POST['ovr_balance'] ) ) {
             $bal = (float) wp_unslash( $_POST['ovr_balance'] );
             update_user_meta( $user_id, \OVR\Payment\Wallet::META_BALANCE, number_format( $bal, 2, '.', '' ) );
+        }
+
+        if ( isset( $_POST['ovr_admin_notes'] ) ) {
+            $notes = sanitize_textarea_field( wp_unslash( $_POST['ovr_admin_notes'] ) );
+            if ( '' === $notes ) {
+                delete_user_meta( $user_id, self::META_ADMIN_NOTES );
+            } else {
+                update_user_meta( $user_id, self::META_ADMIN_NOTES, $notes );
+            }
         }
 
         // Verification classification (P8 §9).

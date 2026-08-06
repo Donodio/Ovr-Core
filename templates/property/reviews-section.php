@@ -78,17 +78,21 @@ $rating_n   = (int)   get_post_meta( $post_id, '_ovr_rating_count', true );
 
         <?php if ( ! is_user_logged_in() ) : ?>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px">
+                <?php // Labels carried visible text but no `for`, and did not wrap the
+                      // input — so both controls were unnamed to assistive tech
+                      // (axe `label`). Ids are suffixed with the property id because
+                      // this section can appear alongside the inquiry form. ?>
                 <div>
-                    <label style="display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+                    <label for="ovr-rev-name-<?php echo esc_attr( (string) $post_id ); ?>" style="display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
                         <?php esc_html_e( 'Your Name', 'ovr-core' ); ?>
                     </label>
-                    <input type="text" name="guest_name" class="ovr-form-input" required>
+                    <input type="text" id="ovr-rev-name-<?php echo esc_attr( (string) $post_id ); ?>" name="guest_name" class="ovr-form-input" required>
                 </div>
                 <div>
-                    <label style="display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+                    <label for="ovr-rev-email-<?php echo esc_attr( (string) $post_id ); ?>" style="display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
                         <?php esc_html_e( 'Email (kept private)', 'ovr-core' ); ?>
                     </label>
-                    <input type="email" name="guest_email" class="ovr-form-input" required>
+                    <input type="email" id="ovr-rev-email-<?php echo esc_attr( (string) $post_id ); ?>" name="guest_email" class="ovr-form-input" required>
                 </div>
             </div>
         <?php else :

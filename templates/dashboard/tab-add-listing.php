@@ -102,12 +102,14 @@ if ( ! in_array( $owner_status, [ 'active', 'inactive' ], true ) ) {
 }
 $admin_status   = $is_edit ? ( (string) get_post_meta( $pid, '_ovr_admin_status', true ) ?: 'approved' ) : 'approved';
 $is_admin_user  = current_user_can( 'manage_options' );
+// Admin Status is a simple Active/Inactive toggle. The stored meta stays
+// 'approved'/'hidden' (the values the visibility gate + Properties list use);
+// any legacy value (suspended/pending_review) normalises to Inactive.
 $admin_statuses = [
-    'approved'       => __( 'Approved', 'ovr-core' ),
-    'hidden'         => __( 'Hidden', 'ovr-core' ),
-    'suspended'      => __( 'Suspended', 'ovr-core' ),
-    'pending_review' => __( 'Pending Review', 'ovr-core' ),
+    'approved' => __( 'Active', 'ovr-core' ),
+    'hidden'   => __( 'Inactive', 'ovr-core' ),
 ];
+$admin_status   = ( 'approved' === $admin_status ) ? 'approved' : 'hidden';
 
 // Admin-only tab data (P8 §8): a dedicated Admin tab, shown only when an admin
 // edits an existing listing (owner reassignment + complimentary services need a
@@ -120,12 +122,15 @@ $activity_start = $is_edit ? (string) get_post_meta( $pid, '_ovr_activity_start'
 $activity_end   = $is_edit ? (string) get_post_meta( $pid, '_ovr_activity_end', true ) : '';
 $owner_user     = $is_edit ? get_userdata( (int) $post->post_author ) : null;
 $deals_options  = [
-    ''                      => __( 'None', 'ovr-core' ),
-    'special_deal'          => __( 'Special Deal', 'ovr-core' ),
-    'last_minute'           => __( 'Last-Minute Discount', 'ovr-core' ),
-    'flexible_cancellation' => __( 'Flexible Cancellation', 'ovr-core' ),
-    'non_refundable'        => __( 'Non-Refundable', 'ovr-core' ),
+    ''    => __( '— Select —', 'ovr-core' ),
+    'yes' => __( 'Yes', 'ovr-core' ),
+    'no'  => __( 'No', 'ovr-core' ),
 ];
+// Normalise any legacy value (special_deal, etc.) so the Yes/No control has a
+// clean state.
+if ( ! in_array( $deals_cancel, [ '', 'yes', 'no' ], true ) ) {
+    $deals_cancel = '';
+}
 
 // Tab definitions (key, label). Consolidated workflow; admins get a 6th "Admin" tab.
 $ld_tabs = [
@@ -313,10 +318,22 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         <label class="ld-fm-label" for="ld-fm-sqft"><?php esc_html_e( 'Size (sq ft)', 'ovr-core' ); ?></label>
                         <input class="ld-fm-input" id="ld-fm-sqft" name="sqft" type="number" min="0" step="1" value="<?php echo esc_attr( (string) $m( 'sqft' ) ); ?>">
                     </div>
-                    <label class="ld-fm-check">
-                        <input type="checkbox" name="pets_allowed" value="1" <?php checked( (string) $m( 'pets_allowed' ), '1' ); ?>>
-                        <span><?php esc_html_e( 'Pets allowed', 'ovr-core' ); ?></span>
-                    </label>
+                    <?php
+                    // Pets policy: three-way select (replaces the old yes/no checkbox).
+                    // Falls back to the legacy _ovr_pets_allowed flag for older listings.
+                    $pets_policy = $is_edit ? (string) get_post_meta( $pid, '_ovr_pets_policy', true ) : '';
+                    if ( '' === $pets_policy ) {
+                        $pets_policy = ( '1' === (string) $m( 'pets_allowed' ) ) ? 'allowed' : 'none';
+                    }
+                    ?>
+                    <div class="ld-fm-field">
+                        <label class="ld-fm-label" for="ld-fm-pets"><?php esc_html_e( 'Pets', 'ovr-core' ); ?></label>
+                        <select class="ld-fm-input" id="ld-fm-pets" name="pets_policy">
+                            <option value="allowed" <?php selected( $pets_policy, 'allowed' ); ?>><?php esc_html_e( 'Pets allowed', 'ovr-core' ); ?></option>
+                            <option value="considered" <?php selected( $pets_policy, 'considered' ); ?>><?php esc_html_e( 'Pets considered', 'ovr-core' ); ?></option>
+                            <option value="none" <?php selected( $pets_policy, 'none' ); ?>><?php esc_html_e( 'No pets', 'ovr-core' ); ?></option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -829,6 +846,8 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         <input class="ld-fm-input" id="ld-fm-referred" name="referred_by" type="text" value="<?php echo esc_attr( $referred_by ); ?>" placeholder="<?php esc_attr_e( 'e.g. Facebook group, agent name…', 'ovr-core' ); ?>">
                     </div>
                 </div>
+                <?php /* Period of Listing Activity (From / To) hidden for now per client request.
+                         Saved values are preserved (the save handler only writes when posted).
                 <div class="ld-fm-grid" style="margin-top:16px">
                     <div class="ld-fm-field">
                         <label class="ld-fm-label" for="ld-fm-activity-start"><?php esc_html_e( 'Period of Listing Activity — From', 'ovr-core' ); ?></label>
@@ -839,6 +858,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         <input class="ld-fm-input" id="ld-fm-activity-end" name="activity_end" type="date" value="<?php echo esc_attr( $activity_end ); ?>">
                     </div>
                 </div>
+                */ ?>
                 <div class="ld-fm-field" style="margin-top:16px">
                     <label class="ld-fm-label" for="ld-fm-admin-notes"><?php esc_html_e( 'Admin Notes', 'ovr-core' ); ?></label>
                     <textarea class="ld-fm-input ld-fm-textarea" id="ld-fm-admin-notes" name="admin_notes" rows="4" placeholder="<?php esc_attr_e( 'Internal notes — never shown to renters or the owner.', 'ovr-core' ); ?>"><?php echo esc_textarea( $admin_notes ); ?></textarea>

@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 $order     = $order ?? [];
 $price     = (float) ( $order['price'] ?? 0 );
+$regular   = isset( $order['regular_price'] ) ? (float) $order['regular_price'] : $price;
 $eyebrow   = (string) ( $order['eyebrow'] ?? '' );
 $item_name = (string) ( $order['name'] ?? '' );
 $sub_lbl   = (string) ( $order['sub'] ?? '' );
@@ -116,7 +117,7 @@ $name      = $user->display_name ?: '';
 
     <header class="ovr-co-header">
         <a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="ovr-co-brand">
-            <span class="material-symbols-outlined fill">real_estate_agent</span><?php esc_html_e( 'Our Villages Rentals', 'ovr-core' ); ?>
+            <span class="material-symbols-outlined fill">real_estate_agent</span><?php esc_html_e( 'Our Villages Rental', 'ovr-core' ); ?>
         </a>
         <a href="<?php echo esc_url( $cancel_url ); ?>" class="ovr-co-cancel">
             <span class="material-symbols-outlined">arrow_back</span><?php esc_html_e( 'Cancel & return', 'ovr-core' ); ?>
@@ -139,8 +140,8 @@ $name      = $user->display_name ?: '';
                 </div>
                 <hr class="ovr-co-rule">
                 <div class="ovr-co-lines">
-                    <div class="ovr-co-line"><span><?php esc_html_e( 'Subtotal', 'ovr-core' ); ?></span><span data-co-subtotal><?php echo esc_html( $fmt( $price ) ); ?></span></div>
-                    <div class="ovr-co-line"><span><?php esc_html_e( 'Taxes & Fees', 'ovr-core' ); ?></span><span><?php esc_html_e( 'Calculated at next step', 'ovr-core' ); ?></span></div>
+                    <div class="ovr-co-line"><span><?php esc_html_e( 'Subtotal (regular price)', 'ovr-core' ); ?></span><span data-co-subtotal><?php echo esc_html( $fmt( $regular ) ); ?></span></div>
+                    <div class="ovr-co-line"><span><?php esc_html_e( 'Your price', 'ovr-core' ); ?></span><span class="pos"><?php echo esc_html( $fmt( $price ) ); ?></span></div>
                     <div class="ovr-co-line"><span><?php esc_html_e( 'Discount', 'ovr-core' ); ?></span><span class="pos" data-co-discount>-<?php echo esc_html( $fmt( 0 ) ); ?></span></div>
                 </div>
                 <hr class="ovr-co-rule">
@@ -170,7 +171,7 @@ $name      = $user->display_name ?: '';
             $methods         = [
                 'stripe' => [ 'panel' => 'card',   'icon' => 'credit_card',             'label' => __( 'Credit Card', 'ovr-core' ) ],
                 'paypal' => [ 'panel' => 'paypal', 'icon' => 'account_balance',         'label' => __( 'PayPal', 'ovr-core' ) ],
-                'wallet' => [ 'panel' => 'wallet', 'icon' => 'account_balance_wallet',  'label' => __( 'Available Credit', 'ovr-core' ) ],
+                'wallet' => [ 'panel' => 'wallet', 'icon' => 'account_balance_wallet',  'label' => __( 'On Account', 'ovr-core' ) ],
             ];
             if ( ! isset( $methods[ $default_gateway ] ) ) {
                 $default_gateway = 'paypal';
@@ -219,8 +220,8 @@ $name      = $user->display_name ?: '';
                         <div class="ovr-co-note">
                             <span class="material-symbols-outlined">account_balance_wallet</span>
                             <span>
-                                <?php printf( esc_html__( 'Your available credit: %s.', 'ovr-core' ), '<strong>' . esc_html( $fmt( (float) $balance ) ) . '</strong>' ); ?>
-                                <?php echo (float) $balance < $price ? esc_html__( ' This is below the total — please choose another payment method.', 'ovr-core' ) : esc_html__( ' It will be applied to this purchase.', 'ovr-core' ); ?>
+                                <?php printf( esc_html__( 'Your account balance: %s.', 'ovr-core' ), '<strong>' . esc_html( $fmt( (float) $balance ) ) . '</strong>' ); ?>
+                                <?php echo (float) $balance < $price ? esc_html__( ' This is below the total — please choose another payment method.', 'ovr-core' ) : esc_html__( ' It will be charged to your account.', 'ovr-core' ); ?>
                             </span>
                         </div>
                     </div>
@@ -229,7 +230,7 @@ $name      = $user->display_name ?: '';
 
                     <!-- Promo -->
                     <div class="ovr-co-field" style="margin-bottom:0">
-                        <label class="ovr-co-label"><?php esc_html_e( 'Promo Code', 'ovr-core' ); ?></label>
+                        <label class="ovr-co-label"><?php esc_html_e( 'Promo Code (if applicable)', 'ovr-core' ); ?></label>
                         <div class="ovr-co-promo">
                             <input class="ovr-co-input" type="text" id="ovr-co-promo" placeholder="<?php esc_attr_e( 'Enter code here', 'ovr-core' ); ?>" autocomplete="off">
                             <button type="button" class="ovr-co-promo-btn" id="ovr-co-promo-apply"><?php esc_html_e( 'Apply', 'ovr-core' ); ?></button>
@@ -252,7 +253,7 @@ $name      = $user->display_name ?: '';
     </main>
 
     <footer class="ovr-co-foot">
-        <p><?php printf( esc_html__( '© %s Our Villages Rentals. All rights reserved.', 'ovr-core' ), esc_html( gmdate( 'Y' ) ) ); ?></p>
+        <p><?php printf( esc_html__( '© %s Our Villages Rental. All rights reserved.', 'ovr-core' ), esc_html( gmdate( 'Y' ) ) ); ?></p>
         <div class="ovr-co-foot-links">
             <a href="<?php echo esc_url( home_url( '/terms/' ) ); ?>"><?php esc_html_e( 'Terms of Service', 'ovr-core' ); ?></a>
             <a href="<?php echo esc_url( home_url( '/privacy/' ) ); ?>"><?php esc_html_e( 'Privacy Policy', 'ovr-core' ); ?></a>

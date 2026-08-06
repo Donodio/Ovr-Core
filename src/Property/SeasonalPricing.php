@@ -50,9 +50,16 @@ class SeasonalPricing {
      *
      * @param array $rows
      */
-    public static function save_pricing( int $property_id, $rows ): void {
+    /**
+     * @return array<int, string> Validation errors for rows that were rejected and
+     *                            NOT saved. Empty when every row was valid. The
+     *                            return type widened from void; existing callers
+     *                            that ignore it are unaffected.
+     */
+    public static function save_pricing( int $property_id, $rows ): array {
         global $wpdb;
-        $table = $wpdb->prefix . 'ovr_seasonal_pricing';
+        $table  = $wpdb->prefix . 'ovr_seasonal_pricing';
+        $errors = [];
 
         $wpdb->delete( $table, [ 'property_id' => $property_id ], [ '%d' ] );
 
@@ -76,6 +83,22 @@ class SeasonalPricing {
 
                 // Drop fully-empty rows.
                 if ( '' === $period && $price <= 0.0 && '' === $start && '' === $end ) {
+                    continue;
+                }
+
+                // Reject reversed ranges rather than silently swapping them. A row
+                // with end < start could never match get_current_rate()'s inclusive
+                // `$date >= start && $date <= end` test, so it was stored as a season
+                // that never applied. Same-day (start === end) stays valid: that test
+                // matches it as a legitimate one-day season.
+                if ( '' !== $start && '' !== $end && $end < $start ) {
+                    $errors[] = sprintf(
+                        /* translators: 1: season name, 2: start date, 3: end date */
+                        __( '"%1$s": the end date (%3$s) is before the start date (%2$s). This pricing period was not saved.', 'ovr-core' ),
+                        '' !== $period ? $period : __( 'Untitled period', 'ovr-core' ),
+                        $start,
+                        $end
+                    );
                     continue;
                 }
 
@@ -105,6 +128,8 @@ class SeasonalPricing {
         }
 
         wp_cache_delete( 'ovr_pricing_' . $property_id, 'ovr' );
+
+        return $errors;
     }
 
     /**

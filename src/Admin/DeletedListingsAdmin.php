@@ -9,7 +9,7 @@
  *
  * A daily cron (ovr_hard_delete_listings) permanently removes any listing that
  * has been in the trash longer than the configured retention window
- * (Settings → Listings → "Deleted Listing Retention", default 90 days).
+ * (Settings → Listings → "Deleted Listing Retention", default 180 days / 6 months).
  *
  * @package OVR\Admin
  * @since   2.1.0
@@ -26,8 +26,8 @@ class DeletedListingsAdmin {
     public const PAGE_SLUG = 'ovr-core-deleted-listings';
     public const CRON_HOOK = 'ovr_hard_delete_listings';
 
-    /** Default retention window in days when the setting is unset. */
-    public const DEFAULT_RETENTION_DAYS = 90;
+    /** Default retention window in days when the setting is unset (6 months). */
+    public const DEFAULT_RETENTION_DAYS = 180;
 
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
@@ -45,6 +45,24 @@ class DeletedListingsAdmin {
         if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
             wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', self::CRON_HOOK );
         }
+        self::maybe_migrate_retention();
+    }
+
+    /**
+     * One-time bump of the retention window from the legacy 90-day default to
+     * the new 6-month (180-day) default. Runs once, and only touches the value
+     * if it is still the old default — a custom value the admin set is left as-is.
+     */
+    private static function maybe_migrate_retention(): void {
+        if ( get_option( 'ovr_listing_retention_180_migrated' ) ) {
+            return;
+        }
+        $settings = (array) get_option( 'ovr_settings', [] );
+        if ( 90 === (int) ( $settings['listing_retention_days'] ?? 0 ) ) {
+            $settings['listing_retention_days'] = 180;
+            update_option( 'ovr_settings', $settings );
+        }
+        update_option( 'ovr_listing_retention_180_migrated', 1 );
     }
 
     /**

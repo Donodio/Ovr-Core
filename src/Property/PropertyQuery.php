@@ -132,6 +132,7 @@ class PropertyQuery {
         $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_bf ON ovr_bf.post_id = {$wpdb->posts}.ID AND ovr_bf.meta_key = '_ovr_is_bumped' ";
         $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_be ON ovr_be.post_id = {$wpdb->posts}.ID AND ovr_be.meta_key = '_ovr_bump_expires' ";
         $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_lb ON ovr_lb.post_id = {$wpdb->posts}.ID AND ovr_lb.meta_key = '" . Bump::META_LAST_BUMP . "' ";
+        $clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} ovr_ba ON ovr_ba.post_id = {$wpdb->posts}.ID AND ovr_ba.meta_key = '_ovr_bump_at' ";
 
         // Active "Featured Property" boost → very top (within the filtered set).
         $is_featured = $wpdb->prepare(
@@ -144,11 +145,17 @@ class PropertyQuery {
             $today
         );
 
-        // Effective recency = max(publish time, last-bump time). Free bumps
-        // store a Unix timestamp; un-bumped listings fall back to post_date.
-        $recency = "GREATEST( UNIX_TIMESTAMP({$wpdb->posts}.post_date_gmt), COALESCE(ovr_lb.meta_value + 0, 0) )";
+        // Effective recency = max(last-updated time, last-bump time). Free bumps
+        // store a Unix timestamp; listings that were never bumped fall back to the
+        // post_modified date so the most recently updated listings surface first.
+        $recency = "GREATEST( UNIX_TIMESTAMP({$wpdb->posts}.post_modified_gmt), COALESCE(ovr_lb.meta_value + 0, 0) )";
 
-        $clauses['orderby']  = $is_featured . ' DESC, ' . $is_bumped . ' DESC, ' . $recency . ' DESC, ' . $clauses['orderby'];
+        // Newest bump first *within* the bumped tier: a freshly-(re)purchased paid
+        // bump ("Priority Listing") floats above older bumps, so the order is
+        // Featured → Bumped (newest first) → recency → normal. ovr_ba is the
+        // dedicated paid-bump timestamp; it's absent on non-bumped listings so
+        // they fall through to recency ordering untouched.
+        $clauses['orderby']  = $is_featured . ' DESC, ' . $is_bumped . ' DESC, COALESCE(ovr_ba.meta_value + 0, 0) DESC, ' . $recency . ' DESC, ' . $clauses['orderby'];
         $clauses['groupby']  = "{$wpdb->posts}.ID"; // dedupe rows from the joins
         return $clauses;
     }
@@ -647,5 +654,81 @@ class PropertyQuery {
             'property_type' => $types,
             'per_page'      => $count,
         ] );
+    }
+
+    /**
+     * Ordered property IDs for the Sponsored Property Carousel.
+     *
+     * Composition order (left → right), de-duplicated (first wins), truncated to
+     * $count:
+     *   1. Sponsored   — active Featured boost, newest first.
+     *   2. Curated     — owner's "Homepage Carousel" picks, in stored order.
+     *   3. Recent fill — newest-published listings to reach $count.
+     *
+     * @param int $count Max number of cards.
+     * @return int[]
+     */
+    public static function get_carousel_ids( int $count = 4 ): array {
+        $count = max( 1, min( 120, absint( $count ) ) );
+
+        $sponsored = array_map( 'absint', (array) ( new \WP_Query( [
+            'post_type'      => 'ovr_property',
+            'post_status'    => 'publish',
+            'posts_per_page' => $count,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'meta_query'     => array_merge(
+                [ 'relation' => 'AND' ],
+                self::visibility_clauses(),
+                [ self::active_boost_clause( '_ovr_is_featured', '_ovr_featured_expires' ) ]
+            ),
+            'orderby' => 'date',
+            'order'   => 'DESC',
+        ] ) )->posts );
+
+        $settings = (array) get_option( 'ovr_settings', [] );
+        $picks    = preg_split( '/[\s,]+/', (string) ( $settings['homepage_carousel_ids'] ?? '' ) );
+        $picks    = array_map( 'absint', (array) $picks );
+        $picks    = array_values( array_filter( $picks ) );
+
+        $curated = [];
+        if ( $picks ) {
+            $curated = array_map( 'absint', (array) ( new \WP_Query( [
+                'post_type'      => 'ovr_property',
+                'post_status'    => 'publish',
+                'posts_per_page' => count( $picks ),
+                'post__in'       => $picks,
+                'orderby'        => 'post__in',
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+            ] ) )->posts );
+        }
+
+        $combined = [];
+        foreach ( array_merge( $sponsored, $curated ) as $id ) {
+            if ( $id > 0 && ! isset( $combined[ $id ] ) ) {
+                $combined[ $id ] = true;
+            }
+        }
+
+        if ( count( $combined ) < $count ) {
+            $recent = array_map( 'absint', (array) ( new \WP_Query( [
+                'post_type'      => 'ovr_property',
+                'post_status'    => 'publish',
+                'posts_per_page' => $count - count( $combined ),
+                'post__not_in'   => $combined ? array_keys( $combined ) : [ 0 ],
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+                'orderby'        => 'date',
+                'order'          => 'DESC',
+            ] ) )->posts );
+            foreach ( $recent as $id ) {
+                if ( $id > 0 && ! isset( $combined[ $id ] ) ) {
+                    $combined[ $id ] = true;
+                }
+            }
+        }
+
+        return array_slice( array_keys( $combined ), 0, $count );
     }
 }

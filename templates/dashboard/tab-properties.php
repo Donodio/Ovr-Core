@@ -32,6 +32,26 @@ $error_notice = 'bump_limit' === $notice
     )
     : '';
 ?>
+<?php
+// Rows the pricing validator rejected on the last save (e.g. end date before
+// start date). Shown alongside the success notice so "listing updated" never
+// hides the fact that a pricing period was dropped.
+$pricing_errors = \OVR\Frontend\ListingForm::take_pricing_errors();
+?>
+<?php if ( $pricing_errors ) : ?>
+    <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(179,38,30,.08);color:#93000a;border:1px solid rgba(179,38,30,.3);border-radius:12px;padding:14px 18px;font-size:14px;font-weight:600;margin-bottom:18px">
+        <span class="material-symbols-outlined">error</span>
+        <span>
+            <?php esc_html_e( 'Some pricing periods were not saved:', 'ovr-core' ); ?>
+            <ul style="margin:6px 0 0;padding-left:18px;font-weight:500">
+                <?php foreach ( $pricing_errors as $pe ) : ?>
+                    <li><?php echo esc_html( $pe ); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </span>
+    </div>
+<?php endif; ?>
+
 <?php if ( isset( $notices[ $notice ] ) ) : ?>
     <div style="display:flex;align-items:center;gap:10px;background:rgba(0,108,74,.1);color:var(--ovr-secondary,#006c4a);border:1px solid rgba(0,108,74,.3);border-radius:12px;padding:14px 18px;font-size:14px;font-weight:600;margin-bottom:18px">
         <span class="material-symbols-outlined">check_circle</span>
@@ -105,6 +125,11 @@ foreach ( $properties as $p ) {
             </a>
         </div>
     <?php else : ?>
+        <div class="ovr-mylist__toolbar">
+            <button type="button" class="ovr-mylist__reset" id="ovr-mylist-reset" title="<?php esc_attr_e( 'Clear filters', 'ovr-core' ); ?>">
+                <span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?>
+            </button>
+        </div>
         <div class="ovr-mylist__scroll">
             <table class="ovr-mylist__table">
                 <thead>
@@ -114,11 +139,7 @@ foreach ( $properties as $p ) {
                         <th><?php esc_html_e( 'Address', 'ovr-core' ); ?></th>
                         <th><?php esc_html_e( 'Views', 'ovr-core' ); ?></th>
                         <th><?php esc_html_e( 'Last Updated', 'ovr-core' ); ?></th>
-                        <th class="ovr-mylist__actions-h">
-                            <button type="button" class="ovr-mylist__reset" id="ovr-mylist-reset" title="<?php esc_attr_e( 'Clear filters', 'ovr-core' ); ?>">
-                                <span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?>
-                            </button>
-                        </th>
+                        <th class="ovr-mylist__actions-h"><?php esc_html_e( 'Actions', 'ovr-core' ); ?></th>
                     </tr>
                     <tr class="ovr-mylist__filters">
                         <td><input type="text" class="ovr-mylist__f" data-f="id" placeholder="<?php esc_attr_e( 'ID…', 'ovr-core' ); ?>" inputmode="numeric"></td>
@@ -187,22 +208,23 @@ foreach ( $properties as $p ) {
                         <td><?php echo esc_html( number_format_i18n( $views ) ); ?></td>
                         <td class="ovr-mylist__muted"><?php echo $modified ? esc_html( $modified->format( 'M j, Y' ) ) : '—'; ?></td>
                         <td class="ovr-mylist__actions">
-                            <a href="<?php echo esc_url( get_permalink( $p->ID ) ); ?>" target="_blank" rel="noopener" class="ovr-mylist__act" title="<?php esc_attr_e( 'View on site', 'ovr-core' ); ?>">
-                                <span class="material-symbols-outlined">open_in_new</span><?php esc_html_e( 'View', 'ovr-core' ); ?>
+                            <a href="<?php echo esc_url( get_permalink( $p->ID ) ); ?>" target="_blank" rel="noopener" class="ovr-mylist__act" title="<?php esc_attr_e( 'View on site', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'View on site', 'ovr-core' ); ?>">
+                                <span class="material-symbols-outlined">open_in_new</span>
                             </a>
-                            <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-mylist__act ovr-mylist__act--edit">
-                                <span class="material-symbols-outlined">edit</span><?php esc_html_e( 'Edit', 'ovr-core' ); ?>
+                            <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-mylist__act ovr-mylist__act--edit" title="<?php esc_attr_e( 'Edit', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Edit', 'ovr-core' ); ?>">
+                                <span class="material-symbols-outlined">edit</span>
                             </a>
-                            <a href="<?php echo esc_url( $bump_url ); ?>" class="ovr-mylist__act" title="<?php esc_attr_e( 'Bump to top of results (free, daily limit)', 'ovr-core' ); ?>">
-                                <span class="material-symbols-outlined">trending_up</span><?php esc_html_e( 'Bump', 'ovr-core' ); ?>
+                            <a href="<?php echo esc_url( $bump_url ); ?>" class="ovr-mylist__act" title="<?php esc_attr_e( 'Bump to top of results (free, daily limit)', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Bump', 'ovr-core' ); ?>">
+                                <span class="material-symbols-outlined">trending_up</span>
+                            </a>
+                            <a href="<?php echo esc_url( $upgrade_url ); ?>" class="ovr-mylist__act ovr-mylist__act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Upgrade', 'ovr-core' ); ?>">
+                                <span class="material-symbols-outlined">rocket_launch</span>
                             </a>
                             <a href="<?php echo esc_url( $del_url ); ?>" class="ovr-mylist__act ovr-mylist__act--danger"
                                data-ovr-delete
-                               data-title="<?php echo esc_attr( $del_title ); ?>">
-                                <span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Delete', 'ovr-core' ); ?>
-                            </a>
-                            <a href="<?php echo esc_url( $upgrade_url ); ?>" class="ovr-mylist__act ovr-mylist__act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>">
-                                <span class="material-symbols-outlined">rocket_launch</span><?php esc_html_e( 'Upgrade', 'ovr-core' ); ?>
+                               data-title="<?php echo esc_attr( $del_title ); ?>"
+                               title="<?php esc_attr_e( 'Delete', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Delete', 'ovr-core' ); ?>">
+                                <span class="material-symbols-outlined">delete</span>
                             </a>
                         </td>
                     </tr>
@@ -217,15 +239,20 @@ foreach ( $properties as $p ) {
 <div class="ovr-mylist-modal" id="ovr-del-modal" aria-hidden="true">
     <div class="ovr-mylist-modal__backdrop" data-del-cancel></div>
     <div class="ovr-mylist-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ovr-del-title">
-        <div class="ovr-mylist-modal__icon"><span class="material-symbols-outlined">delete_forever</span></div>
-        <h3 class="ovr-mylist-modal__title" id="ovr-del-title"><?php esc_html_e( 'Permanently Delete Listing?', 'ovr-core' ); ?></h3>
+        <?php // The handler calls wp_trash_post() (ListingForm::handle_delete), so this
+              // is reversible. The previous copy said "permanently delete … cannot be
+              // undone", which contradicted both the actual behaviour and the success
+              // notice above ("You can restore it from Trash within the retention
+              // window") and could scare an owner off a recoverable action. ?>
+        <div class="ovr-mylist-modal__icon"><span class="material-symbols-outlined">delete</span></div>
+        <h3 class="ovr-mylist-modal__title" id="ovr-del-title"><?php esc_html_e( 'Move Listing to Trash?', 'ovr-core' ); ?></h3>
         <p class="ovr-mylist-modal__body">
-            <?php esc_html_e( 'You are about to permanently delete this property listing. This action cannot be undone.', 'ovr-core' ); ?>
+            <?php esc_html_e( 'This listing will be removed from search and from your active listings. You can restore it from Trash within the retention window.', 'ovr-core' ); ?>
         </p>
         <p class="ovr-mylist-modal__target" id="ovr-del-target"></p>
         <div class="ovr-mylist-modal__actions">
             <button type="button" class="ovr-mylist-modal__btn ovr-mylist-modal__btn--cancel" data-del-cancel><?php esc_html_e( 'Cancel', 'ovr-core' ); ?></button>
-            <a href="#" class="ovr-mylist-modal__btn ovr-mylist-modal__btn--delete" id="ovr-del-confirm"><?php esc_html_e( 'Delete Listing', 'ovr-core' ); ?></a>
+            <a href="#" class="ovr-mylist-modal__btn ovr-mylist-modal__btn--delete" id="ovr-del-confirm"><?php esc_html_e( 'Move to Trash', 'ovr-core' ); ?></a>
         </div>
     </div>
 </div>
@@ -245,15 +272,16 @@ foreach ( $properties as $p ) {
 
 /* ── Table: no more min-width forcing a horizontal scroll on desktop ── */
 .ovr-mylist__scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--ovr-outline-variant,#e6e6e6);border-radius:12px}
-.ovr-mylist__table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
-.ovr-mylist__table thead th{text-align:left;padding:13px 16px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ovr-on-surface-variant,#5f6b7a);background:var(--ovr-surface-container-low,#f4f7f6);border-bottom:1px solid var(--ovr-outline-variant,#e0e0e0);white-space:nowrap}
+.ovr-mylist__table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.ovr-mylist__table thead th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ovr-on-surface-variant,#5f6b7a);background:var(--ovr-surface-container-low,#f4f7f6);border-bottom:1px solid var(--ovr-outline-variant,#e0e0e0);white-space:nowrap}
 .ovr-mylist__filters td{padding:8px 12px;background:var(--ovr-surface-container-low,#f9fbfa);border-bottom:2px solid var(--ovr-outline-variant,#e0e0e0);vertical-align:middle}
 .ovr-mylist__f{width:100%;min-width:80px;padding:7px 10px;font-size:13px;font-family:inherit;color:var(--ovr-on-surface,#1c2430);background:#fff;border:1px solid var(--ovr-outline,#c6d0cf);border-radius:8px;box-sizing:border-box}
 .ovr-mylist__f:focus{outline:none;border-color:var(--ovr-primary,#006c4a);box-shadow:0 0 0 3px rgba(0,108,74,.14)}
+.ovr-mylist__toolbar{display:flex;justify-content:flex-start;margin-bottom:12px}
 .ovr-mylist__reset{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid var(--ovr-outline,#c6d0cf);border-radius:8px;background:#fff;color:var(--ovr-on-surface,#1c2430);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;text-transform:none;letter-spacing:normal}
 .ovr-mylist__reset:hover{background:var(--ovr-surface-container,#eef2f1)}
 .ovr-mylist__reset .material-symbols-outlined{font-size:16px}
-.ovr-mylist__table td{padding:14px 16px;border-bottom:1px solid var(--ovr-outline-variant,#eee);vertical-align:middle}
+.ovr-mylist__table td{padding:10px 12px;border-bottom:1px solid var(--ovr-outline-variant,#eee);vertical-align:middle}
 .ovr-mylist__table tbody tr:hover td{background:var(--ovr-surface-container-low,#f6faf9)}
 .ovr-mylist__no-match td{text-align:center;padding:36px 16px;color:var(--ovr-on-surface-variant,#5f6b7a);font-style:italic}
 .ovr-mylist__id{font-variant-numeric:tabular-nums;color:var(--ovr-on-surface-variant);white-space:nowrap;font-weight:600}
@@ -261,13 +289,14 @@ foreach ( $properties as $p ) {
 .ovr-mylist__muted{color:var(--ovr-on-surface-variant);white-space:nowrap}
 .ovr-mylist__badge{display:inline-block;padding:3px 11px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap}
 
-/* Actions wrap within the cell so the buttons never push off-screen. */
+/* Compact icon-only actions so all five buttons fit without pushing the table
+   off-screen (owners see every control at a glance, no horizontal scroll). */
 .ovr-mylist__actions-h{text-align:right}
-.ovr-mylist__actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;min-width:230px}
-.ovr-mylist__act{display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;color:var(--ovr-on-surface,#1c2430);border:1px solid var(--ovr-outline,#cfcfcf);background:var(--ovr-surface,#fff);line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
+.ovr-mylist__actions{display:flex;flex-wrap:nowrap;gap:5px;justify-content:flex-end;white-space:nowrap}
+.ovr-mylist__act{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border-radius:8px;text-decoration:none;color:var(--ovr-on-surface,#1c2430);border:1px solid var(--ovr-outline,#cfcfcf);background:var(--ovr-surface,#fff);line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
 .ovr-mylist__act:hover{background:var(--ovr-surface-container,#f0f3f2)}
 .ovr-mylist__act:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(0,108,74,.35)}
-.ovr-mylist__act .material-symbols-outlined{font-size:16px}
+.ovr-mylist__act .material-symbols-outlined{font-size:18px}
 /* Edit — high-contrast solid green (P1.4): white label on OVR green, never blue-on-blue. */
 .ovr-mylist__act--edit{background:#006c4a;color:#fff;border-color:#006c4a}
 .ovr-mylist__act--edit:hover{background:#00563b;border-color:#00563b;color:#fff}

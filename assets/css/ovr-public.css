@@ -1015,6 +1015,68 @@
    10. Pricing Cards
    ========================================================================== */
 
+/* Village search autocomplete (Section 7). The .ovr-ac wraps a search field
+   and its suggestion listbox; the box sits below/over the input. */
+.ovr-ac {
+    position: relative;
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.ovr-ac > input {
+    width: 100%;
+}
+
+.ovr-ac-box {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 60;
+    background: var(--ovr-surface-container-lowest, #ffffff);
+    border: 1px solid var(--ovr-outline-variant, #e3e3e3);
+    border-radius: var(--ovr-radius-md, 10px);
+    box-shadow: var(--ovr-shadow-md);
+    padding: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.ovr-ac-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    padding: 9px 12px;
+    border-radius: 7px;
+    font-size: 14px;
+    color: var(--ovr-on-surface);
+    cursor: pointer;
+}
+
+.ovr-ac-item:hover,
+.ovr-ac-item.is-active {
+    background: var(--ovr-surface-container-low, #f2f4f7);
+}
+
+.ovr-search-field .ovr-ac { flex: 1 1 auto; }
+
+/* Description-tab folded owner sections (Section 9): compact, titled blocks
+   that replace the former full-width, stacked detail cards. */
+.ovr-tab-folded {
+    margin-top: 8px;
+}
+
+.ovr-tab-folded-block {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--ovr-outline-variant, #ececec);
+}
+
+.ovr-tab-folded-block:last-child {
+    border-bottom: 0;
+}
+
 .ovr-pricing-grid {
     display: flex;
     flex-wrap: wrap;
@@ -2071,6 +2133,25 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 24px;
+}
+
+.ovr-vs-grid {
+    display: grid;
+    gap: 24px;
+}
+
+.ovr-vs-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.ovr-vs-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.ovr-vs-grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+@media ( max-width: 900px ) {
+    .ovr-vs-grid--4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media ( max-width: 600px ) {
+    .ovr-vs-grid--2,
+    .ovr-vs-grid--3,
+    .ovr-vs-grid--4 { grid-template-columns: 1fr; }
 }
 
 .ovr-village-card {

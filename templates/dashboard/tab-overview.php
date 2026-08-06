@@ -133,9 +133,13 @@ $is_expired  = ( 'expired' === $sub_status );
                     $baths_r = (float) get_post_meta( $p->ID, '_ovr_bathrooms', true );
                     $baths   = rtrim( rtrim( number_format( $baths_r, 1 ), '0' ), '.' );
                     $views   = (int) get_post_meta( $p->ID, '_ovr_view_count', true );
+                    // Full property address: street, city, state (+ ZIP).
+                    $address = (string) get_post_meta( $p->ID, '_ovr_address', true );
                     $city    = (string) get_post_meta( $p->ID, '_ovr_city', true );
                     $state   = (string) get_post_meta( $p->ID, '_ovr_state', true );
-                    $loc     = trim( implode( ', ', array_filter( [ $city, $state ] ) ) );
+                    $zip     = (string) get_post_meta( $p->ID, '_ovr_zip', true );
+                    $loc     = trim( implode( ', ', array_filter( [ $address, $city, $state ] ) ) );
+                    if ( $zip ) { $loc = $loc ? $loc . ' ' . $zip : $zip; }
                     $edit    = add_query_arg( [ 'tab' => 'add-listing', 'post' => $p->ID ], $base_url );
                     $view    = get_permalink( $p->ID );
                     $bump    = wp_nonce_url(
@@ -160,6 +164,7 @@ $is_expired  = ( 'expired' === $sub_status );
                             </span>
                         </div>
                         <div class="ld-card-body">
+                            <span class="ld-card-id" title="<?php esc_attr_e( 'Listing ID', 'ovr-core' ); ?>">#<?php echo (int) $p->ID; ?></span>
                             <div class="ld-card-titlerow">
                                 <h3><?php echo esc_html( $p->post_title ?: __( '(untitled)', 'ovr-core' ) ); ?></h3>
                                 <?php if ( $price > 0 ) : ?>
@@ -182,7 +187,7 @@ $is_expired  = ( 'expired' === $sub_status );
                                 <a href="<?php echo esc_url( (string) $view ); ?>" target="_blank" rel="noopener" class="ld-card-act"><span class="material-symbols-outlined">visibility</span><?php esc_html_e( 'View', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $edit ); ?>" class="ld-card-act"><span class="material-symbols-outlined">edit</span><?php esc_html_e( 'Edit', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $bump ); ?>" class="ld-card-act" title="<?php esc_attr_e( 'Bump to top of results (free, daily limit)', 'ovr-core' ); ?>"><span class="material-symbols-outlined">trending_up</span><?php esc_html_e( 'Bump', 'ovr-core' ); ?></a>
-                                <a href="<?php echo esc_url( (string) $delete ); ?>" class="ld-card-act ld-card-act--danger" data-ovr-confirm="<?php echo esc_attr( sprintf( __( 'Delete “%s”? This cannot be undone.', 'ovr-core' ), $p->post_title ?: __( 'this listing', 'ovr-core' ) ) ); ?>"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Delete', 'ovr-core' ); ?></a>
+                                <a href="<?php echo esc_url( (string) $delete ); ?>" class="ld-card-act ld-card-act--danger" data-ovr-confirm="<?php echo esc_attr( sprintf( __( 'Move “%s” to Trash? It will be removed from search. An administrator can restore it within the retention window.', 'ovr-core' ), $p->post_title ?: __( 'this listing', 'ovr-core' ) ) ); ?>"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Delete', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $upgrade ); ?>" class="ld-card-act ld-card-act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>"><span class="material-symbols-outlined">rocket_launch</span><?php esc_html_e( 'Upgrade', 'ovr-core' ); ?></a>
                             </div>
                         </div>
@@ -305,6 +310,7 @@ $is_expired  = ( 'expired' === $sub_status );
     .ovr-ld .ld-card-status--draft{color:var(--ter)}.ovr-ld .ld-card-status--draft .ld-dot{background:var(--terc)}
     .ovr-ld .ld-card-status--pending{color:var(--err)}.ovr-ld .ld-card-status--pending .ld-dot{background:var(--err)}
     .ovr-ld .ld-card-body{padding:18px;display:flex;flex-direction:column;flex:1}
+    .ovr-ld .ld-card-id{display:inline-block;align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--sv);background:var(--sclow);padding:2px 8px;border-radius:6px;margin-bottom:8px;font-variant-numeric:tabular-nums}
     .ovr-ld .ld-card-titlerow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
     .ovr-ld .ld-card-titlerow h3{font-size:17px;font-weight:700;color:var(--on);margin:0;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .ovr-ld .ld-card-price{font-size:18px;font-weight:700;color:var(--p);white-space:nowrap}

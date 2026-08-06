@@ -35,9 +35,13 @@ class UpgradeActivator {
      */
     private const MAP = [
         'top_of_page'     => [ 'flag' => '_ovr_is_bumped',   'expires' => '_ovr_bump_expires' ],
+        'bump'            => [ 'flag' => '_ovr_is_bumped',   'expires' => '_ovr_bump_expires' ],
         'homepage_slider' => [ 'flag' => '_ovr_in_slider',   'expires' => '_ovr_slider_expires' ],
         'featured'        => [ 'flag' => '_ovr_is_featured', 'expires' => '_ovr_featured_expires' ],
     ];
+
+    /** Post meta storing the Unix timestamp a "bump" started (newest-first sort). */
+    private const META_BUMP_AT = '_ovr_bump_at';
 
     /**
      * Human labels for the boost behaviours (independent of the catalogue).
@@ -46,6 +50,7 @@ class UpgradeActivator {
      */
     private const TYPE_LABELS = [
         'top_of_page'     => 'Priority Placement',
+        'bump'            => 'Bumped (Priority Listing)',
         'homepage_slider' => 'Homepage Slider',
         'featured'        => 'Featured Property',
     ];
@@ -82,6 +87,12 @@ class UpgradeActivator {
         $keys      = self::MAP[ $upgrade_id ];
         $today     = current_time( 'Y-m-d' );
 
+        // A fresh (or re-upped) bump refreshes the "started" timestamp so the
+        // newest bump sorts first within the bumped tier.
+        if ( in_array( $upgrade_id, [ 'bump', 'top_of_page' ], true ) ) {
+            update_post_meta( $property_id, self::META_BUMP_AT, time() );
+        }
+
         // Extend from the current expiry if it's still in the future.
         $current = (string) get_post_meta( $property_id, $keys['expires'], true );
         $base    = ( $current && $current >= $today ) ? $current : $today;
@@ -105,6 +116,9 @@ class UpgradeActivator {
             return false;
         }
         $keys    = self::MAP[ $upgrade_id ];
+        if ( in_array( $upgrade_id, [ 'bump', 'top_of_page' ], true ) ) {
+            update_post_meta( $property_id, self::META_BUMP_AT, time() );
+        }
         $current = (string) get_post_meta( $property_id, $keys['expires'], true );
         if ( '' !== $current && $current > $expires ) {
             $expires = $current; // keep the later expiry
@@ -125,6 +139,9 @@ class UpgradeActivator {
         $keys = self::MAP[ $upgrade_id ];
         update_post_meta( $property_id, $keys['flag'], '0' );
         update_post_meta( $property_id, $keys['expires'], '' );
+        if ( in_array( $upgrade_id, [ 'bump', 'top_of_page' ], true ) ) {
+            delete_post_meta( $property_id, self::META_BUMP_AT );
+        }
         do_action( 'ovr_upgrade_deactivated', $property_id, $upgrade_id );
     }
 
@@ -287,7 +304,19 @@ class UpgradeActivator {
     public function expire_due(): void {
         $today = current_time( 'Y-m-d' );
 
-        foreach ( self::MAP as $keys ) {
+        // MAP has two keys ('top_of_page', 'bump') targeting the SAME
+        // bump flag/expiry metas — dedupe so the expired sweep runs once per
+        // distinct boost and clears the bump timestamp alongside the flag.
+        $seen = [];
+        foreach ( self::MAP as $upgrade_id => $keys ) {
+            $sig = $keys['flag'] . '|' . $keys['expires'];
+            if ( isset( $seen[ $sig ] ) ) {
+                continue;
+            }
+            $seen[ $sig ] = true;
+
+            $is_bump = in_array( $upgrade_id, [ 'bump', 'top_of_page' ], true );
+
             $q = new \WP_Query( [
                 'post_type'      => 'ovr_property',
                 'post_status'    => 'any',
@@ -307,8 +336,12 @@ class UpgradeActivator {
             ] );
 
             foreach ( $q->posts as $pid ) {
-                update_post_meta( (int) $pid, $keys['flag'], '0' );
-                update_post_meta( (int) $pid, $keys['expires'], '' );
+                $pid = (int) $pid;
+                update_post_meta( $pid, $keys['flag'], '0' );
+                update_post_meta( $pid, $keys['expires'], '' );
+                if ( $is_bump ) {
+                    delete_post_meta( $pid, self::META_BUMP_AT );
+                }
             }
         }
     }

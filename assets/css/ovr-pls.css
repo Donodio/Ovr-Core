@@ -265,16 +265,16 @@
     background: #fff;
     border: 1px solid #dcdcde;
     border-radius: 0 0 8px 8px;
-    /* A bounded, self-scrolling viewport: both scrollbars live inside this box,
-       so the horizontal scrollbar is reachable at the bottom of the visible
-       area without scrolling the whole page to the last row. */
-    overflow: auto;
-    max-height: calc(100vh - 300px);
-    min-height: 320px;
+    /* Every column is sized to fit the admin content width, so the table no
+       longer forces a horizontal scrollbar. `visible` keeps the sticky header
+       working against the normal page scroll (no nested scroll region). */
+    overflow: visible;
 }
 
 .ovr-ft-form {
-    min-width: 2080px;
+    /* Was min-width:2080px, which forced the whole table off-screen. Let the
+       fixed-layout table fit 100% of the available width instead. */
+    min-width: 0;
     margin: 0;
 }
 
@@ -302,14 +302,16 @@
 .ovr-ft-headers th {
     background: #f6f7f7;
     border-bottom: 1px solid #dcdcde;
-    padding: 12px 16px;
-    font-size: 13px;
+    padding: 9px 8px;
+    font-size: 11.5px;
     font-weight: 600;
     color: #2c3338;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-align: left;
     vertical-align: middle;
-    line-height: 1.4;
+    line-height: 1.35;
 }
 
 .ovr-ft-headers th a {
@@ -325,23 +327,24 @@
 }
 
 .ovr-ft-headers th.column-cb {
-    width: 30px;
+    width: 26px;
     text-align: center;
-    padding: 8px 6px;
+    padding: 8px 5px;
 }
 
-.ovr-ft-headers th.column-pid { width: 130px; }
-.ovr-ft-headers th.column-property_name { width: 260px; }
-.ovr-ft-headers th.column-display_status { width: 140px; }
-.ovr-ft-headers th.column-price { width: 130px; }
-.ovr-ft-headers th.column-property_type { width: 160px; }
-.ovr-ft-headers th.column-address { width: 300px; }
-.ovr-ft-headers th.column-village { width: 160px; }
-.ovr-ft-headers th.column-owner_email { width: 260px; }
-.ovr-ft-headers th.column-last_updated { width: 170px; }
-.ovr-ft-headers th.column-paid_services { width: 200px; }
-.ovr-ft-headers th.column-views { width: 110px; }
-.ovr-ft-headers th.column-actions { width: 190px; }
+/* Widths act as ratio hints in a fixed-layout, width:100% table, so the whole
+   grid fits the screen with no horizontal scroll. */
+.ovr-ft-headers th.column-pid { width: 66px; }
+.ovr-ft-headers th.column-property_name { width: 150px; }
+.ovr-ft-headers th.column-display_status { width: 84px; }
+.ovr-ft-headers th.column-property_type { width: 96px; }
+.ovr-ft-headers th.column-address { width: 150px; }
+.ovr-ft-headers th.column-village { width: 100px; }
+.ovr-ft-headers th.column-village_of { width: 100px; }
+.ovr-ft-headers th.column-owner_email { width: 150px; }
+.ovr-ft-headers th.column-last_updated { width: 92px; }
+.ovr-ft-headers th.column-paid_services { width: 120px; }
+.ovr-ft-headers th.column-views { width: 52px; }
 
 /* ─── Filter Row ───
  *  Each filter cell inherits the same width as its header counterpart
@@ -349,7 +352,7 @@
  */
 
 .ovr-ft-filters td {
-    padding: 10px 12px;
+    padding: 7px 6px;
     background: #fbfbfc;
     border-bottom: 2px solid #e2e4e7;
     vertical-align: top;
@@ -366,10 +369,10 @@
 
 .ovr-ft-filters .ovr-ft-input {
     width: 100%;
-    padding: 7px 12px !important;
-    font-size: 13px;
-    line-height: 1.5;
-    min-height: 36px;
+    padding: 5px 8px !important;
+    font-size: 12px;
+    line-height: 1.4;
+    min-height: 30px;
     border: 1px solid #dcdce0;
     border-radius: 8px;
     font-family: inherit;
@@ -394,10 +397,10 @@
 
 .ovr-ft-filters .ovr-ft-select {
     width: 100%;
-    padding: 7px 10px;
-    font-size: 13px;
-    min-height: 36px;
-    line-height: 1.5;
+    padding: 5px 6px;
+    font-size: 12px;
+    min-height: 30px;
+    line-height: 1.4;
     border: 1px solid #dcdce0;
     border-radius: 8px;
     font-family: inherit;
@@ -502,12 +505,14 @@
 /* ─── Body ─── */
 
 .ovr-ft-table tbody td {
-    padding: 12px 16px;
+    padding: 9px 8px;
     border-bottom: 1px solid #f0f0f1;
-    font-size: 14px;
+    font-size: 12.5px;
     color: #2c3338;
     vertical-align: middle;
-    line-height: 1.5;
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ovr-ft-table tbody tr:last-child td {
@@ -640,15 +645,26 @@ tr:hover .ovr-pls-copy-id {
     vertical-align: middle;
 }
 
-.ovr-pls-village {
+.ovr-pls-village,
+.ovr-pls-village-of {
     font-weight: 500;
     color: #2c3338;
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .ovr-pls-email {
     color: #2271b1;
     text-decoration: none;
-    font-size: 13px;
+    font-size: 12.5px;
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .ovr-pls-email:hover {
@@ -660,7 +676,12 @@ tr:hover .ovr-pls-copy-id {
     font-weight: 600;
     color: #2271b1;
     text-decoration: none;
-    font-size: 13px;
+    font-size: 12.5px;
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .ovr-pls-name:hover {

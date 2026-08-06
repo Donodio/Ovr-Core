@@ -134,8 +134,16 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
         </div>
 
         <?php
-        $render_group( 'village_section', __( 'Village Section', 'ovr-core' ), $section_opts, $sel_sections );
-        $render_group( 'village', __( 'Village', 'ovr-core' ), $village_opts, $sel_villages );
+        // Village Section + Village facets were removed from the sidebar (client
+        // request). Village-section filtering now happens via the section chips
+        // at the top of the results page. Any active village_section/village
+        // filter is preserved through the hidden fields below.
+        foreach ( (array) $sel_sections as $ss ) : ?>
+            <input type="hidden" name="village_section[]" value="<?php echo esc_attr( (string) $ss ); ?>">
+        <?php endforeach;
+        foreach ( (array) $sel_villages as $sv ) : ?>
+            <input type="hidden" name="village[]" value="<?php echo esc_attr( (string) $sv ); ?>">
+        <?php endforeach;
         $render_group( 'property_type', __( 'Property Type', 'ovr-core' ), $type_opts, $sel_types );
         ?>
 

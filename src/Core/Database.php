@@ -246,7 +246,121 @@ class Database {
             \OVR\Email\EmailTemplates::maybe_seed();
         }
 
+        self::retire_top_of_page_services();
+
+        self::ensure_bump_services();
+
         update_option( 'ovr_db_version', OVR_DB_VERSION );
+    }
+
+    /**
+     * Consolidate the paid-service catalogue onto a single canonical "Featured"
+     * product (DB 2.9.0).
+     *
+     * `top_of_page` ("Top of Search") and `featured` both sold top-of-search
+     * placement — Featured already ranks via PropertyQuery::boost_order_clauses,
+     * which joins _ovr_is_featured directly — so the two SKUs were the same
+     * commercial offer under two names.
+     *
+     * This retires the top_of_page catalogue rows by soft-deleting them rather
+     * than issuing a DELETE: the rows stay readable for historical payment and
+     * audit display. Listing assignments are deliberately NOT rewritten — the
+     * boost meta (_ovr_is_bumped) and UpgradeActivator's mapping are retained for
+     * backward compatibility so any legacy record still resolves.
+     *
+     * Idempotent: the WHERE clause matches only rows not already retired, so a
+     * second run updates zero rows.
+     */
+    private static function retire_top_of_page_services(): void {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'ovr_paid_services';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+            return;
+        }
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE {$table}
+                    SET deleted_at = %s, is_active = 0, updated_at = %s
+                  WHERE service_type = 'top_of_page'
+                    AND deleted_at IS NULL",
+                current_time( 'mysql' ),
+                current_time( 'mysql' )
+            )
+        );
+    }
+
+    /**
+     * Reintroduce the purchasable "Bump" (Priority Listing) upgrade (DB 2.10.0).
+     *
+     * The Bump Upgrade spec reintroduces a DISTINCT paid tier that ranks a
+     * listing above other non-featured listings in the normal search result
+     * order (Featured always wins over it), restoring the option that 2.9.0
+     * merged into Featured. This inserts the two standard Bump SKUs whenever the
+     * catalogue has none of service_type `bump`, so both fresh installs (seeded
+     * by PaidService::maybe_seed) and upgraded installs get them. Idempotent.
+     */
+    private static function ensure_bump_services(): void {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'ovr_paid_services';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+            return;
+        }
+
+        $exists = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table}
+              WHERE service_type = 'bump'
+                AND deleted_at IS NULL"
+        ) );
+        if ( $exists > 0 ) {
+            return;
+        }
+
+        $now = current_time( 'mysql' );
+        $wpdb->insert(
+            $table,
+            [
+                'slug'             => 'bump-14-days',
+                'name'             => __( 'Bump (Priority) — 14 Days', 'ovr-core' ),
+                'description'      => __( 'Bumped (Priority Listing)', 'ovr-core' ),
+                'service_type'     => 'bump',
+                'price'            => 49.00,
+                'duration_days'    => 14,
+                'badge'            => '',
+                'priority_weight'  => 20,
+                'max_simultaneous' => 0,
+                'is_renewable'     => 1,
+                'auto_renew'       => 0,
+                'is_active'        => 1,
+                'sort_order'       => 40,
+                'created_at'       => $now,
+                'updated_at'       => $now,
+            ],
+            [ '%s', '%s', '%s', '%s', '%f', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%s' ]
+        );
+        $wpdb->insert(
+            $table,
+            [
+                'slug'             => 'bump-30-days',
+                'name'             => __( 'Bump (Priority) — 30 Days', 'ovr-core' ),
+                'description'      => __( 'Bumped (Priority Listing)', 'ovr-core' ),
+                'service_type'     => 'bump',
+                'price'            => 79.00,
+                'duration_days'    => 30,
+                'badge'            => '',
+                'priority_weight'  => 20,
+                'max_simultaneous' => 0,
+                'is_renewable'     => 1,
+                'auto_renew'       => 0,
+                'is_active'        => 1,
+                'sort_order'       => 41,
+                'created_at'       => $now,
+                'updated_at'       => $now,
+            ],
+            [ '%s', '%s', '%s', '%s', '%f', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%s' ]
+        );
     }
 
     /**

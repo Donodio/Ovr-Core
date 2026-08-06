@@ -45,6 +45,42 @@ class Taxonomies {
         add_action( 'init', [ self::class, 'maybe_seed_sections' ], 11 );
         // Seed View / Feature facet terms once (so the search filters appear).
         add_action( 'init', [ self::class, 'maybe_seed_facets' ], 11 );
+
+        // Streamline the Village Section admin screen: name only (hide Slug,
+        // Parent, and Description on the add/edit form + drop those columns).
+        add_action( 'admin_head-edit-tags.php', [ self::class, 'simplify_village_screen' ] );
+        add_action( 'admin_head-term.php',      [ self::class, 'simplify_village_screen' ] );
+        add_filter( 'manage_edit-ovr_village_columns', [ self::class, 'village_columns' ] );
+    }
+
+    /**
+     * Remove the Description and Slug columns from the Village Section list table.
+     *
+     * @param array<string,string> $columns
+     * @return array<string,string>
+     */
+    public static function village_columns( array $columns ): array {
+        unset( $columns['description'], $columns['slug'] );
+        return $columns;
+    }
+
+    /**
+     * Hide Slug, Parent, and Description fields on the Village Section add/edit
+     * screens so the form collects only a Name (client request).
+     */
+    public static function simplify_village_screen(): void {
+        $tax = isset( $_GET['taxonomy'] ) ? sanitize_key( wp_unslash( $_GET['taxonomy'] ) ) : '';
+        if ( 'ovr_village' !== $tax ) {
+            return;
+        }
+        ?>
+        <style>
+            /* Add-new form (left column) + edit form (single term) */
+            .term-slug-wrap,
+            .term-parent-wrap,
+            .term-description-wrap { display: none !important; }
+        </style>
+        <?php
     }
 
     public function register_taxonomies(): void {
@@ -118,12 +154,16 @@ class Taxonomies {
     private function register_village(): void {
         register_taxonomy( 'ovr_village', PropertyPostType::POST_TYPE, [
             'labels' => [
-                'name'          => _x( 'Villages', 'taxonomy general name', 'ovr-core' ),
-                'singular_name' => _x( 'Village', 'taxonomy singular name', 'ovr-core' ),
-                'search_items'  => __( 'Search Villages', 'ovr-core' ),
-                'all_items'     => __( 'All Villages', 'ovr-core' ),
-                'edit_item'     => __( 'Edit Village', 'ovr-core' ),
-                'add_new_item'  => __( 'Add New Village', 'ovr-core' ),
+                'name'          => _x( 'Village Sections', 'taxonomy general name', 'ovr-core' ),
+                'singular_name' => _x( 'Village Section', 'taxonomy singular name', 'ovr-core' ),
+                'menu_name'     => __( 'Village Sections', 'ovr-core' ),
+                'search_items'  => __( 'Search Village Sections', 'ovr-core' ),
+                'all_items'     => __( 'All Village Sections', 'ovr-core' ),
+                'edit_item'     => __( 'Edit Village Section', 'ovr-core' ),
+                'update_item'   => __( 'Update Village Section', 'ovr-core' ),
+                'add_new_item'  => __( 'Add New Village Section', 'ovr-core' ),
+                'new_item_name' => __( 'New Village Section Name', 'ovr-core' ),
+                'not_found'     => __( 'No village sections found', 'ovr-core' ),
             ],
             'hierarchical'      => true,
             'public'            => true,

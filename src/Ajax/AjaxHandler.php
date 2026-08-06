@@ -59,6 +59,11 @@ class AjaxHandler {
 
         // Frontend: auto-geocode address fields (landlord editor).
         add_action( 'wp_ajax_ovr_geocode_address', [ $this, 'geocode_address' ] );
+
+        // Frontend: village search autocomplete (Section 7). Returns lightweight
+        // suggestions as you type, never the full village list.
+        add_action( 'wp_ajax_ovr_suggest_villages', [ $this, 'suggest_villages' ] );
+        add_action( 'wp_ajax_nopriv_ovr_suggest_villages', [ $this, 'suggest_villages' ] );
     }
 
     /**
@@ -141,12 +146,17 @@ class AjaxHandler {
     }
 
     /**
-     * Build a self-contained (data-URI) initials avatar so we never fall back
-     * to Gravatar. Fully local — no external request is ever made.
+     * Build an initials avatar so we never fall back to Gravatar. Fully local —
+     * no external request is ever made.
+     *
+     * The SVG is written to the uploads directory and served by URL rather than
+     * inlined as a data: URI. `data:` is not in wp_allowed_protocols(), so
+     * esc_url() — which core get_avatar() and our own templates both run the
+     * avatar through — silently reduces a data URI to an empty string and emits
+     * `src=""`. A normal URL survives escaping, caches, and scales (the SVG is
+     * vector, so one file serves every requested size).
      */
     private static function local_default_avatar( int $user_id, int $size = 96 ): string {
-        $size = $size > 0 ? $size : 96;
-
         $name = '';
         if ( $user_id ) {
             $u = get_userdata( $user_id );
@@ -165,15 +175,51 @@ class AjaxHandler {
         // Deterministic brand-aligned background colour per user.
         $palette = [ '#006666', '#00714e', '#1f4e79', '#7a4f9e', '#b4530a', '#0b6e75' ];
         $bg      = $palette[ $user_id % count( $palette ) ];
-        $fs      = (int) round( $size * 0.46 );
 
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '" viewBox="0 0 ' . $size . ' ' . $size . '">'
-            . '<rect width="' . $size . '" height="' . $size . '" fill="' . $bg . '"/>'
+        // Fixed 96-unit canvas + viewBox: the browser scales it to whatever
+        // width/height the <img> asks for, so one file covers all sizes.
+        $box = 96;
+        $fs  = (int) round( $box * 0.46 );
+
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $box . '" height="' . $box . '" viewBox="0 0 ' . $box . ' ' . $box . '">'
+            . '<rect width="' . $box . '" height="' . $box . '" fill="' . $bg . '"/>'
             . '<text x="50%" y="50%" dy=".35em" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="600" font-size="' . $fs . '" fill="#ffffff">'
             . htmlspecialchars( $initial, ENT_QUOTES )
             . '</text></svg>';
 
-        return 'data:image/svg+xml;base64,' . base64_encode( $svg );
+        $uploads = wp_get_upload_dir();
+        if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) ) {
+            return self::avatar_placeholder_url();
+        }
+
+        // Hash the rendered content so a display-name or palette change yields a
+        // new filename instead of serving a stale cached avatar.
+        $dir      = trailingslashit( $uploads['basedir'] ) . 'ovr-avatars';
+        $file     = $user_id . '-' . substr( md5( $svg ), 0, 8 ) . '.svg';
+        $abs_path = $dir . '/' . $file;
+
+        if ( ! file_exists( $abs_path ) ) {
+            if ( ! wp_mkdir_p( $dir ) ) {
+                return self::avatar_placeholder_url();
+            }
+            // Write via a temp file + rename so a concurrent request never reads
+            // a half-written SVG.
+            $tmp = $abs_path . '.' . wp_generate_password( 6, false ) . '.tmp';
+            if ( false === file_put_contents( $tmp, $svg ) || ! @rename( $tmp, $abs_path ) ) {
+                @unlink( $tmp );
+                return self::avatar_placeholder_url();
+            }
+        }
+
+        return trailingslashit( $uploads['baseurl'] ) . 'ovr-avatars/' . $file;
+    }
+
+    /**
+     * Last-resort avatar when the uploads directory is not writable. Ships with
+     * the plugin, so it is always present and always a real (escapable) URL.
+     */
+    private static function avatar_placeholder_url(): string {
+        return OVR_PLUGIN_URL . 'assets/images/avatar-default.svg';
     }
 
     /**
@@ -694,6 +740,106 @@ class AjaxHandler {
         }
 
         wp_send_json_error( [ 'message' => __( 'Could not locate that address.', 'ovr-core' ) ], 200 );
+    }
+
+    /**
+     * Village-search autocomplete (Section 7).
+     *
+     * Returns a small, ranked list of village suggestions for the given query
+     * so the search bar can offer live suggestions. Two sources are combined:
+     *  1. `ovr_village` taxonomy terms (curated sections).
+     *  2. `_ovr_village_name` meta values actually entered on published listings.
+     *
+     * Matching is tolerant of typos: prefix/substring hits rank first, then a
+     * Levenshtein-distance pass over the candidate names catches a misspelling
+     * (e.g. "Spanish Sprng" → "Spanish Springs"). Never more than the requested
+     * limit is returned, so this stays lightweight (no load-all-villages).
+     */
+    public function suggest_villages(): void {
+        check_ajax_referer( 'ovr_public_nonce', 'nonce' );
+
+        $q     = strtolower( trim( sanitize_text_field( wp_unslash( $_POST['q'] ?? '' ) ) ) );
+        $limit = min( 8, max( 1, absint( $_POST['limit'] ?? 6 ) ) );
+
+        if ( '' === $q ) {
+            wp_send_json_success( [ 'suggestions' => [], 'query' => $q ] );
+        }
+
+        $candidates = $this->village_candidates();
+
+        $ranked = [];
+        foreach ( $candidates as $name ) {
+            // Compute a similarity score (higher = better). Substring + prefix
+            // matches are near-exact; fallbacks are fuzzy-only.
+            $score = 0;
+            if ( strpos( $name, $q ) !== false ) {
+                $score = 100 + ( str_starts_with( $name, $q ) ? 50 : 0 );
+                if ( $name === $q ) {
+                    $score = 300;
+                }
+            } else {
+                $len  = max( strlen( $q ), 1 );
+                $dist = levenshtein( substr( $name, 0, max( $len, 12 ) ), $q );
+                $rel  = ( $len - $dist ) / $len;
+                if ( $rel >= 0.4 ) {
+                    $score = (int) ( $rel * 60 );
+                }
+            }
+            if ( $score > 0 ) {
+                $ranked[] = [ 'name' => $name, 'score' => $score ];
+            }
+        }
+
+        usort( $ranked, static fn( $a, $b ) => $b['score'] <=> $a['score'] );
+
+        $suggestions = array_column( array_slice( $ranked, 0, $limit ), 'name' );
+
+        wp_send_json_success( [ 'suggestions' => $suggestions, 'query' => $q ] );
+    }
+
+    /**
+     * All distinct village names to run autocomplete against. Combines the
+     * curated taxonomy terms with the free-text names entered on listings,
+     * cached briefly so the (rare) listing-driven set doesn't hit the DB on
+     * every keystroke.
+     *
+     * @return string[]
+     */
+    private function village_candidates(): array {
+        global $wpdb;
+
+        $cached = wp_cache_get( 'ovr_suggest_candidates', 'ovr' );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
+        $names = $wpdb->get_col(
+            "SELECT m.meta_value
+             FROM {$wpdb->postmeta} m
+             INNER JOIN {$wpdb->posts} p ON p.ID = m.post_id
+             WHERE m.meta_key = '_ovr_village_name'
+               AND m.meta_value <> ''
+               AND p.post_type = 'ovr_property'
+               AND p.post_status = 'publish'"
+        );
+
+        $terms = get_terms( [ 'taxonomy' => 'ovr_village', 'hide_empty' => false, 'fields' => 'names' ] );
+        if ( ! is_wp_error( $terms ) ) {
+            $names = array_merge( $names, $terms );
+        }
+
+        $out = [];
+        foreach ( $names as $n ) {
+            $clean = strtolower( trim( (string) $n ) );
+            if ( '' !== $clean ) {
+                $out[ $clean ] = $clean;
+            }
+        }
+
+        $out = array_values( $out );
+        wp_cache_set( 'ovr_suggest_candidates', $out, 'ovr', 5 * MINUTE_IN_SECONDS );
+
+        return $out;
     }
 }
 

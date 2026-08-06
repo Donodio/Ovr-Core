@@ -109,6 +109,7 @@ use OVR\Subscription\UserSubscription;
         .ovr-u-badge .material-symbols-outlined{font-size:16px}
         .ovr-u-badge--active{background:var(--green-light);color:var(--green)}
         .ovr-u-badge--inactive{background:var(--red-light);color:var(--red)}
+        .ovr-u-badge--pending{background:var(--gold-light);color:var(--gold-dark)}
         .ovr-u-badge--editing{background:var(--blue-light);color:var(--blue)}
         .ovr-u-badge--popular{background:var(--gold-light);color:var(--gold-dark);font-size:12px;padding:2px 9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 
@@ -134,12 +135,22 @@ use OVR\Subscription\UserSubscription;
         .ovr-u-action-btn--listings:hover{background:var(--green-light,#e3f4ea);color:var(--green,#006c4a)}
         .ovr-u-action-btn--edit:hover{background:var(--blue-light);color:var(--blue)}
         .ovr-u-user-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+        /* Role + Account Type pills (Area D). Each carries its own text label, so
+           the distinction never depends on colour alone. */
+        .ovr-u-roles{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+        .ovr-u-role{display:inline-flex;align-items:center;padding:1px 7px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;line-height:1.6;white-space:nowrap;border:1px solid transparent}
+        .ovr-u-role--admin{background:var(--blue-light);color:var(--blue)}
+        .ovr-u-role--user{background:var(--gray-light);color:var(--muted);border-color:var(--gray-border)}
+        .ovr-u-role--landlord{background:var(--green-light);color:var(--green)}
+        .ovr-u-role--subscriber{background:var(--gray-light);color:var(--muted);border-color:var(--gray-border)}
         .ovr-u-verif{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
         .ovr-u-verif .material-symbols-outlined{font-size:17px}
         .ovr-u-verif--verified_homeowner,.ovr-u-verif--registered_pm{background:#e6f4ea;color:#1e7e34;border-color:#bfe3c8}
         .ovr-u-verif--not_verified{background:var(--gray-light);color:var(--muted);border-color:var(--gray-border)}
         .ovr-u-phone{font-size:14px;color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums;white-space:nowrap}
         .ovr-u-phone:hover{color:var(--blue);text-decoration:underline}
+        .ovr-u-email{font-size:14px;color:var(--navy);text-decoration:none;word-break:break-word}
+        .ovr-u-email:hover{color:var(--blue);text-decoration:underline}
         .ovr-u-muted{color:var(--muted)}
         .ovr-u-balance{font-size:14px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
         .ovr-u-balance.is-positive{color:#1e7e34}
@@ -173,7 +184,8 @@ use OVR\Subscription\UserSubscription;
             .ovr-u-filter select{width:100%;min-width:auto}
             .ovr-u-toolbar .ovr-u-btn{flex:1}
             .ovr-u-total-count{width:100%;text-align:center;margin:0}
-            .ovr-u-table td:nth-child(5),.ovr-u-table th:nth-child(5){display:none}
+            .ovr-u-table td:nth-child(6),.ovr-u-table th:nth-child(6),
+            .ovr-u-table td:nth-child(7),.ovr-u-table th:nth-child(7){display:none}
             .ovr-u-stat-value{font-size:28px}
         }
         @media (max-width:600px){
@@ -246,10 +258,10 @@ use OVR\Subscription\UserSubscription;
                 </div>
             </div>
             <div class="ovr-u-stat">
-                <div class="ovr-u-stat-icon"><span class="material-symbols-outlined">pending_actions</span></div>
+                <div class="ovr-u-stat-icon"><span class="material-symbols-outlined">gpp_maybe</span></div>
                 <div class="ovr-u-stat-info">
-                    <span class="ovr-u-stat-value"><?php echo esc_html( number_format_i18n( $stats['pending_approvals'] ) ); ?></span>
-                    <span class="ovr-u-stat-label"><?php esc_html_e( 'Pending Approvals', 'ovr-core' ); ?></span>
+                    <span class="ovr-u-stat-value"><?php echo esc_html( number_format_i18n( $stats['not_verified'] ) ); ?></span>
+                    <span class="ovr-u-stat-label"><?php esc_html_e( 'Not Yet Verified', 'ovr-core' ); ?></span>
                 </div>
             </div>
         </div>
@@ -284,14 +296,9 @@ use OVR\Subscription\UserSubscription;
                         <select name="status">
                             <option value=""><?php esc_html_e( 'Any Status', 'ovr-core' ); ?></option>
                             <option value="active" <?php selected( $status ?? '', 'active' ); ?>><?php esc_html_e( 'Active', 'ovr-core' ); ?></option>
+                            <option value="active_pending" <?php selected( $status ?? '', 'active_pending' ); ?>><?php esc_html_e( 'Active – Pending Renewal', 'ovr-core' ); ?></option>
                             <option value="inactive" <?php selected( $status ?? '', 'inactive' ); ?>><?php esc_html_e( 'Inactive', 'ovr-core' ); ?></option>
-                        </select>
-                    </div>
-                    <div class="ovr-u-filter">
-                        <select name="type">
-                            <option value=""><?php esc_html_e( 'Any Type', 'ovr-core' ); ?></option>
-                            <option value="landlord" <?php selected( $type ?? '', 'landlord' ); ?>><?php esc_html_e( 'Landlords', 'ovr-core' ); ?></option>
-                            <option value="subscriber" <?php selected( $type ?? '', 'subscriber' ); ?>><?php esc_html_e( 'Subscribers', 'ovr-core' ); ?></option>
+                            <option value="inactive_pending" <?php selected( $status ?? '', 'inactive_pending' ); ?>><?php esc_html_e( 'Inactive – Pending Renewal', 'ovr-core' ); ?></option>
                         </select>
                     </div>
                     <div class="ovr-u-filter">
@@ -306,6 +313,10 @@ use OVR\Subscription\UserSubscription;
                         <span class="material-symbols-outlined">search</span>
                         <?php esc_html_e( 'Search', 'ovr-core' ); ?>
                     </button>
+                    <a href="<?php echo esc_url( $page_url ); ?>" class="ovr-u-btn ovr-u-btn--subtle" aria-label="<?php esc_attr_e( 'Reset filters', 'ovr-core' ); ?>">
+                        <span class="material-symbols-outlined">filter_alt_off</span>
+                        <?php esc_html_e( 'Reset', 'ovr-core' ); ?>
+                    </a>
                 </form>
                 <span class="ovr-u-total-count">
                     <?php printf( esc_html__( '%d user(s)', 'ovr-core' ), (int) $total ); ?>
@@ -323,6 +334,7 @@ use OVR\Subscription\UserSubscription;
                     <thead>
                         <tr>
                             <th><?php esc_html_e( 'User', 'ovr-core' ); ?></th>
+                            <th><?php esc_html_e( 'Phone', 'ovr-core' ); ?></th>
                             <th><?php esc_html_e( 'Verification', 'ovr-core' ); ?></th>
                             <th>
                                 <a href="<?php echo esc_url( add_query_arg( [ 'orderby' => 'subscription', 'order' => 'DESC' === $order ? 'ASC' : 'DESC' ], $page_url ) ); ?>">
@@ -331,15 +343,8 @@ use OVR\Subscription\UserSubscription;
                                 </a>
                             </th>
                             <th><?php esc_html_e( 'Listings', 'ovr-core' ); ?></th>
-                            <th><?php esc_html_e( 'Phone', 'ovr-core' ); ?></th>
                             <th><?php esc_html_e( 'Balance', 'ovr-core' ); ?></th>
                             <th><?php esc_html_e( 'Status', 'ovr-core' ); ?></th>
-                            <th>
-                                <a href="<?php echo esc_url( add_query_arg( [ 'orderby' => 'registered', 'order' => 'DESC' === $order ? 'ASC' : 'DESC' ], $page_url ) ); ?>">
-                                    <?php esc_html_e( 'Activity', 'ovr-core' ); ?>
-                                    <span class="sort-indicator material-symbols-outlined">unfold_more</span>
-                                </a>
-                            </th>
                             <th><?php esc_html_e( 'Actions', 'ovr-core' ); ?></th>
                         </tr>
                     </thead>
@@ -348,24 +353,41 @@ use OVR\Subscription\UserSubscription;
                             $plan_slug      = UserSubscription::get_plan_slug( (int) $user->ID );
                             $plan_data      = $plans[ $plan_slug ] ?? null;
                             $listing_count  = UserSubscription::get_listing_count( (int) $user->ID );
-                            $status         = get_user_meta( (int) $user->ID, 'ovr_account_status', true ) ?: 'active';
-                            $editing        = (bool) get_user_meta( (int) $user->ID, 'ovr_editing_enabled', true );
-                            $registered_ts  = strtotime( $user->user_registered );
+                            $acct_status    = get_user_meta( (int) $user->ID, 'ovr_account_status', true ) ?: 'active';
+                            $is_active      = ( 'active' === $acct_status );
+                            // "Pending renewal" = an expired subscription awaiting renewal.
+                            $sub_status     = UserSubscription::get_status( (int) $user->ID );
+                            $is_pending     = ( UserSubscription::STATUS_EXPIRED === $sub_status );
+                            $sub_expires    = (string) get_user_meta( (int) $user->ID, UserSubscription::META_EXPIRES, true );
                             $avatar         = get_avatar( $user->ID, 46 );
                             $edit_url       = admin_url( 'user-edit.php?user_id=' . (int) $user->ID );
-                            $toggle_url_f   = wp_nonce_url(
-                                add_query_arg( [ 'action' => 'ovr_user_toggle_status', 'user_id' => (int) $user->ID ], $toggle_url ),
-                                'ovr_user_toggle_status'
-                            );
+                            $listings_url   = admin_url( 'admin.php?page=ovr-properties&author=' . (int) $user->ID );
                             $plan_max       = $plan_data['max_listings'] ?? null;
                             $listing_pct    = $plan_max && $plan_max > 0 ? min( 100, round( ( $listing_count / $plan_max ) * 100 ) ) : null;
                             $verif_status   = \OVR\Core\Verification::get( (int) $user->ID );
                             $phone          = (string) get_user_meta( (int) $user->ID, 'ovr_phone', true );
+                            // Role (Admin vs User) and Account Type (Landlord vs Subscriber) pills.
+                            $user_roles     = (array) $user->roles;
+                            $is_admin_role  = in_array( 'administrator', $user_roles, true );
+                            $is_landlord    = in_array( 'ovr_landlord', $user_roles, true );
                             $balance        = (float) get_user_meta( (int) $user->ID, \OVR\Payment\Wallet::META_BALANCE, true );
                             $login_as_url   = wp_nonce_url(
                                 add_query_arg( [ 'action' => 'ovr_login_as_user', 'user_id' => (int) $user->ID ], $toggle_url ),
                                 'ovr_login_as_user'
                             );
+
+                            // Combined status badge (Active / Inactive, plus a
+                            // "Pending Renewal" state when the subscription lapsed).
+                            $status_base  = $is_active ? __( 'Active', 'ovr-core' ) : __( 'Inactive', 'ovr-core' );
+                            if ( $is_pending ) {
+                                $status_class = 'pending';
+                                $status_icon  = 'autorenew';
+                                $status_text  = sprintf( /* translators: %s: Active or Inactive */ __( '%s – Pending Renewal', 'ovr-core' ), $status_base );
+                            } else {
+                                $status_class = $is_active ? 'active' : 'inactive';
+                                $status_icon  = $is_active ? 'check_circle' : 'cancel';
+                                $status_text  = $status_base;
+                            }
                         ?>
                             <tr>
                                 <td>
@@ -377,8 +399,23 @@ use OVR\Subscription\UserSubscription;
                                             <span class="ovr-u-user-name"><?php echo esc_html( $user->display_name ); ?></span>
                                             <span class="ovr-u-user-email"><?php echo esc_html( $user->user_email ); ?></span>
                                             <span class="ovr-u-user-meta">#<?php echo (int) $user->ID; ?> · <?php echo esc_html( $user->user_login ); ?></span>
+                                            <span class="ovr-u-roles">
+                                                <span class="ovr-u-role ovr-u-role--<?php echo $is_admin_role ? 'admin' : 'user'; ?>">
+                                                    <?php echo $is_admin_role ? esc_html__( 'Admin', 'ovr-core' ) : esc_html__( 'User', 'ovr-core' ); ?>
+                                                </span>
+                                                <span class="ovr-u-role ovr-u-role--<?php echo $is_landlord ? 'landlord' : 'subscriber'; ?>">
+                                                    <?php echo $is_landlord ? esc_html__( 'Landlord', 'ovr-core' ) : esc_html__( 'Subscriber', 'ovr-core' ); ?>
+                                                </span>
+                                            </span>
                                         </div>
                                     </div>
+                                </td>
+                                <td>
+                                    <?php if ( $phone ) : ?>
+                                        <a class="ovr-u-phone" href="tel:<?php echo esc_attr( preg_replace( '/[^0-9+]/', '', $phone ) ); ?>"><?php echo esc_html( $phone ); ?></a>
+                                    <?php else : ?>
+                                        <span class="ovr-u-muted">—</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="ovr-u-verif ovr-u-verif--<?php echo esc_attr( $verif_status ); ?>" title="<?php echo esc_attr( \OVR\Core\Verification::label( $verif_status ) ); ?>">
@@ -396,11 +433,14 @@ use OVR\Subscription\UserSubscription;
                                                 <?php endif; ?>
                                             </div>
                                             <span class="ovr-u-plan-price">
-                                                <?php if ( ! empty( $plan_data['price'] ) && $plan_data['price'] > 0 ) : ?>
-                                                    <strong><?php echo esc_html( '$' . number_format_i18n( (float) $plan_data['price'], 2 ) ); ?></strong>
-                                                    / <?php echo esc_html( $plan_data['period'] ?? '' ); ?>
+                                                <?php if ( $sub_expires ) : ?>
+                                                    <?php printf(
+                                                        /* translators: %s: subscription expiry date */
+                                                        esc_html__( 'Expires %s', 'ovr-core' ),
+                                                        '<strong>' . esc_html( mysql2date( get_option( 'date_format' ), $sub_expires ) ) . '</strong>'
+                                                    ); ?>
                                                 <?php else : ?>
-                                                    <?php esc_html_e( 'Free plan', 'ovr-core' ); ?>
+                                                    <span class="ovr-u-muted"><?php esc_html_e( 'No expiry', 'ovr-core' ); ?></span>
                                                 <?php endif; ?>
                                             </span>
                                         </div>
@@ -429,48 +469,20 @@ use OVR\Subscription\UserSubscription;
                                     </div>
                                 </td>
                                 <td>
-                                    <?php if ( $phone ) : ?>
-                                        <a class="ovr-u-phone" href="tel:<?php echo esc_attr( preg_replace( '/[^0-9+]/', '', $phone ) ); ?>"><?php echo esc_html( $phone ); ?></a>
-                                    <?php else : ?>
-                                        <span class="ovr-u-muted">—</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
                                     <span class="ovr-u-balance<?php echo $balance > 0 ? ' is-positive' : ''; ?>"><?php echo esc_html( '$' . number_format_i18n( $balance, 2 ) ); ?></span>
                                 </td>
                                 <td>
-                                    <div style="display:flex;flex-direction:column;gap:7px">
-                                        <span class="ovr-u-badge ovr-u-badge--<?php echo 'active' === $status ? 'active' : 'inactive'; ?>">
-                                            <span class="material-symbols-outlined"><?php echo 'active' === $status ? 'check_circle' : 'cancel'; ?></span>
-                                            <?php echo 'active' === $status ? esc_html__( 'Active', 'ovr-core' ) : esc_html__( 'Inactive', 'ovr-core' ); ?>
-                                        </span>
-                                        <?php if ( $editing ) : ?>
-                                            <span class="ovr-u-badge ovr-u-badge--editing">
-                                                <span class="material-symbols-outlined">edit_note</span>
-                                                <?php esc_html_e( 'Editing', 'ovr-core' ); ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="ovr-u-activity" title="<?php echo esc_attr( $user->user_registered ); ?>">
-                                        <span><?php printf( esc_html__( 'Joined %s', 'ovr-core' ), esc_html( human_time_diff( $registered_ts, time() ) . ' ago' ) ); ?></span>
-                                        <span class="ovr-u-activity-date"><?php echo esc_html( date_i18n( 'M j, Y', $registered_ts ) ); ?></span>
+                                    <span class="ovr-u-badge ovr-u-badge--<?php echo esc_attr( $status_class ); ?>">
+                                        <span class="material-symbols-outlined"><?php echo esc_html( $status_icon ); ?></span>
+                                        <?php echo esc_html( $status_text ); ?>
                                     </span>
                                 </td>
                                 <td>
-                                    <?php
-                                    // P6.4: jump straight to this user's listings (business-critical).
-                                    $listings_url = add_query_arg(
-                                        [ 'post_type' => 'ovr_property', 'author' => (int) $user->ID ],
-                                        admin_url( 'edit.php' )
-                                    );
-                                    ?>
                                     <div class="ovr-u-actions-cell">
-                                        <a href="<?php echo esc_url( $listings_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--listings" title="<?php esc_attr_e( 'View this user’s listings', 'ovr-core' ); ?>">
-                                            <span class="material-symbols-outlined">home</span>
+                                        <a href="<?php echo esc_url( $listings_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--listings" title="<?php esc_attr_e( 'View this user\'s listings', 'ovr-core' ); ?>">
+                                            <span class="material-symbols-outlined">home_work</span>
                                         </a>
-                                        <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--edit" title="<?php esc_attr_e( 'Edit profile', 'ovr-core' ); ?>">
+                                        <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-u-action-btn ovr-u-action-btn--edit" title="<?php esc_attr_e( 'Edit user', 'ovr-core' ); ?>">
                                             <span class="material-symbols-outlined">edit</span>
                                         </a>
                                         <?php if ( current_user_can( 'manage_options' ) && (int) $user->ID !== get_current_user_id() ) : ?>
@@ -478,12 +490,6 @@ use OVR\Subscription\UserSubscription;
                                                 <span class="material-symbols-outlined">login</span>
                                             </a>
                                         <?php endif; ?>
-                                        <a href="<?php echo esc_url( $toggle_url_f ); ?>" class="ovr-u-action-btn ovr-u-action-btn--suspend" title="<?php echo 'active' === $status ? esc_attr__( 'Suspend account', 'ovr-core' ) : esc_attr__( 'Reactivate account', 'ovr-core' ); ?>">
-                                            <span class="material-symbols-outlined"><?php echo 'active' === $status ? 'pause_circle' : 'play_circle'; ?></span>
-                                        </a>
-                                        <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'users.php?action=delete&user_id=' . (int) $user->ID ), 'bulk-users' ) ); ?>" class="ovr-u-action-btn ovr-u-action-btn--danger" title="<?php esc_attr_e( 'Delete user', 'ovr-core' ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to permanently delete this user and all associated data?', 'ovr-core' ) ); ?>');">
-                                            <span class="material-symbols-outlined">delete</span>
-                                        </a>
                                     </div>
                                 </td>
                             </tr>

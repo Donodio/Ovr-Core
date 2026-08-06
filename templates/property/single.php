@@ -38,6 +38,13 @@ if ( empty( $gallery ) ) {
 
 get_header();
 
+// This template is returned straight from `template_include`, so it bypasses the
+// theme's page.php — which is where <main id="main-content"> normally lives. Without
+// it the listing page had no main landmark, and the theme's "Skip to content" link
+// (header.php, href="#main-content") pointed at an element that did not exist.
+// Opening it here fixes both; it is closed before every get_footer() exit path below.
+echo '<main id="main-content" class="ovr-single-main">';
+
 // Visibility gate (Phase 8B): a listing the owner set Inactive — or an admin
 // set to Hidden/Suspended/Pending Review — is not shown publicly. The owner of
 // this listing and site admins can still preview it.
@@ -49,6 +56,7 @@ if ( ! \OVR\Property\PropertyQuery::is_publicly_visible( $post_id ) && ! $gate_i
     echo '<h1 class="ovr-detail-heading">' . esc_html__( 'This listing is not available', 'ovr-core' ) . '</h1>';
     echo '<p class="ovr-tab-prose" style="margin:0">' . esc_html__( 'It may have been set to inactive or removed by the owner.', 'ovr-core' ) . '</p>';
     echo '</div></div></div>';
+    echo '</main>';
     get_footer();
     return;
 }
@@ -62,7 +70,17 @@ $beds       = (int)   ( $meta['beds']       ?? 0 );
 $sqft       = (int)   ( $meta['sqft']       ?? 0 );
 $max_guests = (int)   ( $meta['max_guests'] ?? 1 );
 $base_price = (float) ( $meta['base_price'] ?? 0 );
-$pets       = ! empty( $meta['pets_allowed'] );
+// Pets policy: allowed / considered / none (falls back to the legacy flag).
+$pets_policy = (string) get_post_meta( $post_id, '_ovr_pets_policy', true );
+if ( '' === $pets_policy ) {
+    $pets_policy = ! empty( $meta['pets_allowed'] ) ? 'allowed' : 'none';
+}
+$pets_label = [
+    'allowed'    => __( 'Pets allowed', 'ovr-core' ),
+    'considered' => __( 'Pets considered', 'ovr-core' ),
+    'none'       => __( 'No pets', 'ovr-core' ),
+][ $pets_policy ] ?? __( 'No pets', 'ovr-core' );
+$pets_icon  = 'none' === $pets_policy ? 'block' : 'pets';
 $is_feat    = ! empty( $meta['is_featured'] );
 $rating_avg = (float) ( $meta['rating_avg']   ?? 0 );
 $rating_n   = (int)   ( $meta['rating_count'] ?? 0 );
@@ -228,7 +246,6 @@ if ( '' !== $schema_video_url ) {
 }
 
 // Pre-render the embedded tab partials so empty ones get a graceful fallback.
-$amenities_html = TemplateLoader::get_rendered( 'property/amenities.php', [ 'post_id' => $post_id ] );
 $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', [ 'post_id' => $post_id ] );
 ?>
 <script type="application/ld+json"><?php echo wp_json_encode( $schema, JSON_UNESCAPED_SLASHES ); ?></script>
@@ -313,8 +330,8 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                         ?>
                     </span>
                     <span class="ovr-detail-spec">
-                        <span class="material-symbols-outlined"><?php echo $pets ? 'pets' : 'block'; ?></span>
-                        <?php echo $pets ? esc_html__( 'Pets allowed', 'ovr-core' ) : esc_html__( 'No pets', 'ovr-core' ); ?>
+                        <span class="material-symbols-outlined"><?php echo esc_html( $pets_icon ); ?></span>
+                        <?php echo esc_html( $pets_label ); ?>
                     </span>
                     <?php if ( $sqft > 0 ) : ?>
                         <span class="ovr-detail-spec"><span class="material-symbols-outlined">straighten</span>
@@ -406,6 +423,38 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                             }
                             ?>
                         </div>
+
+                        <?php
+                        // The "minor" owner sections (What's Nearby / Policies / Payment
+                        // Information) are folded into the long description so the page
+                        // isn't a stack of full-width cards (Section 9). They render as
+                        // compact blocks under the description text.
+                        $fold_sections = [
+                            [ 'icon' => 'explore',      'title' => __( "What's Nearby", 'ovr-core' ),        'body' => (string) get_post_meta( $post_id, '_ovr_nearby', true ) ],
+                            [ 'icon' => 'policy',       'title' => __( 'Policies', 'ovr-core' ),             'body' => (string) get_post_meta( $post_id, '_ovr_policies', true ) ],
+                            [ 'icon' => 'payments',     'title' => __( 'Payment Information', 'ovr-core' ),   'body' => (string) get_post_meta( $post_id, '_ovr_payment_info', true ) ],
+                        ];
+                        $has_folded = false;
+                        foreach ( $fold_sections as $fsec ) {
+                            if ( '' !== trim( (string) $fsec['body'] ) ) { $has_folded = true; break; }
+                        }
+                        if ( $has_folded ) :
+                        ?>
+                            <div class="ovr-tab-folded">
+                                <?php foreach ( $fold_sections as $fsec ) :
+                                    $fbody = trim( (string) $fsec['body'] );
+                                    if ( '' === $fbody ) { continue; }
+                                    ?>
+                                    <div class="ovr-tab-folded-block">
+                                        <h4 class="ovr-tab-subhead" style="margin:18px 0 6px">
+                                            <span class="material-symbols-outlined" style="font-size:18px;color:var(--ovr-secondary);vertical-align:-3px"><?php echo esc_html( $fsec['icon'] ); ?></span>
+                                            <?php echo esc_html( $fsec['title'] ); ?>
+                                        </h4>
+                                        <div class="ovr-tab-prose"><?php echo wp_kses_post( wpautop( $fbody ) ); ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                         <?php if ( $village_name || $village || $location_short ) : ?>
                             <div class="ovr-tab-near">
                                 <h3 class="ovr-tab-subhead"><?php esc_html_e( "What's nearby", 'ovr-core' ); ?></h3>
@@ -441,12 +490,57 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
 
                     <div class="ovr-tab-panel" role="tabpanel" data-ovr-panel="features">
                         <?php
-                        if ( trim( (string) $amenities_html ) !== '' ) {
-                            echo $amenities_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-                        } else {
+                        // Consolidated "What this place offers" section (Section 8).
+                        // Amenities, Features and Views share one icon grid so the page
+                        // reads as a single block rather than three stacked sections.
+                        $amenity_terms = wp_get_post_terms( $post_id, 'ovr_amenity' );
+                        $feat_terms    = wp_get_post_terms( $post_id, 'ovr_feature' );
+                        $view_terms    = wp_get_post_terms( $post_id, 'ovr_view' );
+
+                        $ok = static function ( $v ) { return ! is_wp_error( $v ) && ! empty( $v ); };
+
+                        $has_any = $ok( $amenity_terms ) || $ok( $feat_terms ) || $ok( $view_terms );
+
+                        if ( ! $has_any ) {
                             echo '<p class="ovr-tab-prose" style="margin:0">' . esc_html__( 'No features have been listed for this property yet.', 'ovr-core' ) . '</p>';
-                        }
-                        ?>
+                        } else {
+                            // Owner-ordered Features first (matching the editor), then
+                            // Views, then Amenities — one combined grid.
+                            $feat_order = (array) get_post_meta( $post_id, '_ovr_feature_order', true );
+                            $order_pos  = array_flip( array_map( 'intval', $feat_order ) );
+                            $by_order   = static function ( $a, $b ) use ( $order_pos ) {
+                                return ( $order_pos[ $a->term_id ] ?? PHP_INT_MAX ) <=> ( $order_pos[ $b->term_id ] ?? PHP_INT_MAX );
+                            };
+
+                            $groups = [];
+                            if ( $ok( $feat_terms ) ) {
+                                usort( $feat_terms, $by_order );
+                                $groups[] = [ __( 'Features', 'ovr-core' ), $feat_terms, 'check_circle' ];
+                            }
+                            if ( $ok( $view_terms ) ) {
+                                $groups[] = [ __( 'Views', 'ovr-core' ), $view_terms, 'visibility' ];
+                            }
+                            if ( $ok( $amenity_terms ) ) {
+                                $groups[] = [ __( 'Amenities', 'ovr-core' ), $amenity_terms, 'check_circle' ];
+                            }
+                            ?>
+                            <section class="ovr-amenities" style="padding-top:32px;border-top:1px solid var(--ovr-outline-variant)">
+                                <h2 class="ovr-h2" style="margin-bottom:20px"><?php esc_html_e( 'What this place offers', 'ovr-core' ); ?></h2>
+
+                                <?php foreach ( $groups as $blk ) : ?>
+                                    [ $blk_title, $blk_terms, $blk_icon ] = $blk;
+                                    <h3 class="ovr-tab-subhead" style="margin:16px 0 8px"><?php echo esc_html( $blk_title ); ?></h3>
+                                    <ul class="ovr-amenity-list" style="list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px 32px">
+                                        <?php foreach ( $blk_terms as $t ) : ?>
+                                            <li style="display:flex;align-items:center;gap:12px;padding:6px 0">
+                                                <span class="material-symbols-outlined" style="font-size:24px;color:var(--ovr-primary);flex-shrink:0"><?php echo esc_html( $blk_icon ); ?></span>
+                                                <span style="font-size:15px;color:var(--ovr-on-surface)"><?php echo esc_html( $t->name ); ?></span>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endforeach; ?>
+                            </section>
+                        <?php } ?>
                     </div>
 
                     <div class="ovr-tab-panel" role="tabpanel" data-ovr-panel="reviews">
@@ -456,28 +550,6 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                 </div>
             </div>
         </section>
-
-        <!-- Owner-authored sections (Phase 20): What's Nearby / Policies / Payment Information -->
-        <?php
-        $extra_sections = [
-            [ 'icon' => 'explore',     'title' => __( "What's Nearby", 'ovr-core' ),        'body' => (string) get_post_meta( $post_id, '_ovr_nearby', true ) ],
-            [ 'icon' => 'policy',      'title' => __( 'Policies', 'ovr-core' ),             'body' => (string) get_post_meta( $post_id, '_ovr_policies', true ) ],
-            [ 'icon' => 'payments',    'title' => __( 'Payment Information', 'ovr-core' ),   'body' => (string) get_post_meta( $post_id, '_ovr_payment_info', true ) ],
-        ];
-        foreach ( $extra_sections as $sec ) :
-            $body = trim( (string) $sec['body'] );
-            if ( '' === $body ) { continue; }
-            ?>
-            <section class="ovr-detail-section" data-purpose="owner-section">
-                <div class="ovr-detail-card">
-                    <h2 class="ovr-detail-heading">
-                        <span class="material-symbols-outlined" style="vertical-align:-4px;margin-right:6px;color:var(--ovr-secondary)"><?php echo esc_html( $sec['icon'] ); ?></span>
-                        <?php echo esc_html( $sec['title'] ); ?>
-                    </h2>
-                    <div class="ovr-tab-prose"><?php echo wp_kses_post( wpautop( $body ) ); ?></div>
-                </div>
-            </section>
-        <?php endforeach; ?>
 
         <!-- Policies & Payment -->
         <?php
@@ -655,4 +727,5 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
 </script>
 <?php endif; ?>
 <?php
+echo '</main>';
 get_footer();

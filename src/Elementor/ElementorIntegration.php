@@ -64,6 +64,8 @@ class ElementorIntegration {
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/TestimonialsWidget.php';
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/TestimonialsCarouselWidget.php';
         require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/VillagesSliderWidget.php';
+        require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/PropertyCarouselWidget.php';
+        require_once OVR_PLUGIN_DIR . 'src/Elementor/Widgets/VillageSectionsWidget.php';
 
         // Register widgets.
         $widgets_manager->register( new Widgets\PropertyCardWidget() );
@@ -74,6 +76,8 @@ class ElementorIntegration {
         $widgets_manager->register( new Widgets\TestimonialsWidget() );
         $widgets_manager->register( new Widgets\TestimonialsCarouselWidget() );
         $widgets_manager->register( new Widgets\VillagesSliderWidget() );
+        $widgets_manager->register( new Widgets\PropertyCarouselWidget() );
+        $widgets_manager->register( new Widgets\VillageSectionsWidget() );
     }
 
     /**

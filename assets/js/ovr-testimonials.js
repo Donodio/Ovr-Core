@@ -1,16 +1,18 @@
 /**
- * OVR Core — Testimonials Carousel
+ * OVR — Testimonials / Property Carousel engine
  *
- * Drives the `OVR Testimonials Carousel` Elementor widget. Self-contained
- * (no external slider dependency). Reads per-view from the CSS custom property
- * `--tc-per` (Elementor responsive control sets it per breakpoint), so the
- * number of visible cards is fully responsive.
+ * Drives the `OVR Testimonials Carousel` and `OVR Property Carousel` Elementor
+ * widgets. Self-contained (no external slider dependency). The widget prefix
+ * (e.g. `ovr-tc`, `ovr-pc`) is read from `data-ovr-prefix` so this single
+ * engine serves every carousel; it falls back to `ovr-tc`. Reads per-view from
+ * the CSS custom property `--<prefix>-per` (Elementor responsive control sets
+ * it per breakpoint), so the number of visible cards is fully responsive.
  *
  * Markup contract:
- *   .ovr-tc[data-ovr-carousel]            root  (data-autoplay, data-interval, data-loop)
- *     .ovr-tc-viewport > .ovr-tc-track    track holding .ovr-tc-card slides
- *     .ovr-tc-prev / .ovr-tc-next         arrow buttons (optional)
- *     .ovr-tc-dots                        dots container (optional)
+ *   .<prefix>[data-ovr-carousel]              root  (data-autoplay, data-interval, data-loop)
+ *     .<prefix>-viewport > .<prefix>-track    track holding .<prefix>-card slides
+ *     .<prefix>-prev / .<prefix>-next         arrow buttons (optional)
+ *     .<prefix>-dots                          dots container (optional)
  *
  * @package OVR
  */
@@ -18,18 +20,20 @@
     'use strict';
 
     function init(root) {
-        if (!root || root.getAttribute('data-tc-ready') === '1') return;
+        if (!root) return;
+        var prefix = root.getAttribute('data-ovr-prefix') || 'ovr-tc';
+        if (root.getAttribute('data-' + prefix + '-ready') === '1') return;
 
-        var track = root.querySelector('.ovr-tc-track');
+        var track = root.querySelector('.' + prefix + '-track');
         if (!track) return;
-        var slides = Array.prototype.slice.call(track.querySelectorAll('.ovr-tc-card'));
-        if (!slides.length) { root.setAttribute('data-tc-ready', '1'); return; }
+        var slides = Array.prototype.slice.call(track.querySelectorAll('.' + prefix + '-card'));
+        if (!slides.length) { root.setAttribute('data-' + prefix + '-ready', '1'); return; }
 
-        root.setAttribute('data-tc-ready', '1');
+        root.setAttribute('data-' + prefix + '-ready', '1');
 
-        var prevBtn = root.querySelector('.ovr-tc-prev');
-        var nextBtn = root.querySelector('.ovr-tc-next');
-        var dotsBox = root.querySelector('.ovr-tc-dots');
+        var prevBtn = root.querySelector('.' + prefix + '-prev');
+        var nextBtn = root.querySelector('.' + prefix + '-next');
+        var dotsBox = root.querySelector('.' + prefix + '-dots');
 
         var autoplay = root.getAttribute('data-autoplay') === '1';
         var interval = parseInt(root.getAttribute('data-interval'), 10) || 5000;
@@ -41,7 +45,7 @@
         var timer = null;
 
         function readPerView() {
-            var cssVal = parseFloat(getComputedStyle(root).getPropertyValue('--tc-per'));
+            var cssVal = parseFloat(getComputedStyle(root).getPropertyValue('--' + prefix + '-per'));
             if (isNaN(cssVal) || cssVal < 1) cssVal = 1;
             return Math.min(Math.round(cssVal), slides.length);
         }
@@ -93,7 +97,7 @@
                 (function (i) {
                     var dot = document.createElement('button');
                     dot.type = 'button';
-                    dot.className = 'ovr-tc-dot';
+                    dot.className = prefix + '-dot';
                     dot.setAttribute('role', 'tab');
                     dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
                     dot.addEventListener('click', function () { go(i); restart(); });
@@ -155,10 +159,11 @@
 
     /* Reveal a "Read more" toggle only when a quote is actually clamped. */
     function setupReadMore(root) {
-        var btns = root.querySelectorAll('.ovr-tc-readmore');
+        var qPrefix = root.getAttribute('data-ovr-prefix') || 'ovr-tc';
+        var btns = root.querySelectorAll('.' + qPrefix + '-readmore');
         Array.prototype.forEach.call(btns, function (btn) {
-            var card = btn.closest ? btn.closest('.ovr-tc-card') : null;
-            var quote = card ? card.querySelector('.ovr-tc-quote') : null;
+            var card = btn.closest ? btn.closest('.' + qPrefix + '-card') : null;
+            var quote = card ? card.querySelector('.' + qPrefix + '-quote') : null;
             if (!quote) return;
 
             function evaluate() {
@@ -181,7 +186,7 @@
 
     function initAll(scope) {
         var root = scope && scope.querySelectorAll ? scope : document;
-        Array.prototype.slice.call(root.querySelectorAll('.ovr-tc[data-ovr-carousel]')).forEach(init);
+        Array.prototype.slice.call(root.querySelectorAll('[data-ovr-carousel]')).forEach(init);
     }
 
     if (document.readyState === 'loading') {
@@ -198,6 +203,10 @@
                 window.elementorFrontend.hooks.addAction(
                     'frontend/element_ready/ovr_testimonials_carousel.default',
                     function ($scope) { init($scope[0].querySelector('.ovr-tc[data-ovr-carousel]')); }
+                );
+                window.elementorFrontend.hooks.addAction(
+                    'frontend/element_ready/ovr_property_carousel.default',
+                    function ($scope) { init($scope[0].querySelector('.ovr-pc[data-ovr-carousel]')); }
                 );
             }
         });

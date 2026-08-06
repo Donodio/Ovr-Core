@@ -36,7 +36,7 @@ class PropertyListScreen {
 
         $this->filter_table = new FilterTable( self::PAGE_SLUG );
         $this->filter_table->set_columns( $this->get_column_labels() );
-        $this->filter_table->set_sortable( [ 'pid', 'display_status', 'price', 'property_type', 'address', 'village', 'owner_email', 'property_name', 'last_updated', 'paid_services', 'views' ] );
+        $this->filter_table->set_sortable( [ 'pid', 'display_status', 'property_type', 'address', 'village', 'owner_email', 'property_name', 'last_updated', 'paid_services', 'views' ] );
         $this->filter_table->set_bulk_actions( [
             'activate'   => __( 'Activate', 'ovr-core' ),
             'deactivate' => __( 'Deactivate', 'ovr-core' ),
@@ -61,12 +61,6 @@ class PropertyListScreen {
             'meta_key' => '_ovr_admin_status',
         ] );
 
-        $engine->add_column_filter( 'price', [
-            'type'     => 'numeric',
-            'label'    => __( 'Price', 'ovr-core' ),
-            'meta_key' => '_ovr_base_price',
-        ] );
-
         $engine->add_column_filter( 'property_type', [
             'type'   => 'dropdown',
             'label'  => __( 'Type', 'ovr-core' ),
@@ -82,8 +76,15 @@ class PropertyListScreen {
 
         $engine->add_column_filter( 'village', [
             'type'   => 'dropdown',
-            'label'  => __( 'Village', 'ovr-core' ),
+            'label'  => __( 'Village Section', 'ovr-core' ),
             'source' => 'taxonomy:ovr_village',
+        ] );
+
+        $engine->add_column_filter( 'village_of', [
+            'type'        => 'text',
+            'label'       => __( 'Village Of', 'ovr-core' ),
+            'placeholder' => __( 'Search village…', 'ovr-core' ),
+            'meta_keys'   => [ '_ovr_village_name' ],
         ] );
 
         $engine->add_column_filter( 'owner_email', [
@@ -124,6 +125,7 @@ class PropertyListScreen {
         add_action( 'wp_ajax_ovr_admin_remove_listing_service', [ $this, 'ajax_remove_service' ] );
         add_action( 'wp_ajax_ovr_admin_get_services',  [ $this, 'ajax_get_services' ] );
         add_action( 'wp_ajax_ovr_admin_bulk_action',    [ $this, 'ajax_bulk_action' ] );
+        add_action( 'wp_ajax_ovr_admin_duplicate_property', [ $this, 'ajax_duplicate_property' ] );
         // P8 §8 — Admin tab: owner reassignment + user search.
         add_action( 'wp_ajax_ovr_admin_search_users',      [ $this, 'ajax_search_users' ] );
         add_action( 'wp_ajax_ovr_admin_reassign_listing',  [ $this, 'ajax_reassign_listing' ] );
@@ -177,17 +179,39 @@ class PropertyListScreen {
             wp_die( 'Unauthorized' );
         }
 
-        $author_id = current_user_can( 'manage_options' ) ? 0 : get_current_user_id();
-        $args = [
-            'post_type'      => self::PT,
-            'post_status'    => 'any',
-            'posts_per_page' => -1,
-            'fields'         => 'ids',
-        ];
-        if ( $author_id ) {
-            $args['author'] = $author_id;
+        // The export previously ran its own unfiltered get_posts(), so an admin who
+        // had narrowed the table down and clicked Export silently received EVERY
+        // listing instead of the rows on screen. Reuse the same filtered query the
+        // table itself uses (per_page -1 = all matches), so the file always mirrors
+        // the current filter state.
+        $ids = [];
+        if ( $this->filter_table instanceof FilterTable ) {
+            $query = $this->build_custom_query(
+                $this->filter_table->get_current_filters(),
+                1,
+                $this->filter_table->get_current_orderby(),
+                $this->filter_table->get_current_order(),
+                $this->filter_table->get_current_search(),
+                $this->filter_table,
+                -1
+            );
+            $ids = array_map(
+                static fn( $p ) => is_object( $p ) ? (int) $p->ID : (int) $p,
+                $query->posts ?? []
+            );
+        } else {
+            // Defensive fallback — should not happen, the table is built in init().
+            $args = [
+                'post_type'      => self::PT,
+                'post_status'    => 'any',
+                'posts_per_page' => -1,
+                'fields'         => 'ids',
+            ];
+            if ( ! current_user_can( 'manage_options' ) ) {
+                $args['author'] = get_current_user_id();
+            }
+            $ids = get_posts( $args );
         }
-        $ids = get_posts( $args );
 
         header( 'Content-Type: text/csv; charset=utf-8' );
         header( 'Content-Disposition: attachment; filename="ovr-properties-' . date( 'Y-m-d' ) . '.csv"' );
@@ -347,12 +371,6 @@ class PropertyListScreen {
                     <?php endforeach; ?>
                 </select>
                 <?php endif; ?>
-                <select id="ovr-pls-filter-paid-service" class="ovr-pls-toolbar-filter">
-                    <option value=""><?php esc_html_e( 'All Paid Services', 'ovr-core' ); ?></option>
-                    <?php foreach ( $service_types as $svc ) : ?>
-                        <option value="<?php echo (int) $svc['id']; ?>"><?php echo esc_html( $svc['name'] ); ?></option>
-                    <?php endforeach; ?>
-                </select>
                 <a href="<?php echo esc_url( add_query_arg( 'export_csv', '1' ) ); ?>" class="button ovr-pls-btn-export">
                     <span class="material-symbols-outlined">download</span>
                     <?php esc_html_e( 'Export CSV', 'ovr-core' ); ?>
@@ -376,10 +394,10 @@ class PropertyListScreen {
             'pid'            => __( 'Property ID', 'ovr-core' ),
             'property_name'  => __( 'Property Name', 'ovr-core' ),
             'display_status' => __( 'Display Status', 'ovr-core' ),
-            'price'          => __( 'Price', 'ovr-core' ),
             'property_type'  => __( 'Property Type', 'ovr-core' ),
             'address'        => __( 'Address', 'ovr-core' ),
-            'village'        => __( 'Village', 'ovr-core' ),
+            'village'        => __( 'Village Section', 'ovr-core' ),
+            'village_of'     => __( 'Village Of', 'ovr-core' ),
             'owner_email'    => __( 'Owner Email', 'ovr-core' ),
             'last_updated'   => __( 'Last Updated', 'ovr-core' ),
             'paid_services'  => __( 'Paid Services', 'ovr-core' ),
@@ -388,7 +406,11 @@ class PropertyListScreen {
         ];
     }
 
-    public function build_custom_query( array $filters, int $page, string $orderby, string $order, string $search, FilterTable $table ): \WP_Query {
+    /**
+     * @param int $per_page Rows per page; pass -1 to return every match (used by
+     *                      the CSV export so it honours the active filters).
+     */
+    public function build_custom_query( array $filters, int $page, string $orderby, string $order, string $search, FilterTable $table, int $per_page = self::PER_PAGE ): \WP_Query {
         $author_id = current_user_can( 'manage_options' ) ? 0 : get_current_user_id();
 
         $orderby_map = [
@@ -410,7 +432,7 @@ class PropertyListScreen {
             'post_type'      => self::PT,
             'post_status'    => 'any',
             'paged'          => $page,
-            'posts_per_page' => self::PER_PAGE,
+            'posts_per_page' => $per_page,
             'orderby'        => $wp_orderby,
             'order'          => $order,
         ];
@@ -735,6 +757,9 @@ class PropertyListScreen {
             case 'village':
                 $this->render_village_cell( $pid );
                 break;
+            case 'village_of':
+                $this->render_village_of_cell( $pid );
+                break;
             case 'owner_email':
                 $this->render_owner_email_cell( $item );
                 break;
@@ -821,6 +846,15 @@ class PropertyListScreen {
             return;
         }
         echo '<span class="ovr-pls-village">' . esc_html( $villages[0] ) . '</span>';
+    }
+
+    private function render_village_of_cell( int $pid ): void {
+        $village_name = trim( (string) get_post_meta( $pid, '_ovr_village_name', true ) );
+        if ( '' === $village_name ) {
+            echo '<span class="ovr-pls-na">&mdash;</span>';
+            return;
+        }
+        echo '<span class="ovr-pls-village-of">' . esc_html( $village_name ) . '</span>';
     }
 
     private function render_owner_email_cell( \WP_Post $post ): void {
@@ -1265,6 +1299,58 @@ class PropertyListScreen {
     // ──────────────────────────────────────────────
     //  AJAX: Bulk actions
     // ──────────────────────────────────────────────
+
+    public function ajax_duplicate_property(): void {
+        if ( ! check_ajax_referer( 'ovr_duplicate_property', 'nonce', false )
+             || ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied.', 'ovr-core' ) ], 403 );
+        }
+
+        $post_id = absint( $_POST['listing_id'] ?? 0 );
+        $post    = get_post( $post_id );
+        if ( ! $post || self::PT !== $post->post_type ) {
+            wp_send_json_error( [ 'message' => __( 'Listing not found.', 'ovr-core' ) ], 404 );
+        }
+
+        $new = wp_insert_post( [
+            'post_type'    => self::PT,
+            'post_status'  => 'draft',
+            'post_title'   => $post->post_title . ' — Copy',
+            'post_author'  => $post->post_author,
+            'post_content' => $post->post_content,
+            'post_excerpt' => $post->post_excerpt,
+        ] );
+
+        if ( is_wp_error( $new ) || ! $new ) {
+            wp_send_json_error( [ 'message' => __( 'Could not duplicate this listing.', 'ovr-core' ) ], 500 );
+        }
+
+        // Copy every piece of post meta (except the redundant naming flags).
+        $meta = get_post_meta( $post_id );
+        foreach ( $meta as $key => $values ) {
+            if ( in_array( $key, [ '_edit_last', '_edit_lock' ], true ) ) {
+                continue;
+            }
+            foreach ( $values as $value ) {
+                add_post_meta( $new, $key, $value );
+            }
+        }
+
+        // Clone the taxonomies (village section, type, amenities, features, views…).
+        $taxonomies = get_object_taxonomies( self::PT );
+        foreach ( $taxonomies as $tax ) {
+            $terms = wp_get_object_terms( $post_id, $tax, [ 'fields' => 'ids' ] );
+            if ( ! is_wp_error( $terms ) ) {
+                wp_set_object_terms( $new, $terms, $tax );
+            }
+        }
+
+        AuditLog::record( 'admin.duplicate', 'listing', (int) $new, [ 'source' => $post_id ], (int) $post->post_author );
+
+        wp_send_json_success( [
+            'message' => sprintf( __( 'Listing %d duplicated to #%d (draft).', 'ovr-core' ), $post_id, $new ),
+        ] );
+    }
 
     public function ajax_bulk_action(): void {
         if ( ! check_ajax_referer( 'ovr_admin_nonce', 'nonce', false )

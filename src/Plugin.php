@@ -65,6 +65,7 @@ use OVR\Admin\AdminAssets;
 use OVR\Admin\Settings;
 use OVR\Admin\PlansAdmin;
 use OVR\Admin\FeaturedCities;
+use OVR\Admin\PropertyCarouselAdmin;
 use OVR\Admin\PlatformOverview;
 use OVR\Admin\ReviewsAdmin;
 use OVR\Admin\PaidServicesAdmin;
@@ -256,6 +257,8 @@ class Plugin {
         $this->modules['admin_settings']   = new Settings();
         $this->modules['admin_plans']      = new PlansAdmin();
         $this->modules['admin_featured_cities'] = new FeaturedCities();
+        $this->modules['admin_property_carousel'] = new PropertyCarouselAdmin();
+        $this->modules['admin_village_sections'] = new \OVR\Admin\VillageSectionsAdmin();
         $this->modules['admin_overview']   = new PlatformOverview();
         $this->modules['admin_reviews']         = new ReviewsAdmin();
         $this->modules['admin_paid_services']   = new PaidServicesAdmin();
@@ -284,6 +287,8 @@ class Plugin {
         $this->modules['admin_settings']->init();
         $this->modules['admin_plans']->init();
         $this->modules['admin_featured_cities']->init();
+        $this->modules['admin_property_carousel']->init();
+        $this->modules['admin_village_sections']->init();
         $this->modules['admin_overview']->init();
         $this->modules['admin_reviews']->init();
         $this->modules['admin_paid_services']->init();

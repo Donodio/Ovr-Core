@@ -101,7 +101,7 @@ class Activator {
                 'enable_watermark'     => false,
                 'watermark_text'       => 'Our Village Rentals',
                 'bump_daily_limit'     => 12,
-                'listing_retention_days' => 90,
+                'listing_retention_days' => 180,
                 'grace_period_days'    => 7,
                 'inactivity_days'      => 180,
                 'google_maps_api_key'  => '',

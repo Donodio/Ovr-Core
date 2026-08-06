@@ -129,11 +129,33 @@ class FilterTable {
         ];
     }
 
-    public function get_current_filters(): array {
-        $input = [];
-        if ( isset( $_GET['ovr_filters'] ) && is_array( $_GET['ovr_filters'] ) ) {
-            $input = $_GET['ovr_filters'];
+    /**
+     * Normalise the `ovr_filters` request value into an array.
+     *
+     * assets/js/ovr-filter-table.js sends the filter set as a JSON *string*
+     * (`params.set('ovr_filters', JSON.stringify(filters))`) on both the URL and
+     * the AJAX POST. The readers here previously required `is_array()`, which a
+     * JSON string never satisfies, so every column filter was silently dropped
+     * and the table always returned the unfiltered dataset. Accept both shapes.
+     *
+     * @param mixed $raw
+     * @return array<string, mixed>
+     */
+    private static function normalize_filter_input( $raw ): array {
+        if ( is_array( $raw ) ) {
+            return $raw;
         }
+        if ( is_string( $raw ) && '' !== $raw ) {
+            $decoded = json_decode( wp_unslash( $raw ), true );
+            if ( is_array( $decoded ) ) {
+                return $decoded;
+            }
+        }
+        return [];
+    }
+
+    public function get_current_filters(): array {
+        $input  = self::normalize_filter_input( $_GET['ovr_filters'] ?? null );
         $values = $this->engine->process_input( $input );
         return array_merge( $this->defaults, $values );
     }
@@ -163,10 +185,9 @@ class FilterTable {
     public function handle_ajax(): void {
         check_ajax_referer( $this->ajax_action, 'nonce' );
 
-        $filters = [];
-        if ( isset( $_POST['ovr_filters'] ) && is_array( $_POST['ovr_filters'] ) ) {
-            $filters = $this->engine->process_input( $_POST['ovr_filters'] );
-        }
+        $filters = $this->engine->process_input(
+            self::normalize_filter_input( $_POST['ovr_filters'] ?? null )
+        );
         $filters = array_merge( $this->defaults, $filters );
 
         $page    = max( 1, (int) ( $_POST['paged'] ?? 1 ) );
@@ -238,6 +259,16 @@ class FilterTable {
     }
 
     protected function render_rows( array $items ): void {
+        // An empty result set previously rendered nothing at all, so a filter that
+        // matched no records produced a blank table with no explanation.
+        if ( ! $items ) {
+            printf(
+                '<tr class="ovr-ft-empty"><td colspan="%d" style="padding:28px 16px;text-align:center;color:#646970">%s</td></tr>',
+                max( 1, count( $this->columns ) ),
+                esc_html__( 'No records match the current filters.', 'ovr-core' )
+            );
+            return;
+        }
         foreach ( $items as $item ) {
             echo '<tr>';
             foreach ( $this->columns as $key => $label ) {

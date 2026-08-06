@@ -303,4 +303,109 @@
         start();
     });
 
+    /* ──────────────────────────────────────
+       Village Search Autocomplete (Section 7)
+       Attaches a live-suggestion dropdown to search inputs that target villages
+       (the "Location / keyword" field of the search bar, or any input marked
+       data-ovr-autocomplete="village"). Suggestions are fetched per keystroke
+       from the lightweight `ovr_suggest_villages` AJAX endpoint — never the
+       full list. Picking one fills the input and (on Enter) submits the form.
+       ────────────────────────────────────── */
+    (function initVillageAutocomplete() {
+        var inputs = document.querySelectorAll('[data-ovr-autocomplete="village"], input[name="keyword"]');
+        if (!inputs.length || !window.ovrData) return;
+
+        var debounceMs = 220;
+
+        inputs.forEach(function (input) {
+            var wrap = document.createElement('div');
+            wrap.className = 'ovr-ac';
+            input.parentNode.insertBefore(wrap, input);
+            wrap.appendChild(input);
+
+            var box = document.createElement('div');
+            box.className = 'ovr-ac-box';
+            box.setAttribute('role', 'listbox');
+            box.hidden = true;
+            wrap.appendChild(box);
+
+            var timer = null;
+
+            function close() { box.hidden = true; box.innerHTML = ''; }
+
+            function render(suggestions) {
+                box.innerHTML = '';
+                if (!suggestions || !suggestions.length) { box.hidden = true; return; }
+                suggestions.forEach(function (name) {
+                    var item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'ovr-ac-item';
+                    item.setAttribute('role', 'option');
+                    item.textContent = name;
+                    item.addEventListener('mousedown', function (e) { e.preventDefault(); });
+                    item.addEventListener('click', function () {
+                        input.value = name;
+                        close();
+                        var f = input.closest('form');
+                        if (f) f.submit();
+                    });
+                    box.appendChild(item);
+                });
+                box.hidden = false;
+            }
+
+            function fetchSuggestions(q) {
+                if (!q) { close(); return; }
+                var fd = new FormData();
+                fd.append('action', 'ovr_suggest_villages');
+                fd.append('nonce', window.ovrData.nonce || '');
+                fd.append('q', q);
+                fd.append('limit', '6');
+
+                fetch(window.ovrData.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (res.data) render(res.data.suggestions || []);
+                    })
+                    .catch(close);
+            }
+
+            input.addEventListener('input', function () {
+                var q = (input.value || '').trim();
+                if (timer) clearTimeout(timer);
+                if (!q) { close(); return; }
+                timer = setTimeout(function () { fetchSuggestions(q); }, debounceMs);
+            });
+
+            // Keyboard navigation among the suggestion rows.
+            input.addEventListener('keydown', function (e) {
+                var items = box.querySelectorAll('.ovr-ac-item');
+                if (!items.length) return;
+                if (e.key === 'ArrowDown') { e.preventDefault(); moveActive(items, 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); moveActive(items, -1); }
+                else if (e.key === 'Enter') {
+                    var current = box.querySelector('.ovr-ac-item.is-active');
+                    if (current) {
+                        e.preventDefault();
+                        input.value = current.textContent;
+                        close();
+                        var f = input.closest('form');
+                        if (f) f.submit();
+                    }
+                }
+                else if (e.key === 'Escape') { close(); }
+            });
+
+            var active = -1;
+            function moveActive(items, dir) {
+                active = (active + dir + items.length) % items.length;
+                items.forEach(function (it, i) {
+                    it.classList.toggle('is-active', i === active);
+                });
+            }
+
+            input.addEventListener('blur', function () { setTimeout(close, 120); });
+        });
+    })();
+
 })();

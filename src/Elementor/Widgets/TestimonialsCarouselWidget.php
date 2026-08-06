@@ -119,7 +119,7 @@ class TestimonialsCarouselWidget extends Widget_Base {
             'tablet_default' => '2',
             'mobile_default' => '1',
             'options'        => [ '1' => '1', '2' => '2', '3' => '3', '4' => '4' ],
-            'selectors'      => [ '{{WRAPPER}} .ovr-tc' => '--tc-per:{{VALUE}}' ],
+            'selectors'      => [ '{{WRAPPER}} .ovr-tc' => '--ovr-tc-per:{{VALUE}}' ],
         ] );
 
         $this->add_responsive_control( 'gap', [
@@ -564,7 +564,10 @@ class TestimonialsCarouselWidget extends Widget_Base {
                                 <?php endif; ?>
 
                                 <?php if ( $show_stars && $rating > 0 ) : ?>
-                                    <div class="ovr-tc-stars" aria-label="<?php echo esc_attr( sprintf( /* translators: %d: rating */ __( 'Rated %d out of 5', 'ovr-core' ), $rating ) ); ?>">
+                                    <?php // role="img" is required for aria-label to be permitted on a
+                                          // div (axe `aria-prohibited-attr`); the stars are a graphic
+                                          // whose meaning the label conveys. ?>
+                                    <div class="ovr-tc-stars" role="img" aria-label="<?php echo esc_attr( sprintf( /* translators: %d: rating */ __( 'Rated %d out of 5', 'ovr-core' ), $rating ) ); ?>">
                                         <?php for ( $i = 1; $i <= 5; $i++ ) : ?>
                                             <span class="ovr-tc-star <?php echo $i <= $rating ? 'is-on' : 'is-off'; ?>" aria-hidden="true">&#9733;</span>
                                         <?php endfor; ?>
@@ -633,14 +636,14 @@ class TestimonialsCarouselWidget extends Widget_Base {
         self::$css_printed = true;
         ?>
         <style id="ovr-tc-structural">
-            .ovr-tc{--tc-per:3;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;position:relative}
+            .ovr-tc{--ovr-tc-per:3;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;position:relative}
             .ovr-tc-header{text-align:center;margin-bottom:28px}
             .ovr-tc-heading{margin:0 0 8px;font-weight:700}
             .ovr-tc-sub{margin:0;font-size:15px}
             .ovr-tc-stage{display:flex;align-items:center;gap:8px}
             .ovr-tc-viewport{overflow:hidden;flex:1 1 auto;width:100%;position:relative}
             .ovr-tc-track{display:flex;gap:24px;will-change:transform;transition:transform 420ms cubic-bezier(.22,.61,.36,1)}
-            .ovr-tc-card{flex:0 0 calc((100% - (var(--tc-per) - 1) * 24px) / var(--tc-per));box-sizing:border-box;position:relative;overflow:hidden;background:#fff;border-radius:14px;padding:24px;cursor:grab}
+            .ovr-tc-card{flex:0 0 calc((100% - (var(--ovr-tc-per) - 1) * 24px) / var(--ovr-tc-per));box-sizing:border-box;position:relative;overflow:hidden;background:#fff;border-radius:14px;padding:24px;cursor:grab}
             .ovr-tc-track:active .ovr-tc-card{cursor:grabbing}
             .ovr-tc-mark{position:absolute;top:8px;right:16px;font-size:64px;line-height:1;font-family:Georgia,serif;font-weight:700;opacity:.25;color:#cca72f;pointer-events:none}
             .ovr-tc-stars{display:flex;gap:2px;margin-bottom:12px;justify-content:inherit}

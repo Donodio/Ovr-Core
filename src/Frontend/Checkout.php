@@ -45,13 +45,20 @@ class Checkout {
             $slug = sanitize_key( wp_unslash( $_GET['plan'] ) );
             $plan = Plans::get_plan( $slug );
             if ( $plan && ! empty( $plan['is_active'] ) ) {
+                // Regular list price vs. the (optionally admin-set) price we are
+                // actually offering this member. The special price defaults to
+                // the regular price; a lower value can be injected per user via
+                // the `ovr_checkout_member_price` filter.
+                $regular = (float) ( $plan['price'] ?? 0 );
+                $your    = (float) apply_filters( 'ovr_checkout_member_price', $regular, $slug, get_current_user_id() );
                 $order = [
-                    'type'    => 'plan',
-                    'eyebrow' => __( 'Subscription', 'ovr-core' ),
-                    'name'    => (string) ( $plan['name'] ?? '' ),
-                    'sub'     => 'annually' === ( $plan['period'] ?? 'monthly' ) ? __( 'Annual Renewal', 'ovr-core' ) : __( 'Monthly Subscription', 'ovr-core' ),
-                    'price'   => (float) ( $plan['price'] ?? 0 ),
-                    'fields'  => [ 'plan' => $slug ],
+                    'type'          => 'plan',
+                    'eyebrow'       => __( 'Subscription Renewal', 'ovr-core' ),
+                    'name'          => (string) ( $plan['name'] ?? '' ),
+                    'sub'           => 'annually' === ( $plan['period'] ?? 'monthly' ) ? __( 'Annual Renewal', 'ovr-core' ) : __( 'Monthly Subscription', 'ovr-core' ),
+                    'regular_price' => $regular,
+                    'price'         => $your,
+                    'fields'        => [ 'plan' => $slug ],
                 ];
             }
         // Listing upgrade checkout. A boost must target a specific listing the

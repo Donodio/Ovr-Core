@@ -260,7 +260,13 @@ class ListingForm {
         update_post_meta( $post_id, '_ovr_beds',       (int) ( $_POST['beds'] ?? 0 ) );
         update_post_meta( $post_id, '_ovr_max_guests', (int) ( $_POST['max_guests'] ?? 0 ) );
         update_post_meta( $post_id, '_ovr_sqft',       (int) ( $_POST['sqft'] ?? 0 ) );
-        update_post_meta( $post_id, '_ovr_pets_allowed', empty( $_POST['pets_allowed'] ) ? 0 : 1 );
+        if ( isset( $_POST['pets_policy'] ) ) {
+            $pets = sanitize_key( wp_unslash( $_POST['pets_policy'] ) );
+            if ( ! in_array( $pets, [ 'allowed', 'considered', 'none' ], true ) ) { $pets = 'none'; }
+            update_post_meta( $post_id, '_ovr_pets_policy', $pets );
+            // Keep the legacy boolean in sync for any older reader.
+            update_post_meta( $post_id, '_ovr_pets_allowed', 'allowed' === $pets ? 1 : 0 );
+        }
 
         // Nightly rate / listing-wide min stay were removed from the editor
         // (no Airbnb-style nightly assumption). Only persist them if some other
@@ -419,7 +425,10 @@ class ListingForm {
         // Pricing tab (Phase 4): "Check Description For Pricing" hides the table
         // but preserves the rows; then save the production-shaped rate rows.
         update_post_meta( $post_id, '_ovr_hide_pricing', empty( $_POST['hide_pricing'] ) ? 0 : 1 );
-        SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ?? [] );
+        // save_pricing() silently drops rows whose end date precedes the start
+        // date. Without surfacing that, the landlord saw only "listing updated"
+        // and their pricing period vanished with no explanation.
+        self::stash_pricing_errors( SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ?? [] ) );
 
         // Availability Calendar tab: replace this listing's manual block-out
         // ranges (iCal-sourced rows are preserved by the helper).
@@ -632,7 +641,13 @@ class ListingForm {
                         update_post_meta( $post_id, '_ovr_' . $f, sanitize_text_field( wp_unslash( $_POST[ $f ] ) ) );
                     }
                 }
-                update_post_meta( $post_id, '_ovr_pets_allowed', empty( $_POST['pets_allowed'] ) ? 0 : 1 );
+                if ( isset( $_POST['pets_policy'] ) ) {
+            $pets = sanitize_key( wp_unslash( $_POST['pets_policy'] ) );
+            if ( ! in_array( $pets, [ 'allowed', 'considered', 'none' ], true ) ) { $pets = 'none'; }
+            update_post_meta( $post_id, '_ovr_pets_policy', $pets );
+            // Keep the legacy boolean in sync for any older reader.
+            update_post_meta( $post_id, '_ovr_pets_allowed', 'allowed' === $pets ? 1 : 0 );
+        }
 
                 if ( isset( $_POST['listing_status'] ) ) {
                     $s = sanitize_key( wp_unslash( $_POST['listing_status'] ) );
@@ -757,7 +772,7 @@ class ListingForm {
                     update_post_meta( $post_id, '_ovr_hide_pricing', 0 );
                 }
                 if ( isset( $_POST['pricing'] ) && is_array( $_POST['pricing'] ) ) {
-                    SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] );
+                    self::stash_pricing_errors( SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ) );
                 }
                 break;
 
@@ -1186,5 +1201,37 @@ class ListingForm {
             $args['author'] = get_current_user_id();
         }
         return $args;
+    }
+
+    /** Transient holding pricing rows rejected during the last save, per user. */
+    private const PRICING_ERROR_TRANSIENT = 'ovr_pricing_errors_';
+
+    /**
+     * Remember validation errors returned by SeasonalPricing::save_pricing() so the
+     * dashboard can tell the owner which rows were not saved. A transient is used
+     * because the save handler redirects, so the messages must survive one request.
+     *
+     * @param array<int, string> $errors
+     */
+    private static function stash_pricing_errors( array $errors ): void {
+        if ( ! $errors ) {
+            return;
+        }
+        set_transient( self::PRICING_ERROR_TRANSIENT . get_current_user_id(), $errors, 2 * MINUTE_IN_SECONDS );
+    }
+
+    /**
+     * Read and clear the pending pricing validation errors for the current user.
+     *
+     * @return array<int, string>
+     */
+    public static function take_pricing_errors(): array {
+        $key    = self::PRICING_ERROR_TRANSIENT . get_current_user_id();
+        $errors = get_transient( $key );
+        if ( ! is_array( $errors ) || ! $errors ) {
+            return [];
+        }
+        delete_transient( $key );
+        return $errors;
     }
 }

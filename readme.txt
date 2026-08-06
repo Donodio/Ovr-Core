@@ -36,6 +36,21 @@ OVR Core is a complete rental listing platform built as a robust WordPress plugi
 
 == Changelog ==
 
+= 1.2.0 =
+Milestone 3 — Search, discovery & details (Section 5–10).
+* Bump paid upgrade: tiered search ordering (Featured, then recently Bumped, then newer), 24h/7d SKUs, auto-expiry + renewal.
+* Village Sections: new OVR Village Sections Elementor widget + admin enable/order screen.
+* Intelligent village search: async autocomplete with typo tolerance across village names + taxonomy.
+* Consolidated listing amenities: Features / Views / Amenities grouped into a single "What this place offers" section.
+* Compact details page: What's Nearby, Policies & Payment Info folded into the Description tab.
+* Admin Properties screen: restored per-row actions (View/Edit/Delete/Duplicate) + one-click Duplicate with audit log.
+* Admin Users screen: per-user "View listings" action, de-duplicated email column, Reset Filters button.
+
+= 1.1.2 =
+* New OVR Property Carousel Elementor widget (sponsored first, curated + recent fill, 4/3/1 responsive, drag/dots/autoplay).
+* New Homepage Carousel admin page (add/remove/reorder curated listings).
+* PropertyQuery::get_carousel_ids() composes the carousel order.
+
 = 1.1.0 =
 Milestone 3 — Admin tooling, optimization & handover.
 * Admin Control Center: YTD/system-health stat cards, configurable dashboard widgets, global search.

@@ -393,21 +393,26 @@ class SearchBarWidget extends Widget_Base {
     protected function render(): void {
         $s          = $this->get_settings_for_display();
         $search_url = Pages::get_page_url( 'ovr_page_search' );
+        // The field captions were plain <span>s: visible text with no programmatic
+        // association, so every control was an unnamed input to assistive tech.
+        // They are now real <label for=…>. The Elementor element id keeps the ids
+        // unique when more than one search bar is placed on the same page.
+        $uid        = $this->get_id();
         ?>
         <div class="ovr-search-wrap">
         <form class="ovr-search-pill" action="<?php echo esc_url( $search_url ); ?>" method="get">
 
             <!-- Location -->
             <div class="ovr-search-field">
-                <span class="ovr-search-field-label"><?php echo esc_html( $s['location_label'] ?? __( 'Location', 'ovr-core' ) ); ?></span>
-                <input type="text" name="keyword" placeholder="<?php echo esc_attr( $s['placeholder'] ?? '' ); ?>">
+                <label class="ovr-search-field-label" for="ovr-sb-kw-<?php echo esc_attr( $uid ); ?>"><?php echo esc_html( $s['location_label'] ?? __( 'Location', 'ovr-core' ) ); ?></label>
+                <input type="text" id="ovr-sb-kw-<?php echo esc_attr( $uid ); ?>" name="keyword" placeholder="<?php echo esc_attr( $s['placeholder'] ?? '' ); ?>">
             </div>
 
             <?php if ( 'yes' === ( $s['show_type_filter'] ?? 'yes' ) ) : ?>
                 <div class="ovr-search-divider"></div>
                 <div class="ovr-search-field">
-                    <span class="ovr-search-field-label"><?php echo esc_html( $s['type_label'] ?? __( 'Property Type', 'ovr-core' ) ); ?></span>
-                    <select name="property_type">
+                    <label class="ovr-search-field-label" for="ovr-sb-type-<?php echo esc_attr( $uid ); ?>"><?php echo esc_html( $s['type_label'] ?? __( 'Property Type', 'ovr-core' ) ); ?></label>
+                    <select id="ovr-sb-type-<?php echo esc_attr( $uid ); ?>" name="property_type">
                         <option value=""><?php esc_html_e( 'All Types', 'ovr-core' ); ?></option>
                         <?php
                         $types = get_terms( [ 'taxonomy' => 'ovr_property_type', 'hide_empty' => true ] );
@@ -423,16 +428,16 @@ class SearchBarWidget extends Widget_Base {
             <?php if ( 'yes' === ( $s['show_date_field'] ?? '' ) ) : ?>
                 <div class="ovr-search-divider"></div>
                 <div class="ovr-search-field">
-                    <span class="ovr-search-field-label"><?php esc_html_e( 'Check In', 'ovr-core' ); ?></span>
-                    <input type="date" name="checkin">
+                    <label class="ovr-search-field-label" for="ovr-sb-checkin-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Check In', 'ovr-core' ); ?></label>
+                    <input type="date" id="ovr-sb-checkin-<?php echo esc_attr( $uid ); ?>" name="checkin">
                 </div>
             <?php endif; ?>
 
             <?php if ( 'yes' === ( $s['show_guests_field'] ?? '' ) ) : ?>
                 <div class="ovr-search-divider"></div>
                 <div class="ovr-search-field">
-                    <span class="ovr-search-field-label"><?php esc_html_e( 'Guests', 'ovr-core' ); ?></span>
-                    <input type="number" name="guests" min="1" max="20" placeholder="<?php esc_attr_e( 'Add guests', 'ovr-core' ); ?>">
+                    <label class="ovr-search-field-label" for="ovr-sb-guests-<?php echo esc_attr( $uid ); ?>"><?php esc_html_e( 'Guests', 'ovr-core' ); ?></label>
+                    <input type="number" id="ovr-sb-guests-<?php echo esc_attr( $uid ); ?>" name="guests" min="1" max="20" placeholder="<?php esc_attr_e( 'Add guests', 'ovr-core' ); ?>">
                 </div>
             <?php endif; ?>
 

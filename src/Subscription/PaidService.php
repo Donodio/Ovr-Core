@@ -5,11 +5,14 @@
  * The `ovr_paid_services` table is the single source of truth for the
  * promotional upgrade catalogue. Each row is one purchasable offering — a
  * Name, Description, Price, Duration, Badge, Priority Weight and Active flag —
- * mapped to one of the three underlying boost *behaviours* via `service_type`:
+ * mapped to one of the underlying boost *behaviours* via `service_type`:
  *
- *   top_of_page      → priority placement in search results
  *   homepage_slider  → homepage hero rail (capped by max_simultaneous)
- *   featured         → featured badge + treatment
+ *   featured         → search ranking + featured badge + Featured Listings page
+ *
+ * `top_of_page` was retired in DB 2.9.0 and merged into `featured` (they sold
+ * the same top-of-search placement). The key is still honoured on read for
+ * backward compatibility; it is simply no longer an offerable product.
  *
  * Admins create/edit/disable/delete services freely; the landlord catalogue
  * (ListingUpgrades) and checkout read straight from here. All writes are
@@ -39,11 +42,16 @@ class PaidService {
      * @var array<string, array<string, mixed>>
      */
     public const TYPES = [
-        'top_of_page' => [
-            'label'    => 'Priority Placement (Top of Search)',
-            'icon'     => 'vertical_align_top',
-            'features' => [ 'Ranks above standard listings in search', 'Only within the visitor’s active filters', 'First purchased ranks highest' ],
-        ],
+        // NOTE: 'top_of_page' ("Top of Search") was retired in DB 2.9.0 and merged
+        // into 'featured' below — both sold the same top-of-search placement.
+        // Database::retire_top_of_page_services() soft-deletes its catalogue rows.
+        // UpgradeActivator still MAPS the old key for backward compatibility, so
+        // any legacy record continues to resolve; it is simply no longer offered.
+        //
+        // 'bump' below is the reintroduced, DISTINCT "Priority Listing" tier from
+        // the Bump Upgrade spec: it ranks a listing in the normal search results
+        // above other non-featured listings (never above a Featured listing),
+        // without granting the Featured badge/page placement.
         'homepage_slider' => [
             'label'    => 'Homepage Slider (slideshow only)',
             'icon'     => 'view_carousel',
@@ -52,7 +60,12 @@ class PaidService {
         'featured' => [
             'label'    => 'Featured Property',
             'icon'     => 'verified',
-            'features' => [ 'Top of search results (within matching filters)', 'Placement on the Featured Listings page', "Distinctive 'Featured' badge" ],
+            'features' => [ 'Ranks above standard listings in search', 'Only within the visitor’s active filters', 'Placement on the Featured Listings page', "Distinctive 'Featured' badge" ],
+        ],
+        'bump' => [
+            'label'    => 'Bumped (Priority Listing)',
+            'icon'     => 'trending_up',
+            'features' => [ 'Rises above standard listings in the normal search result order', 'Never outranks a Featured listing', 'Only changes ordering — no info, badge or page changes', 'Re-sorts flooded results by newest bump first' ],
         ],
     ];
 
@@ -257,12 +270,12 @@ class PaidService {
         };
 
         $seed = [
-            [ 'name' => __( 'Top of Search — 14 Days', 'ovr-core' ), 'service_type' => 'top_of_page',     'price' => $price( 'top_of_page', 'price_14', 49 ),  'duration_days' => 14, 'badge' => '',                                  'priority_weight' => 100, 'max_simultaneous' => 0, 'sort_order' => 10 ],
-            [ 'name' => __( 'Top of Search — 30 Days', 'ovr-core' ), 'service_type' => 'top_of_page',     'price' => $price( 'top_of_page', 'price_30', 89 ),  'duration_days' => 30, 'badge' => '',                                  'priority_weight' => 100, 'max_simultaneous' => 0, 'sort_order' => 11 ],
             [ 'name' => __( 'Homepage Slider — 14 Days', 'ovr-core' ), 'service_type' => 'homepage_slider', 'price' => $price( 'homepage_slider', 'price_14', 119 ), 'duration_days' => 14, 'badge' => __( 'Highest Conversion', 'ovr-core' ), 'priority_weight' => 50, 'max_simultaneous' => 8, 'sort_order' => 20 ],
             [ 'name' => __( 'Homepage Slider — 30 Days', 'ovr-core' ), 'service_type' => 'homepage_slider', 'price' => $price( 'homepage_slider', 'price_30', 199 ), 'duration_days' => 30, 'badge' => __( 'Highest Conversion', 'ovr-core' ), 'priority_weight' => 50, 'max_simultaneous' => 8, 'sort_order' => 21 ],
             [ 'name' => __( 'Featured Listing — 14 Days', 'ovr-core' ), 'service_type' => 'featured',       'price' => $price( 'featured', 'price_14', 89 ),  'duration_days' => 14, 'badge' => '',                                  'priority_weight' => 10, 'max_simultaneous' => 0, 'sort_order' => 30 ],
             [ 'name' => __( 'Featured Listing — 30 Days', 'ovr-core' ), 'service_type' => 'featured',       'price' => $price( 'featured', 'price_30', 149 ), 'duration_days' => 30, 'badge' => '',                                  'priority_weight' => 10, 'max_simultaneous' => 0, 'sort_order' => 31 ],
+            [ 'name' => __( 'Bump (Priority) — 14 Days', 'ovr-core' ),  'service_type' => 'bump',            'price' => $price( 'bump', 'price_14', 49 ),   'duration_days' => 14, 'badge' => '',                                  'priority_weight' => 20, 'max_simultaneous' => 0, 'sort_order' => 40 ],
+            [ 'name' => __( 'Bump (Priority) — 30 Days', 'ovr-core' ),  'service_type' => 'bump',            'price' => $price( 'bump', 'price_30', 79 ),   'duration_days' => 30, 'badge' => '',                                  'priority_weight' => 20, 'max_simultaneous' => 0, 'sort_order' => 41 ],
         ];
 
         foreach ( $seed as $row ) {

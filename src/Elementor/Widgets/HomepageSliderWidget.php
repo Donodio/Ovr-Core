@@ -594,7 +594,10 @@ class HomepageSliderWidget extends Widget_Base {
         $this->add_control( 'panel_sub_color', [
             'label'     => esc_html__( 'Subtext Color', 'ovr-core' ),
             'type'      => Controls_Manager::COLOR,
-            'default'   => '#667085',
+            // Same muted grey family as the rest of the UI, darkened enough to
+            // clear WCAG AA (4.5:1) against the panel backgrounds editors
+            // actually pick — #667085 only reached 3.39:1 on a grey panel.
+            'default'   => '#4F5867',
             'selectors' => [ '{{WRAPPER}} .ovr-hps-search-sub' => 'color: {{VALUE}};' ],
         ] );
 
@@ -879,7 +882,12 @@ class HomepageSliderWidget extends Widget_Base {
         }
 
         if ( $dots && count( $slides ) > 1 ) {
-            echo '<div class="ovr-hps-dots" role="tablist">';
+            // No role="tablist" here: these dots are carousel position indicators,
+            // not tabs — they control no tabpanel, so a tablist would require
+            // role="tab" children and an aria-controls target that do not exist
+            // (axe `aria-required-children`). Native buttons, each already carrying
+            // a "Go to slide N" accessible name, are the correct semantics.
+            echo '<div class="ovr-hps-dots">';
             foreach ( $slides as $i => $s ) {
                 printf(
                     '<button type="button" class="ovr-hps-dot%s" data-index="%d" aria-label="%s"></button>',
@@ -936,14 +944,19 @@ class HomepageSliderWidget extends Widget_Base {
 
         // Each field carries an .ovr-hps-f-<key> class so its width is controlled
         // independently (Field Widths controls), like Elementor form columns.
-        $term_dropdown = static function ( $terms, string $name, string $icon, string $all_label, string $field_class ) {
+        // a11y: the wrapping <label> holds no text of its own — only the icon span,
+        // which initA11y() marks aria-hidden as decorative. That leaves the control
+        // with no accessible name (axe `select-name`), so each one carries an
+        // explicit aria-label describing its purpose, matching the check-in /
+        // check-out inputs below.
+        $term_dropdown = static function ( $terms, string $name, string $icon, string $all_label, string $field_class, string $aria_label ) {
             if ( is_wp_error( $terms ) || empty( $terms ) ) {
                 return;
             }
             ?>
             <label class="ovr-hps-search-field <?php echo esc_attr( $field_class ); ?>">
                 <span class="material-symbols-outlined"><?php echo esc_html( $icon ); ?></span>
-                <select name="<?php echo esc_attr( $name ); ?>">
+                <select name="<?php echo esc_attr( $name ); ?>" aria-label="<?php echo esc_attr( $aria_label ); ?>">
                     <option value=""><?php echo esc_html( $all_label ); ?></option>
                     <?php foreach ( $terms as $t ) : ?>
                         <option value="<?php echo esc_attr( $t->slug ); ?>"><?php echo esc_html( $t->name ); ?></option>
@@ -964,7 +977,7 @@ class HomepageSliderWidget extends Widget_Base {
                 <form class="ovr-hps-search-form" action="<?php echo esc_url( $search_url ); ?>" method="get">
 
                     <!-- ── Primary ── -->
-                    <?php $term_dropdown( $sections, 'village_section[]', 'map', __( 'All Sections', 'ovr-core' ), 'ovr-hps-f-section' ); ?>
+                    <?php $term_dropdown( $sections, 'village_section[]', 'map', __( 'All Sections', 'ovr-core' ), 'ovr-hps-f-section', __( 'Village section', 'ovr-core' ) ); ?>
 
                     <?php if ( $show_dates ) : ?>
                         <label class="ovr-hps-search-field ovr-hps-f-checkin">
@@ -977,19 +990,19 @@ class HomepageSliderWidget extends Widget_Base {
                         </label>
                     <?php endif; ?>
 
-                    <?php if ( $show_ptype ) { $term_dropdown( $property_types, 'property_type[]', 'home', __( 'All Property Types', 'ovr-core' ), 'ovr-hps-f-ptype' ); } ?>
+                    <?php if ( $show_ptype ) { $term_dropdown( $property_types, 'property_type[]', 'home', __( 'All Property Types', 'ovr-core' ), 'ovr-hps-f-ptype', __( 'Property type', 'ovr-core' ) ); } ?>
 
                     <?php if ( $has_optional ) : ?>
                         <div class="ovr-hps-search-optional"><?php echo esc_html( $opt_label ); ?></div>
                     <?php endif; ?>
 
                     <!-- ── Optional ── -->
-                    <?php if ( $show_term ) { $term_dropdown( $rental_types, 'rental_type[]', 'event_repeat', __( 'Any Rental Term', 'ovr-core' ), 'ovr-hps-f-term' ); } ?>
+                    <?php if ( $show_term ) { $term_dropdown( $rental_types, 'rental_type[]', 'event_repeat', __( 'Any Rental Term', 'ovr-core' ), 'ovr-hps-f-term', __( 'Rental term', 'ovr-core' ) ); } ?>
 
                     <?php if ( $show_village && ! empty( $villages ) ) : ?>
                         <label class="ovr-hps-search-field ovr-hps-f-village">
                             <span class="material-symbols-outlined">holiday_village</span>
-                            <select name="village[]">
+                            <select name="village[]" aria-label="<?php esc_attr_e( 'Village', 'ovr-core' ); ?>">
                                 <option value=""><?php esc_html_e( 'Any Village', 'ovr-core' ); ?></option>
                                 <?php foreach ( $villages as $name ) : ?>
                                     <option value="<?php echo esc_attr( $name ); ?>"><?php echo esc_html( $name ); ?></option>
@@ -1001,14 +1014,14 @@ class HomepageSliderWidget extends Widget_Base {
                     <?php if ( $show_address ) : ?>
                         <label class="ovr-hps-search-field ovr-hps-f-address">
                             <span class="material-symbols-outlined">location_on</span>
-                            <input type="text" name="address" placeholder="<?php echo esc_attr( $addr_ph ); ?>">
+                            <input type="text" name="address" placeholder="<?php echo esc_attr( $addr_ph ); ?>" aria-label="<?php esc_attr_e( 'Address or area', 'ovr-core' ); ?>">
                         </label>
                     <?php endif; ?>
 
                     <?php if ( $show_bedrooms ) : ?>
                         <label class="ovr-hps-search-field ovr-hps-f-beds">
                             <span class="material-symbols-outlined">bed</span>
-                            <select name="bedrooms">
+                            <select name="bedrooms" aria-label="<?php esc_attr_e( 'Bedrooms', 'ovr-core' ); ?>">
                                 <option value=""><?php esc_html_e( 'Any Beds', 'ovr-core' ); ?></option>
                                 <?php for ( $i = 1; $i <= 6; $i++ ) : ?>
                                     <option value="<?php echo (int) $i; ?>"><?php echo esc_html( sprintf( __( '%d+ Beds', 'ovr-core' ), $i ) ); ?></option>
@@ -1020,7 +1033,7 @@ class HomepageSliderWidget extends Widget_Base {
                     <?php if ( $show_bathrooms ) : ?>
                         <label class="ovr-hps-search-field ovr-hps-f-baths">
                             <span class="material-symbols-outlined">bathtub</span>
-                            <select name="bathrooms">
+                            <select name="bathrooms" aria-label="<?php esc_attr_e( 'Bathrooms', 'ovr-core' ); ?>">
                                 <option value=""><?php esc_html_e( 'Any Baths', 'ovr-core' ); ?></option>
                                 <?php for ( $i = 1; $i <= 5; $i++ ) : ?>
                                     <option value="<?php echo (int) $i; ?>"><?php echo esc_html( sprintf( __( '%d+ Baths', 'ovr-core' ), $i ) ); ?></option>

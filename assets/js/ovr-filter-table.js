@@ -149,13 +149,17 @@
                 }
 
                 var data = response.data;
-                if (tbody && data.rows) {
+                // Presence checks, not truthiness: a filter that matches nothing
+                // returns rows === '' (falsy), which previously skipped the update
+                // and left the PREVIOUS, unfiltered rows on screen — the admin saw
+                // the full dataset and no "no results" indication.
+                if (tbody && typeof data.rows === 'string') {
                     tbody.innerHTML = data.rows;
                 }
-                if (paginationTop && data.pagination) {
+                if (paginationTop && typeof data.pagination === 'string') {
                     paginationTop.innerHTML = data.pagination;
                 }
-                if (paginationBottom && data.pagination) {
+                if (paginationBottom && typeof data.pagination === 'string') {
                     paginationBottom.innerHTML = data.pagination;
                 }
 
