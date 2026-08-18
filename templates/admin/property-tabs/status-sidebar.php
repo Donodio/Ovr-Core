@@ -14,8 +14,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 $status        = (string) ( $meta['listing_status']   ?? 'active' );
 $is_featured   = ! empty( $meta['is_featured'] );
 $is_bumped     = ! empty( $meta['is_bumped'] );
+$in_slider     = ! empty( $meta['in_slider'] );
+$is_deal       = ! empty( $meta['is_deal'] );
 $feat_expires  = (string) ( $meta['featured_expires'] ?? '' );
 $bump_expires  = (string) ( $meta['bump_expires']     ?? '' );
+$slider_expires= (string) ( $meta['slider_expires']   ?? '' );
+$deal_expires  = (string) ( $meta['deal_expires']     ?? '' );
 
 $status_label = [
     'active'          => __( 'Active', 'ovr-core' ),
@@ -53,6 +57,18 @@ $pill_class = [
             <span class="ovr-status-pill ovr-status-pill--bumped" style="margin-left:6px">
                 <span class="material-symbols-outlined" style="font-size:14px">trending_up</span>
                 <?php esc_html_e( 'Bumped', 'ovr-core' ); ?>
+            </span>
+        <?php endif; ?>
+        <?php if ( $in_slider ) : ?>
+            <span class="ovr-status-pill" style="margin-left:6px;background:var(--ovr-a-accent-soft);color:var(--ovr-a-accent)">
+                <span class="material-symbols-outlined" style="font-size:14px">view_carousel</span>
+                <?php esc_html_e( 'Slider', 'ovr-core' ); ?>
+            </span>
+        <?php endif; ?>
+        <?php if ( $is_deal ) : ?>
+            <span class="ovr-status-pill" style="margin-left:6px;background:var(--ovr-a-accent-soft);color:var(--ovr-a-accent)">
+                <span class="material-symbols-outlined" style="font-size:14px">local_offer</span>
+                <?php esc_html_e( 'Deal', 'ovr-core' ); ?>
             </span>
         <?php endif; ?>
         <p style="margin:8px 0 0;font-size:12px;color:var(--ovr-a-text-soft)">
@@ -95,6 +111,44 @@ $pill_class = [
                value="<?php echo esc_attr( $bump_expires ); ?>"
                style="margin-top:10px"
                aria-label="<?php esc_attr_e( 'Bump expires on', 'ovr-core' ); ?>">
+        <p class="ovr-field__hint" style="margin-top:4px"><?php esc_html_e( 'Auto-removes after this date (leave blank for no expiry).', 'ovr-core' ); ?></p>
+    </div>
+
+    <!-- Homepage Slider -->
+    <div class="ovr-field">
+        <label class="ovr-checkbox-row" for="ovr-side-slider" style="background:transparent;border:none;padding:0">
+            <input type="checkbox" id="ovr-side-slider"
+                   name="ovr_meta[in_slider]"
+                   value="1" <?php checked( $in_slider ); ?>>
+            <span class="ovr-checkbox-row__text">
+                <strong><?php esc_html_e( 'Homepage Slider', 'ovr-core' ); ?></strong>
+                <small><?php esc_html_e( 'Rotates in the homepage slideshow (does not affect search ranking).', 'ovr-core' ); ?></small>
+            </span>
+        </label>
+        <input type="date"
+               name="ovr_meta[slider_expires]"
+               value="<?php echo esc_attr( $slider_expires ); ?>"
+               style="margin-top:10px"
+               aria-label="<?php esc_attr_e( 'Slider expires on', 'ovr-core' ); ?>">
+        <p class="ovr-field__hint" style="margin-top:4px"><?php esc_html_e( 'Auto-removes after this date (leave blank for no expiry).', 'ovr-core' ); ?></p>
+    </div>
+
+    <!-- Deals & Cancellations -->
+    <div class="ovr-field">
+        <label class="ovr-checkbox-row" for="ovr-side-deal" style="background:transparent;border:none;padding:0">
+            <input type="checkbox" id="ovr-side-deal"
+                   name="ovr_meta[is_deal]"
+                   value="1" <?php checked( $is_deal ); ?>>
+            <span class="ovr-checkbox-row__text">
+                <strong><?php esc_html_e( 'Deals & Cancellations', 'ovr-core' ); ?></strong>
+                <small><?php esc_html_e( 'Surfaces on the public Deals & Cancellations page for the duration.', 'ovr-core' ); ?></small>
+            </span>
+        </label>
+        <input type="date"
+               name="ovr_meta[deal_expires]"
+               value="<?php echo esc_attr( $deal_expires ); ?>"
+               style="margin-top:10px"
+               aria-label="<?php esc_attr_e( 'Deal expires on', 'ovr-core' ); ?>">
         <p class="ovr-field__hint" style="margin-top:4px"><?php esc_html_e( 'Auto-removes after this date (leave blank for no expiry).', 'ovr-core' ); ?></p>
     </div>
 

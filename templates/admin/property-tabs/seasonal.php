@@ -17,7 +17,9 @@ $seasonal = is_array( $seasonal ?? null ) ? $seasonal : [];
 
 $settings = get_option( 'ovr_settings', [] );
 $symbol   = $settings['currency_symbol'] ?? '$';
-$hidden   = ! empty( $meta['hide_pricing'] );
+// A listing always needs *something* for pricing: with no rows the override
+// defaults to on. Once rows exist the stored choice is left exactly as saved.
+$hidden   = ! empty( $meta['hide_pricing'] ) || empty( $seasonal );
 
 /** The billing-period dropdown options (Per Day / Per Week / Per Month / Flat Rate). */
 $per_options = [
@@ -54,9 +56,13 @@ $render_per = static function ( string $selected ) use ( $per_options ) {
         <?php esc_html_e( 'See Description For Pricing', 'ovr-core' ); ?>
     </label>
     <p class="description" style="margin:4px 0 0 24px">
-        <?php esc_html_e( 'When enabled, the pricing table is hidden on the listing (rows below are still saved) and renters see "See Description For Pricing".', 'ovr-core' ); ?>
+        <?php esc_html_e( 'Display-only: when enabled the pricing table is not shown on the listing and renters see "See Description For Pricing". The rows below are always kept.', 'ovr-core' ); ?>
     </p>
 </div>
+
+<?php // Sentinel: proves this repeater was part of the submit, so a save that
+      // never rendered it can't clear the stored rows. ?>
+<input type="hidden" name="ovr_meta[seasonal_present]" value="1">
 
 <div class="ovr-repeater" data-ovr-repeater>
 

@@ -38,11 +38,11 @@ class PropertyMetaBoxes {
     // latitude/longitude are no longer entered by hand — they are generated
     // automatically from the address (Phase 2, see Geocoder).
     private const NUMERIC_DEC = [ 'bathrooms', 'rating_avg' ];
-    private const BOOLEAN     = [ 'pets_allowed', 'is_featured', 'is_bumped', 'hide_pricing' ];
+    private const BOOLEAN     = [ 'pets_allowed', 'is_featured', 'is_bumped', 'in_slider', 'is_deal', 'hide_pricing' ];
     private const TEXT        = [
         'address', 'city', 'state', 'zip',
         'video_url', 'panorama_url', 'ical_url',
-        'bump_expires', 'featured_expires', 'listing_status', 'booking_mode',
+        'bump_expires', 'featured_expires', 'slider_expires', 'deal_expires', 'listing_status', 'booking_mode',
     ];
 
     /** @var int Document upload cap. */
@@ -173,6 +173,36 @@ class PropertyMetaBoxes {
         // detect approval (pending/draft → publish) and rejection transitions.
         update_post_meta( $post_id, '_ovr_pre_save_status', $post->post_status );
 
+        // Guard rails. `save_post_ovr_property` fires for EVERY write to a
+        // listing — autosaves, revisions, quick-edit, status flips, the
+        // front-end landlord editor, REST — not just this meta box. Without
+        // these checks the field loops below ran with no submitted data and
+        // blanked every stored value (and wiped the seasonal pricing table).
+        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+            return;
+        }
+        if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+            return;
+        }
+        $nonce = isset( $_POST[ self::NONCE_NAME ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_NAME ] ) ) : '';
+        if ( '' === $nonce || ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+            return; // Not our meta box — leave every stored value untouched.
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            return;
+        }
+
+        // The meta box posts every field under ovr_meta[...].
+        $raw = ( isset( $_POST['ovr_meta'] ) && is_array( $_POST['ovr_meta'] ) )
+            ? wp_unslash( $_POST['ovr_meta'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- each field is sanitised below.
+            : [];
+
+        // Integer fields.
+        foreach ( self::NUMERIC_INT as $key ) {
+            $val = isset( $raw[ $key ] ) ? absint( $raw[ $key ] ) : 0;
+            update_post_meta( $post_id, '_ovr_' . $key, $val );
+        }
+
         // Decimal fields.
         foreach ( self::NUMERIC_DEC as $key ) {
             $val = isset( $raw[ $key ] ) ? (float) wp_unslash( $raw[ $key ] ) : 0.0;
@@ -223,8 +253,13 @@ class PropertyMetaBoxes {
         update_post_meta( $post_id, '_ovr_document_ids', implode( ',', $doc_ids ) );
 
         // Seasonal pricing (custom table) — same per-unit save path as the
-        // front-end landlord editor so both write identical row shapes.
-        SeasonalPricing::save_pricing( $post_id, $raw['seasonal'] ?? [] );
+        // front-end landlord editor so both write identical row shapes. Guarded
+        // by the `seasonal_present` sentinel the Seasonal Pricing tab renders:
+        // save_pricing() clears the table before re-inserting, so a submit that
+        // never carried the repeater must leave the stored rows alone.
+        if ( isset( $raw['seasonal_present'] ) ) {
+            SeasonalPricing::save_pricing( $post_id, $raw['seasonal'] ?? [] );
+        }
 
         // Availability blocks (custom table).
         $this->save_availability( $post_id, $raw['availability'] ?? [] );

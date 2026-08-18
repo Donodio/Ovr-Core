@@ -57,7 +57,13 @@ $lng      = (float)  ( $meta['longitude'] ?? 0 );
     <?php esc_html_e( 'The map is generated automatically from the address above — there is nothing to place by hand. Coordinates refresh when you save; the hourly backfill also fills in any listing still missing a map.', 'ovr-core' ); ?>
 </p>
 
-<?php if ( $lat && $lng ) : ?>
+<?php if ( $lat && $lng ) :
+    $jitter     = 0.0008;
+    $marker_lat = $lat + $jitter;
+    $marker_lng = $lng - $jitter;
+    $bbox       = ( $marker_lng - 0.01 ) . ',' . ( $marker_lat - 0.01 ) . ',' . ( $marker_lng + 0.01 ) . ',' . ( $marker_lat + 0.01 );
+    $marker     = $marker_lat . ',' . $marker_lng;
+?>
     <p class="ovr-field__hint" style="margin-bottom:8px;font-size:12px;color:var(--ovr-a-on-surface-variant)">
         <?php
         /* translators: 1: latitude, 2: longitude */
@@ -66,7 +72,7 @@ $lng      = (float)  ( $meta['longitude'] ?? 0 );
     </p>
     <div style="border-radius:var(--ovr-a-radius-md);overflow:hidden;border:1px solid var(--ovr-a-outline)">
         <iframe
-            src="<?php echo esc_url( 'https://www.openstreetmap.org/export/embed.html?bbox=' . ( $lng - 0.01 ) . ',' . ( $lat - 0.01 ) . ',' . ( $lng + 0.01 ) . ',' . ( $lat + 0.01 ) . '&layer=mapnik&marker=' . $lat . ',' . $lng ); ?>"
+            src="<?php echo esc_url( 'https://www.openstreetmap.org/export/embed.html?bbox=' . $bbox . '&layer=mapnik&marker=' . $marker ); ?>"
             width="100%" height="280" frameborder="0"
             loading="lazy"
             style="border:0;display:block"

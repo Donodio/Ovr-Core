@@ -65,7 +65,8 @@ $avail_rows = $is_edit ? \OVR\Property\Availability::get_manual_blocks( $pid ) :
 
 // Pricing rows (Pricing tab) — the production-compatible table (Phase 4):
 // Month/Season Name-Year · From · To · Price (free text) · Per · Minimum Term.
-// When editing, load saved rows; for a NEW listing seed example rows.
+// A NEW listing starts with an EMPTY table — the old "sample" rows were being
+// saved verbatim and published on the listing.
 $price_rows = [];
 if ( $is_edit ) {
     foreach ( \OVR\Property\SeasonalPricing::get_pricing( $pid ) as $row ) {
@@ -79,13 +80,17 @@ if ( $is_edit ) {
             'min'    => (string) (int) ( $row['min_stay'] ?? 0 ),
         ];
     }
-} else {
-    $price_rows = [
-        [ 'period' => __( 'Peak Season 2026 (sample)', 'ovr-core' ), 'from' => '', 'to' => '', 'price' => '3200', 'per' => 'per_month', 'min' => '1' ],
-        [ 'period' => __( 'Summer 2026 (sample)', 'ovr-core' ),      'from' => '', 'to' => '', 'price' => '700',  'per' => 'per_week',  'min' => '1' ],
-    ];
 }
+
+// "Check Description For Pricing" default. Every listing needs *something* for
+// pricing, so whenever the rates table is empty the box starts ticked — on a new
+// listing and on an existing one that never got any rows. Once rows exist the
+// landlord's own saved choice is honoured untouched: a landlord may deliberately
+// keep a table but still point renters at the description.
 $hide_pricing = $is_edit ? (bool) get_post_meta( $pid, '_ovr_hide_pricing', true ) : false;
+if ( empty( $price_rows ) ) {
+    $hide_pricing = true;
+}
 
 // "Per" dropdown options (Phase 4B). Keys match SeasonalPricing::PER_UNITS.
 $per_options = [
@@ -116,21 +121,10 @@ $admin_status   = ( 'approved' === $admin_status ) ? 'approved' : 'hidden';
 // saved post).
 $show_admin_tab = $is_admin_user && $is_edit;
 $admin_notes    = $is_edit ? (string) get_post_meta( $pid, '_ovr_admin_notes', true ) : '';
-$deals_cancel   = $is_edit ? (string) get_post_meta( $pid, '_ovr_deals_cancellations', true ) : '';
 $referred_by    = $is_edit ? (string) get_post_meta( $pid, '_ovr_referred_by', true ) : '';
 $activity_start = $is_edit ? (string) get_post_meta( $pid, '_ovr_activity_start', true ) : '';
 $activity_end   = $is_edit ? (string) get_post_meta( $pid, '_ovr_activity_end', true ) : '';
 $owner_user     = $is_edit ? get_userdata( (int) $post->post_author ) : null;
-$deals_options  = [
-    ''    => __( '— Select —', 'ovr-core' ),
-    'yes' => __( 'Yes', 'ovr-core' ),
-    'no'  => __( 'No', 'ovr-core' ),
-];
-// Normalise any legacy value (special_deal, etc.) so the Yes/No control has a
-// clean state.
-if ( ! in_array( $deals_cancel, [ '', 'yes', 'no' ], true ) ) {
-    $deals_cancel = '';
-}
 
 // Tab definitions (key, label). Consolidated workflow; admins get a 6th "Admin" tab.
 $ld_tabs = [
@@ -443,11 +437,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         <section class="ld-fm-panel" data-ld-panel="additional">
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Features & Views', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'Select what applies to your property. Drag to reorder — the order you set is how they appear on your listing.', 'ovr-core' ); ?></p>
-
-                <div class="ld-fm-feature-search" style="margin-bottom:16px">
-                    <input type="text" class="ld-fm-input" id="ld-fm-feature-search" placeholder="<?php esc_attr_e( 'Search features…', 'ovr-core' ); ?>" style="padding:10px 14px;border-radius:10px;border:1px solid var(--gray-border,#dbdbdb);width:100%;max-width:400px;font-size:14px">
-                </div>
+                <p class="ld-fm-hint"><?php esc_html_e( 'Select what applies to your property.', 'ovr-core' ); ?></p>
 
                 <div class="ld-fm-feature-groups" id="ld-fm-feature-groups">
                     <?php
@@ -491,7 +481,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Additional Information', 'ovr-core' ); ?></h2>
                 <p class="ld-fm-hint"><?php esc_html_e( 'Optional. These appear as their own sections on your listing page.', 'ovr-core' ); ?></p>
                 <div class="ld-fm-field">
-                    <label class="ld-fm-label" for="ld-fm-nearby"><?php esc_html_e( "What's Nearby", 'ovr-core' ); ?></label>
+                    <label class="ld-fm-label" for="ld-fm-nearby"><?php esc_html_e( "What's Near", 'ovr-core' ); ?></label>
                     <textarea class="ld-fm-input ld-fm-textarea" id="ld-fm-nearby" name="nearby" rows="4" placeholder="<?php esc_attr_e( "e.g. Golf courses, pools, restaurants, shopping…", 'ovr-core' ); ?>"><?php echo esc_textarea( (string) $m( 'nearby' ) ); ?></textarea>
                 </div>
                 <div class="ld-fm-field">
@@ -651,16 +641,49 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     // Notes — just the dates, who's renting, and one "Show as
                     // available" checkbox. Unchecked = the dates are blocked
                     // (unavailable); checked = the dates stay bookable on the site.
-                    $render_avail_row = static function ( $i, $start, $end, $renter, $show_avail = 0 ) {
+                    // Hybrid date field: a typeable text input (values stick as you
+                    // type) backed by a native date input for the calendar picker.
+                    // The native input carries the ISO `Y-m-d` value the server
+                    // expects; the text input only drives display + manual entry.
+                    $render_avail_date = static function ( $i, $field, $iso, $label, $data_key ) {
+                        $display = '';
+                        if ( '' !== $iso ) {
+                            $dt = DateTime::createFromFormat( 'Y-m-d', $iso );
+                            if ( $dt ) { $display = $dt->format( 'm/d/Y' ); }
+                        }
+                        ?>
+                        <div class="ld-fm-date">
+                            <input type="text"
+                                   class="ld-fm-input ld-fm-date-text"
+                                   data-ovr-date="<?php echo esc_attr( $data_key ); ?>"
+                                   inputmode="numeric"
+                                   autocomplete="off"
+                                   placeholder="<?php esc_attr_e( 'MM/DD/YYYY', 'ovr-core' ); ?>"
+                                   value="<?php echo esc_attr( $display ); ?>">
+                            <input type="date"
+                                   class="ld-fm-date-native"
+                                   name="avail[<?php echo esc_attr( $i ); ?>][<?php echo esc_attr( $field ); ?>]"
+                                   value="<?php echo esc_attr( (string) $iso ); ?>"
+                                   tabindex="-1"
+                                   aria-hidden="true">
+                            <button type="button"
+                                    class="ld-fm-date-btn"
+                                    title="<?php echo esc_attr( $label ); ?>"
+                                    aria-label="<?php echo esc_attr( $label ); ?>"><span class="material-symbols-outlined">calendar_month</span></button>
+                        </div>
+                        <?php
+                    };
+
+                    $render_avail_row = static function ( $i, $start, $end, $renter, $show_avail = 0 ) use ( $render_avail_date ) {
                         ?>
                         <div class="ld-fm-avail-row">
                             <div class="ld-fm-field">
                                 <label class="ld-fm-label"><?php esc_html_e( 'From', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="date" name="avail[<?php echo esc_attr( $i ); ?>][start_date]" value="<?php echo esc_attr( (string) $start ); ?>">
+                                <?php $render_avail_date( $i, 'start_date', (string) $start, __( 'Pick a start date', 'ovr-core' ), 'start' ); ?>
                             </div>
                             <div class="ld-fm-field">
                                 <label class="ld-fm-label"><?php esc_html_e( 'To', 'ovr-core' ); ?></label>
-                                <input class="ld-fm-input" type="date" name="avail[<?php echo esc_attr( $i ); ?>][end_date]" value="<?php echo esc_attr( (string) $end ); ?>">
+                                <?php $render_avail_date( $i, 'end_date', (string) $end, __( 'Pick an end date', 'ovr-core' ), 'end' ); ?>
                             </div>
                             <div class="ld-fm-field">
                                 <label class="ld-fm-label"><?php esc_html_e( 'Renter Name', 'ovr-core' ); ?></label>
@@ -740,31 +763,36 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     <input type="checkbox" name="hide_pricing" id="ld-fm-hide-pricing" value="1" <?php checked( $hide_pricing ); ?>>
                     <span><?php esc_html_e( 'Check Description For Pricing', 'ovr-core' ); ?></span>
                 </label>
-                <p class="ld-fm-subhint" style="margin-top:-8px;margin-bottom:16px"><?php esc_html_e( 'When ticked, the rates table is hidden on your listing (renters are told to check the description). Your saved rows are kept.', 'ovr-core' ); ?></p>
+                <p class="ld-fm-subhint" style="margin-top:-8px;margin-bottom:16px"><?php esc_html_e( 'When ticked, the rates table is not shown on your listing — renters are told to check the description instead. Any rows you have entered are kept and reappear the moment you untick it.', 'ovr-core' ); ?></p>
+
+                <?php // Sentinel: proves the Pricing panel was part of this submit. Without
+                      // it the server leaves existing rows alone, so a save from any screen
+                      // that doesn't render this table can never wipe a landlord's rates. ?>
+                <input type="hidden" name="pricing_present" value="1">
 
                 <div id="ld-fm-price-wrap">
-                    <p class="ld-fm-hint">
-                        <?php esc_html_e( 'Add a row for each way you rent — daily, weekly, monthly, seasonal, or a flat rate. Enter rows chronologically (Month/Season first, then weekly/daily). Drag the handle or use the arrows to reorder.', 'ovr-core' ); ?>
-                        <?php if ( ! $is_edit ) : ?><br><strong><?php esc_html_e( 'The rows below are examples — edit or remove them.', 'ovr-core' ); ?></strong><?php endif; ?>
-                    </p>
+                    <div id="ld-fm-price-table">
+                        <p class="ld-fm-hint">
+                            <?php esc_html_e( 'Add a row for each way you rent — daily, weekly, monthly, seasonal, or a flat rate. Enter rows chronologically (Month/Season first, then weekly/daily). Drag the handle or use the arrows to reorder.', 'ovr-core' ); ?>
+                        </p>
 
-                    <div class="ld-fm-price-head" aria-hidden="true">
-                        <span></span>
-                        <span><?php esc_html_e( 'Month or Season Name - Year', 'ovr-core' ); ?></span>
-                        <span><?php esc_html_e( 'From', 'ovr-core' ); ?></span>
-                        <span><?php esc_html_e( 'To', 'ovr-core' ); ?></span>
-                        <span><?php esc_html_e( 'Price', 'ovr-core' ); ?></span>
-                        <span><?php esc_html_e( 'Per', 'ovr-core' ); ?></span>
-                        <span><?php esc_html_e( 'Min Term', 'ovr-core' ); ?></span>
-                        <span></span>
-                    </div>
+                        <div class="ld-fm-price-head" aria-hidden="true">
+                            <span></span>
+                            <span><?php esc_html_e( 'Month or Season Name - Year', 'ovr-core' ); ?></span>
+                            <span><?php esc_html_e( 'From', 'ovr-core' ); ?></span>
+                            <span><?php esc_html_e( 'To', 'ovr-core' ); ?></span>
+                            <span><?php esc_html_e( 'Price', 'ovr-core' ); ?></span>
+                            <span><?php esc_html_e( 'Per', 'ovr-core' ); ?></span>
+                            <span><?php esc_html_e( 'Min Term', 'ovr-core' ); ?></span>
+                            <span></span>
+                        </div>
 
-                    <div class="ld-fm-price-list" id="ld-fm-price-list">
+                        <div class="ld-fm-price-list" id="ld-fm-price-list">
                         <?php
                         $render_price_row = static function ( $i, $r ) use ( $per_options ) {
                             ?>
                             <div class="ld-fm-price-row" draggable="true">
-                                <div class="ld-fm-price-handle" title="<?php esc_attr_e( 'Drag to reorder', 'ovr-core' ); ?>" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></div>
+                                <div class="ld-fm-price-handle" title="<?php esc_attr_e( 'Reorder', 'ovr-core' ); ?>" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'Month or Season Name - Year', 'ovr-core' ); ?></label>
                                     <input class="ld-fm-input" type="text" name="pricing[<?php echo esc_attr( $i ); ?>][season_name]" value="<?php echo esc_attr( (string) ( $r['period'] ?? '' ) ); ?>" placeholder="<?php esc_attr_e( 'e.g. Peak Season 2026, January 2027', 'ovr-core' ); ?>">
@@ -805,7 +833,12 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                             $render_price_row( $i, $r );
                         }
                         ?>
-                    </div>
+                        </div><?php // /.ld-fm-price-list ?>
+                    </div><?php // /#ld-fm-price-table ?>
+
+                    <p class="ld-fm-hint ld-fm-price-off" id="ld-fm-price-off"<?php echo $hide_pricing ? '' : ' hidden'; ?>>
+                        <?php esc_html_e( 'No rates table will be shown on your listing — renters will see “See Description For Pricing”. Add a pricing row below to show a table instead.', 'ovr-core' ); ?>
+                    </p>
 
                     <template id="ld-fm-price-tpl">
                         <?php $render_price_row( '__i__', [ 'period' => '', 'from' => '', 'to' => '', 'price' => '', 'per' => 'per_month', 'min' => '0' ] ); ?>
@@ -832,14 +865,6 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                             <?php endforeach; ?>
                         </select>
                         <p class="ld-fm-subhint"><?php esc_html_e( 'Overrides the owner status. Anything other than “Approved” removes the listing from the public site.', 'ovr-core' ); ?></p>
-                    </div>
-                    <div class="ld-fm-field">
-                        <label class="ld-fm-label" for="ld-fm-deals"><?php esc_html_e( 'Deals & Cancellations', 'ovr-core' ); ?></label>
-                        <select class="ld-fm-input" id="ld-fm-deals" name="deals_cancellations">
-                            <?php foreach ( $deals_options as $dv => $dl ) : ?>
-                                <option value="<?php echo esc_attr( $dv ); ?>" <?php selected( $deals_cancel, $dv ); ?>><?php echo esc_html( $dl ); ?></option>
-                            <?php endforeach; ?>
-                        </select>
                     </div>
                     <div class="ld-fm-field">
                         <label class="ld-fm-label" for="ld-fm-referred"><?php esc_html_e( 'Referred By', 'ovr-core' ); ?></label>
@@ -1154,6 +1179,13 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ovr-ld .ld-fm-avail-x{width:42px;height:46px;border:1px solid var(--ov);border-radius:9px;background:#fff;color:var(--err);cursor:pointer;display:flex;align-items:center;justify-content:center}
     .ovr-ld .ld-fm-avail-x:hover{background:var(--errc)}
 
+    /* Hybrid date field — typeable text + native picker button. */
+    .ovr-ld .ld-fm-date{display:flex;align-items:stretch;gap:6px}
+    .ovr-ld .ld-fm-date .ld-fm-date-text{flex:1;min-width:0}
+    .ovr-ld .ld-fm-date-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden}
+    .ovr-ld .ld-fm-date-btn{flex-shrink:0;width:46px;border:1px solid var(--ov);border-radius:9px;background:#fff;color:var(--on);cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .ovr-ld .ld-fm-date-btn:hover{border-color:var(--p);color:var(--p)}
+
     /* Pricing table — handle | Name-Year | From | To | Price | Per | Min Term | actions */
     .ovr-ld .ld-fm-price-cols{grid-template-columns:26px 1.5fr 1fr 1fr .9fr 1fr .7fr 82px}
     .ovr-ld .ld-fm-price-head{display:grid;gap:10px;padding:0 4px 8px;font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--sv);grid-template-columns:26px 1.5fr 1fr 1fr .9fr 1fr .7fr 82px}
@@ -1172,7 +1204,11 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ovr-ld .ld-fm-price-x:hover{background:var(--errc)}
     .ovr-ld .ld-fm-price-move .material-symbols-outlined,.ovr-ld .ld-fm-price-x .material-symbols-outlined{font-size:19px}
     .ovr-ld .ld-fm-pricehide input{width:20px;height:20px;accent-color:var(--p)}
-    .ovr-ld #ld-fm-price-wrap.is-hidden{opacity:.45;pointer-events:none}
+    /* "Check Description For Pricing": the rates table is collapsed out of
+       sight, but its inputs stay in the form so the rows are never lost. The
+       "Add a pricing row" button stays live — using it unticks the box. */
+    .ovr-ld #ld-fm-price-table.is-hidden{display:none}
+    .ovr-ld .ld-fm-price-off{margin:0 0 12px}
     @media (max-width:900px){
         .ovr-ld .ld-fm-price-head{display:none}
         .ovr-ld .ld-fm-price-row{grid-template-columns:1fr 1fr;align-items:stretch}
@@ -1492,19 +1528,6 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 collectOrder();
             });
         });
-        // Feature search filter
-        var searchInput = document.getElementById('ld-fm-feature-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', function(){
-                var q = searchInput.value.toLowerCase().trim();
-                groups.forEach(function(g){
-                    g.querySelectorAll('.ld-fm-feat-item').forEach(function(item){
-                        var name = (item.querySelector('.ld-fm-feat-name') || {}).textContent || '';
-                        item.style.display = (q === '' || name.toLowerCase().indexOf(q) > -1) ? '' : 'none';
-                    });
-                });
-            });
-        }
         // Wire up feature checkboxes to mark dirty
         root.querySelectorAll('.ld-fm-feat-item input[type="checkbox"]').forEach(function(cb){
             cb.addEventListener('change', function(){ dirty = true; });
@@ -1532,9 +1555,14 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
 
         function updateMap(lat, lng){
             if (mapIframe) {
+                // Approximate location (mirrors the public listing map): nudge
+                // the pinned marker a few tens of metres off the exact address
+                // so the home's precise position stays private.
+                var markerLat = lat + 0.0008;
+                var markerLng = lng - 0.0008;
                 var bboxLng = lng - 0.008;
                 var bboxLat = lat - 0.006;
-                mapIframe.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bboxLng + ',' + bboxLat + ',' + (lng + 0.008) + ',' + (lat + 0.006) + '&layer=mapnik&marker=' + lat + ',' + lng;
+                mapIframe.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bboxLng + ',' + bboxLat + ',' + (lng + 0.008) + ',' + (lat + 0.006) + '&layer=mapnik&marker=' + markerLat + ',' + markerLng;
             }
             if (mapPreview) { mapPreview.style.display = ''; }
         }
@@ -1651,28 +1679,112 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         var from = row.querySelector('[name*="[start_date]"]');
         var to   = row.querySelector('[name*="[end_date]"]');
         if (!from || !to) { return true; }
+        var toText = rowDateText(to);
         if (from.value && to.value && to.value < from.value) {
-            to.classList.add('is-invalid');
+            if (toText) { toText.classList.add('is-invalid'); } else { to.classList.add('is-invalid'); }
             return false;
         }
-        to.classList.remove('is-invalid');
+        if (toText) { toText.classList.remove('is-invalid'); } else { to.classList.remove('is-invalid'); }
         return true;
     }
-    // Keep "To" ≥ "From": point the To picker's `min` at the chosen From date so
-    // the native calendar greys out earlier days (prevents invalid selections),
-    // and flag any residual reversed range. Shared by availability & pricing rows.
+    // Hybrid date fields: keep the native input's `min` in sync so the picker
+    // greys out earlier days, and flag reversed ranges on the visible text input.
     function linkRowDates(row){
         var from = row.querySelector('[name*="[start_date]"]');
         var to   = row.querySelector('[name*="[end_date]"]');
         if (!from || !to) { return; }
         var sync = function(){
             if (from.value) { to.setAttribute('min', from.value); } else { to.removeAttribute('min'); }
-            if (from.value && to.value && to.value < from.value) { to.classList.add('is-invalid'); }
-            else { to.classList.remove('is-invalid'); }
+            var toText = rowDateText(to);
+            if (from.value && to.value && to.value < from.value) {
+                if (toText) { toText.classList.add('is-invalid'); } else { to.classList.add('is-invalid'); }
+            } else {
+                if (toText) { toText.classList.remove('is-invalid'); } else { to.classList.remove('is-invalid'); }
+            }
         };
         from.addEventListener('change', sync);
         to.addEventListener('change', sync);
         sync();
+    }
+    // ── Hybrid date field wiring ──
+    // `type="text"` shows what you type and keeps it (no native date-input quirks);
+    // the hidden native `type="date"` input is the source of truth for the server
+    // (ISO Y-m-d) and drives the calendar picker via showPicker().
+    function ovrFmtDateText(val){
+        var d = String(val).replace(/\D/g, '').slice(0, 8);
+        var out = '';
+        for (var i = 0; i < d.length; i++) {
+            if (i === 2 || i === 4) { out += '/'; }
+            out += d[i];
+        }
+        return out;
+    }
+    function ovrDateToISO(text){
+        var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(text).trim());
+        if (!m) { return ''; }
+        var mo = parseInt(m[1], 10), da = parseInt(m[2], 10), yr = parseInt(m[3], 10);
+        if (mo < 1 || mo > 12 || da < 1 || da > 31) { return ''; }
+        var dt = new Date(yr, mo - 1, da);
+        if (dt.getFullYear() !== yr || dt.getMonth() !== mo - 1 || dt.getDate() !== da) { return ''; }
+        return yr + '-' + (mo < 10 ? '0' : '') + mo + '-' + (da < 10 ? '0' : '') + da;
+    }
+    function ovrISOToDisplay(iso){
+        if (!iso) { return ''; }
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+        if (!m) { return String(iso); }
+        return m[2] + '/' + m[3] + '/' + m[1];
+    }
+    function rowDateText(nativeEl){
+        var wrap = nativeEl.closest ? nativeEl.closest('.ld-fm-date') : null;
+        return wrap ? wrap.querySelector('.ld-fm-date-text') : null;
+    }
+    function initAvailDateField(textEl, nativeEl, btnEl){
+        if (!textEl || !nativeEl) { return; }
+        var syncToNative = function(){
+            var iso = ovrDateToISO(textEl.value);
+            nativeEl.value = iso;
+            if (textEl.value.trim() !== '' && iso === '') {
+                textEl.classList.add('is-invalid');
+            } else {
+                textEl.classList.remove('is-invalid');
+            }
+            if (iso) {
+                nativeEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+        textEl.addEventListener('input', function(){
+            textEl.value = ovrFmtDateText(textEl.value);
+            textEl.classList.remove('is-invalid');
+        });
+        textEl.addEventListener('change', syncToNative);
+        textEl.addEventListener('blur', syncToNative);
+        nativeEl.addEventListener('change', function(){
+            textEl.value = ovrISOToDisplay(nativeEl.value);
+            textEl.classList.remove('is-invalid');
+        });
+        if (btnEl) {
+            btnEl.addEventListener('click', function(e){
+                e.preventDefault();
+                if (nativeEl.showPicker) {
+                    try { nativeEl.showPicker(); }
+                    catch (_) { nativeEl.focus(); nativeEl.click(); }
+                } else {
+                    nativeEl.focus();
+                }
+            });
+        }
+    }
+    function initAvailRow(row){
+        row.querySelectorAll('.ld-fm-date').forEach(function(wrap){
+            var textEl = wrap.querySelector('.ld-fm-date-text');
+            var nativeEl = wrap.querySelector('.ld-fm-date-native');
+            var btnEl = wrap.querySelector('.ld-fm-date-btn');
+            initAvailDateField(textEl, nativeEl, btnEl);
+        });
+        row.querySelectorAll('input[type="date"]').forEach(function(inp){
+            inp.addEventListener('change', function(){ validateAvailRow(row); });
+        });
+        linkRowDates(row);
     }
     if (availAdd && availTpl && availWrap) {
         availAdd.addEventListener('click', function(){
@@ -1680,20 +1792,13 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             var tmp = document.createElement('div'); tmp.innerHTML = html.trim();
             var row = tmp.firstElementChild;
             availWrap.appendChild(row);
-            row.querySelectorAll('input[type="date"]').forEach(function(inp){
-                inp.addEventListener('change', function(){ validateAvailRow(row); });
-            });
-            linkRowDates(row);
+            initAvailRow(row);
         });
         availWrap.addEventListener('click', function(e){
             var x = e.target.closest('.ld-fm-avail-x'); if (!x) { return; }
             var row = x.closest('.ld-fm-avail-row'); if (row) { row.remove(); }
         });
-        availWrap.querySelectorAll('.ld-fm-avail-row').forEach(function(row){
-            row.querySelectorAll('input[type="date"]').forEach(function(inp){
-                inp.addEventListener('change', function(){ validateAvailRow(row); });
-            });
-        });
+        availWrap.querySelectorAll('.ld-fm-avail-row').forEach(initAvailRow);
     }
 
     // ── iCal "Sync now" ── syncs the URL currently in the field. If the listing
@@ -1776,8 +1881,34 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             else { priceWrap.insertBefore(priceDrag, over.nextSibling); }
         });
     }
+
+    // ── "Check Description For Pricing" ──
+    // Ticked = the rates table is not shown on the listing. It is only ever
+    // COLLAPSED here, never emptied: every row input stays in the form and is
+    // submitted, so ticking/unticking can't lose a landlord's rates.
+    var hideToggle     = document.getElementById('ld-fm-hide-pricing');
+    var priceTableWrap = document.getElementById('ld-fm-price-table');
+    var priceOffNote   = document.getElementById('ld-fm-price-off');
+    function reflectHide(){
+        if (!hideToggle) { return; }
+        if (priceTableWrap) { priceTableWrap.classList.toggle('is-hidden', hideToggle.checked); }
+        if (priceOffNote)   { priceOffNote.hidden = !hideToggle.checked; }
+    }
+    if (hideToggle) {
+        hideToggle.addEventListener('change', reflectHide);
+        reflectHide();
+    }
+
     if (priceAdd && priceTpl && priceWrap) {
         priceAdd.addEventListener('click', function(){
+            // Adding a rate means the landlord wants a table — untick
+            // "Check Description For Pricing" and reveal it.
+            if (hideToggle && hideToggle.checked) {
+                hideToggle.checked = false;
+                // Bubbling change → reflectHide() + the form's dirty/auto-save hooks.
+                try { hideToggle.dispatchEvent(new Event('change', { bubbles: true })); }
+                catch (_) { reflectHide(); }
+            }
             var html = priceTpl.innerHTML.replace(/__i__/g, String(priceIdx++));
             var tmp = document.createElement('div'); tmp.innerHTML = html.trim();
             var row = tmp.firstElementChild;
@@ -1798,15 +1929,6 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 }
             }
         });
-    }
-
-    // ── "Check Description For Pricing" — dim/disable the table when ticked ──
-    var hideToggle = document.getElementById('ld-fm-hide-pricing');
-    var pricePanelWrap = document.getElementById('ld-fm-price-wrap');
-    if (hideToggle && pricePanelWrap) {
-        var reflectHide = function(){ pricePanelWrap.classList.toggle('is-hidden', hideToggle.checked); };
-        hideToggle.addEventListener('change', reflectHide);
-        reflectHide();
     }
 
     // ── Photo management: upload · drag-reorder · rotate · delete · set-main · captions ──

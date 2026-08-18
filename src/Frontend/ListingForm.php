@@ -38,6 +38,7 @@ class ListingForm {
         add_action( 'admin_post_ovr_save_listing',        [ $this, 'handle_save' ] );
         add_action( 'admin_post_nopriv_ovr_save_listing', [ $this, 'handle_save_nopriv' ] );
         add_action( 'admin_post_ovr_delete_listing',      [ $this, 'handle_delete' ] );
+        add_action( 'admin_post_ovr_restore_listing',     [ $this, 'handle_restore' ] );
         add_action( 'admin_post_ovr_bump_listing',        [ $this, 'handle_bump' ] );
         add_action( 'admin_post_ovr_toggle_listing_status', [ $this, 'handle_toggle_status' ] );
         add_action( 'wp_ajax_ovr_upload_listing_photo',   [ $this, 'handle_upload' ] );
@@ -58,7 +59,7 @@ class ListingForm {
     }
 
     /**
-     * Delete (trash) a listing the current landlord owns. Triggered from the
+     * Delete (archive) a listing the current landlord owns. Triggered from the
      * dashboard's per-listing Delete action (nonce-protected GET + JS confirm).
      */
     public function handle_delete(): void {
@@ -69,7 +70,9 @@ class ListingForm {
             wp_safe_redirect( Pages::get_page_url( 'ovr_page_login' ) );
             exit;
         }
-        if ( ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
+        // Admins manage listings from wp-admin / the front-end editor and never
+        // need their own paid subscription, so they bypass the gate here too.
+        if ( ! current_user_can( 'manage_options' ) && ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
             wp_safe_redirect( Pages::get_page_url( 'ovr_page_subscription_select' ) );
             exit;
         }
@@ -88,11 +91,17 @@ class ListingForm {
             exit;
         }
 
-        wp_trash_post( $post_id );
-        // Tag the soft-delete so admins know who removed it and why (Phase 9:
+        // Archive (soft-delete) — never hard-trash. Use a dedicated non-public
+        // post status so the listing stays fully recoverable and is excluded from
+        // the public site, search and WP's global trash sweep (which would
+        // otherwise force-delete it after EMPTY_TRASH_DAYS, bypassing retention).
+        wp_update_post( [
+            'ID'          => $post_id,
+            'post_status' => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED,
+        ] );
+        // Tag the archive so admins know who removed it and why (Phase 9:
         // soft-delete workflow). Nothing is destroyed - media, metadata and the
-        // post row all stay; only post_status becomes 'trash', which every public
-        // query already excludes.
+        // post row all stay; only post_status becomes 'archived'.
         update_post_meta( $post_id, '_ovr_deleted_by', 'owner' );
         update_post_meta( $post_id, '_ovr_deleted_at', current_time( 'mysql' ) );
         \OVR\Core\AuditLog::record( 'listing.deleted', 'listing', $post_id, [ 'deleted_by' => 'owner' ], get_current_user_id() );
@@ -100,6 +109,43 @@ class ListingForm {
         do_action( 'ovr_listing_deleted', $post_id, get_current_user_id() );
 
         wp_safe_redirect( add_query_arg( 'ovr_listing', 'deleted', $props ) );
+        exit;
+    }
+
+    /**
+     * Restore an archived listing the current landlord owns back to publish.
+     * Triggered from the dashboard's per-listing Restore action (nonce-protected
+     * GET). Owners may only restore their own listings.
+     */
+    public function handle_restore(): void {
+        $dash  = Pages::get_page_url( 'ovr_page_dashboard' );
+        $props = add_query_arg( 'tab', 'properties', $dash );
+
+        $post_id = isset( $_REQUEST['post'] ) ? absint( $_REQUEST['post'] ) : 0;
+        $nonce   = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+
+        if ( ! is_user_logged_in()
+            || ! $post_id
+            || ! wp_verify_nonce( $nonce, 'ovr_restore_listing_' . $post_id ) ) {
+            wp_safe_redirect( $props );
+            exit;
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post
+            || 'ovr_property' !== $post->post_type
+            || (int) $post->post_author !== get_current_user_id()
+            || \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED !== $post->post_status ) {
+            wp_safe_redirect( $props );
+            exit;
+        }
+
+        wp_update_post( [ 'ID' => $post_id, 'post_status' => 'publish' ] );
+        delete_post_meta( $post_id, '_ovr_deleted_by' );
+        delete_post_meta( $post_id, '_ovr_deleted_at' );
+        \OVR\Core\AuditLog::record( 'listing.restored', 'listing', $post_id, [ 'deleted_by' => 'owner' ], get_current_user_id() );
+
+        wp_safe_redirect( add_query_arg( 'ovr_listing', 'restored', $props ) );
         exit;
     }
 
@@ -248,18 +294,31 @@ class ListingForm {
             'post_content' => wp_kses_post( wp_unslash( $_POST['description'] ?? '' ) ),
             'post_excerpt' => $short_desc,
             'post_status'  => 'publish',
-            'post_author'  => $user_id,
         ];
         if ( $editing ) {
             $postarr['ID'] = $post_id;
+            // Editing must never silently change ownership: an admin saving a
+            // listing keeps the original owner unless they explicitly use the
+            // admin "Reassign Owner" control (its own AJAX endpoint).
+            $postarr['post_author'] = (int) $existing->post_author;
             $post_id = wp_update_post( $postarr, true );
         } else {
+            $postarr['post_author'] = $user_id;
             $post_id = wp_insert_post( $postarr, true );
         }
 
         if ( is_wp_error( $post_id ) || ! $post_id ) {
             wp_safe_redirect( add_query_arg( [ 'tab' => 'add-listing', 'ovr_listing' => 'error' ], $dash ) );
             exit;
+        }
+
+        // Keep the owner-email search meta in sync with the actual post author so
+        // the All Properties "Owner Email" filter always matches who owns it now.
+        $owner = get_userdata( (int) get_post_field( 'post_author', $post_id ) );
+        if ( $owner && $owner->user_email ) {
+            update_post_meta( $post_id, '_ovr_owner_email', $owner->user_email );
+        } else {
+            delete_post_meta( $post_id, '_ovr_owner_email' );
         }
 
         // Scalar meta.
@@ -430,13 +489,20 @@ class ListingForm {
             update_post_meta( $post_id, '_ovr_' . $rt, wp_kses_post( wp_unslash( $_POST[ $rt ] ?? '' ) ) );
         }
 
-        // Pricing tab (Phase 4): "Check Description For Pricing" hides the table
-        // but preserves the rows; then save the production-shaped rate rows.
+        // Pricing tab (Phase 4): "Check Description For Pricing" only controls
+        // whether the rates table is DISPLAYED on the listing — it never touches
+        // the rows themselves.
         update_post_meta( $post_id, '_ovr_hide_pricing', empty( $_POST['hide_pricing'] ) ? 0 : 1 );
-        // save_pricing() silently drops rows whose end date precedes the start
-        // date. Without surfacing that, the landlord saw only "listing updated"
-        // and their pricing period vanished with no explanation.
-        self::stash_pricing_errors( SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ?? [] ) );
+        // Rows are replaced only when the submit actually carried the Pricing
+        // panel (`pricing_present`). save_pricing() deletes every existing row
+        // before re-inserting, so without this guard any save posted from a
+        // screen that doesn't render the table wiped the landlord's rates.
+        if ( isset( $_POST['pricing_present'] ) ) {
+            // save_pricing() silently drops rows whose end date precedes the start
+            // date. Without surfacing that, the landlord saw only "listing updated"
+            // and their pricing period vanished with no explanation.
+            self::stash_pricing_errors( SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ?? [] ) );
+        }
 
         // Availability Calendar tab: replace this listing's manual block-out
         // ranges (iCal-sourced rows are preserved by the helper).
@@ -675,10 +741,13 @@ class ListingForm {
                     }
                 }
 
-                if ( isset( $_POST['amenities'] ) && is_array( $_POST['amenities'] ) ) {
-                    $amenities = array_map( 'absint', $_POST['amenities'] );
-                    wp_set_object_terms( $post_id, $amenities, 'ovr_amenity', false );
-                }
+                // Amenities (multi). Always replace — a section auto-save that
+                // carries no ticked boxes means "none selected", so stale terms
+                // are cleared instead of silently surviving.
+                $amenities = ( isset( $_POST['amenities'] ) && is_array( $_POST['amenities'] ) )
+                    ? array_map( 'absint', $_POST['amenities'] )
+                    : [];
+                wp_set_object_terms( $post_id, $amenities, 'ovr_amenity', false );
 
                 Geocoder::geocode_listing( $post_id );
                 break;
@@ -691,12 +760,18 @@ class ListingForm {
                     }
                 }
 
-                if ( isset( $_POST['ovr_features'] ) && is_array( $_POST['ovr_features'] ) ) {
-                    wp_set_object_terms( $post_id, array_map( 'absint', $_POST['ovr_features'] ), 'ovr_feature', false );
-                }
-                if ( isset( $_POST['ovr_views'] ) && is_array( $_POST['ovr_views'] ) ) {
-                    wp_set_object_terms( $post_id, array_map( 'absint', $_POST['ovr_views'] ), 'ovr_view', false );
-                }
+                // Features (multi). Always replace (missing = cleared) so an
+                // auto-save never leaves previously-ticked boxes behind.
+                $features = ( isset( $_POST['ovr_features'] ) && is_array( $_POST['ovr_features'] ) )
+                    ? array_map( 'absint', $_POST['ovr_features'] )
+                    : [];
+                wp_set_object_terms( $post_id, $features, 'ovr_feature', false );
+
+                // Views (multi). Same replace-always behaviour.
+                $views = ( isset( $_POST['ovr_views'] ) && is_array( $_POST['ovr_views'] ) )
+                    ? array_map( 'absint', $_POST['ovr_views'] )
+                    : [];
+                wp_set_object_terms( $post_id, $views, 'ovr_view', false );
 
                 if ( isset( $_POST['feature_order'] ) ) {
                     $order = json_decode( wp_unslash( $_POST['feature_order'] ), true );
@@ -779,8 +854,10 @@ class ListingForm {
                     // Hidden field sent even when unchecked to signal "set to 0".
                     update_post_meta( $post_id, '_ovr_hide_pricing', 0 );
                 }
-                if ( isset( $_POST['pricing'] ) && is_array( $_POST['pricing'] ) ) {
-                    self::stash_pricing_errors( SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ) );
+                // `pricing_present` marks a submit that carried the rates table, so
+                // deleting every row is only ever the landlord's explicit doing.
+                if ( isset( $_POST['pricing_present'] ) ) {
+                    self::stash_pricing_errors( SeasonalPricing::save_pricing( $post_id, $_POST['pricing'] ?? [] ) );
                 }
                 break;
 
@@ -815,7 +892,8 @@ class ListingForm {
         if ( ! is_user_logged_in() || ! current_user_can( 'upload_files' ) ) {
             wp_send_json_error( [ 'message' => __( 'You are not allowed to upload.', 'ovr-core' ) ], 403 );
         }
-        if ( ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
+        // Admins editing any listing don't need their own paid subscription.
+        if ( ! current_user_can( 'manage_options' ) && ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
             wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
         }
         if ( empty( $_FILES['file'] ) || empty( $_FILES['file']['tmp_name'] ) ) {
@@ -875,7 +953,8 @@ class ListingForm {
         if ( ! is_user_logged_in() || ! current_user_can( 'upload_files' ) ) {
             wp_send_json_error( [ 'message' => __( 'You are not allowed to upload.', 'ovr-core' ) ], 403 );
         }
-        if ( ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
+        // Admins editing any listing don't need their own paid subscription.
+        if ( ! current_user_can( 'manage_options' ) && ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
             wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
         }
         if ( empty( $_FILES['file'] ) || empty( $_FILES['file']['tmp_name'] ) ) {

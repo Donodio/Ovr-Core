@@ -132,6 +132,7 @@ class PropertyListScreen {
         add_action( 'wp_ajax_ovr_admin_duplicate_property', [ $this, 'ajax_duplicate_property' ] );
         add_action( 'wp_ajax_ovr_admin_restore_property', [ $this, 'ajax_restore_property' ] );
         add_action( 'wp_ajax_ovr_admin_perma_delete_property', [ $this, 'ajax_perma_delete_property' ] );
+        add_action( 'admin_post_ovr_admin_archive_listing', [ $this, 'handle_admin_archive' ] );
         // P8 §8 — Admin tab: owner reassignment + user search.
         add_action( 'wp_ajax_ovr_admin_search_users',      [ $this, 'ajax_search_users' ] );
         add_action( 'wp_ajax_ovr_admin_reassign_listing',  [ $this, 'ajax_reassign_listing' ] );
@@ -538,10 +539,10 @@ class PropertyListScreen {
         $disp = (string) ( $filters['display_status'] ?? '' );
         unset( $filters['display_status'] );
 
-        // Soft-deleted = trashed post. Scoping the base query to trash gives a
-        // clean "recycle bin" view on the same screen.
+        // Soft-deleted = archived post. Scoping the base query to the archived
+        // status gives a clean "recycle bin" view on the same screen.
         if ( 'deleted' === $disp ) {
-            $args['post_status'] = 'trash';
+            $args['post_status'] = \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED;
         }
 
         // Intersect the collected constraint sets.
@@ -817,11 +818,11 @@ class PropertyListScreen {
     }
 
     private function render_display_status_cell( int $pid ): void {
-        if ( 'trash' === get_post_status( $pid ) ) {
+        if ( \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED === get_post_status( $pid ) ) {
             $by    = get_post_meta( $pid, '_ovr_deleted_by', true );
             $title = 'owner' === $by
-                ? __( 'Deleted by Landlord — restore to bring it back', 'ovr-core' )
-                : __( 'Soft deleted by administrator', 'ovr-core' );
+                ? __( 'Archived by Landlord — restore to bring it back', 'ovr-core' )
+                : __( 'Archived by administrator', 'ovr-core' );
             printf(
                 '<span class="ovr-pls-status ovr-pls-status--deleted" title="%s">%s</span>',
                 esc_attr( $title ),
@@ -957,9 +958,12 @@ class PropertyListScreen {
     private function render_actions_cell( int $pid ): void {
         $edit_url   = admin_url( 'admin.php?page=ovr-edit-listing&post=' . $pid );
         $view_url   = get_permalink( $pid );
-        $delete_url = get_delete_post_link( $pid );
+        $delete_url = wp_nonce_url(
+            admin_url( 'admin-post.php?action=ovr_admin_archive_listing&post=' . $pid ),
+            'ovr_admin_archive_listing_' . $pid
+        );
         $duplicate_nonce = wp_create_nonce( 'ovr_duplicate_property' );
-        $is_trashed = 'trash' === get_post_status( $pid );
+        $is_trashed = \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED === get_post_status( $pid );
 
         echo '<div class="ovr-pls-actions">';
 
@@ -1433,11 +1437,10 @@ class PropertyListScreen {
         if ( ! $post || self::PT !== $post->post_type ) {
             wp_send_json_error( [ 'message' => __( 'Listing not found.', 'ovr-core' ) ], 404 );
         }
-        if ( 'trash' !== $post->post_status ) {
-            wp_send_json_error( [ 'message' => __( 'This listing is not soft-deleted.', 'ovr-core' ) ], 400 );
+        if ( \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED !== $post->post_status ) {
+            wp_send_json_error( [ 'message' => __( 'This listing is not archived.', 'ovr-core' ) ], 400 );
         }
 
-        wp_untrash_post( $post_id );
         wp_update_post( [ 'ID' => $post_id, 'post_status' => 'publish' ] );
 
         // Clear the soft-delete reason markers.
@@ -1465,8 +1468,8 @@ class PropertyListScreen {
         if ( ! $post || self::PT !== $post->post_type ) {
             wp_send_json_error( [ 'message' => __( 'Listing not found.', 'ovr-core' ) ], 404 );
         }
-        if ( 'trash' !== $post->post_status ) {
-            wp_send_json_error( [ 'message' => __( 'Only soft-deleted listings can be permanently removed.', 'ovr-core' ) ], 400 );
+        if ( \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED !== $post->post_status ) {
+            wp_send_json_error( [ 'message' => __( 'Only archived listings can be permanently removed.', 'ovr-core' ) ], 400 );
         }
 
         $deleted_by = get_post_meta( $post_id, '_ovr_deleted_by', true );
@@ -1476,6 +1479,40 @@ class PropertyListScreen {
         AuditLog::record( 'listing.permanent_delete', 'listing', $post_id, [ 'was_deleted_by' => $deleted_by, 'title' => $title ], get_current_user_id() );
 
         wp_send_json_success( [ 'message' => __( 'Property permanently deleted.', 'ovr-core' ) ] );
+    }
+
+    /**
+     * Archive (soft-delete) a single listing from the Properties grid row action.
+     * Mirrors the bulk "Move to Archive" behaviour so every admin delete path
+     * lands the listing in the recoverable archive rather than WP trash.
+     */
+    public function handle_admin_archive(): void {
+        $post_id = isset( $_REQUEST['post'] ) ? absint( $_REQUEST['post'] ) : 0;
+        $nonce   = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+
+        if ( ! current_user_can( 'manage_options' ) || ! $post_id || ! wp_verify_nonce( $nonce, 'ovr_admin_archive_listing_' . $post_id ) ) {
+            wp_die( esc_html__( 'Permission denied.', 'ovr-core' ) );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post || self::PT !== $post->post_type ) {
+            wp_die( esc_html__( 'Listing not found.', 'ovr-core' ) );
+        }
+
+        $back = add_query_arg( 'page', self::PAGE_SLUG, admin_url( 'admin.php' ) );
+
+        if ( \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED === $post->post_status ) {
+            wp_safe_redirect( add_query_arg( 'ovr_trash', 'error', $back ) );
+            exit;
+        }
+
+        wp_update_post( [ 'ID' => $post_id, 'post_status' => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED ] );
+        update_post_meta( $post_id, '_ovr_deleted_by', 'admin' );
+        update_post_meta( $post_id, '_ovr_deleted_at', current_time( 'mysql' ) );
+        AuditLog::record( 'listing.deleted', 'listing', $post_id, [ 'deleted_by' => 'admin' ], get_current_user_id() );
+
+        wp_safe_redirect( add_query_arg( 'ovr_trash', 'archived', $back ) );
+        exit;
     }
 
     public function ajax_bulk_action(): void {
@@ -1519,7 +1556,10 @@ class PropertyListScreen {
                     update_post_meta( $lid, '_ovr_admin_status', 'hidden' );
                     break;
                 case 'delete':
-                    wp_trash_post( $lid );
+                    wp_update_post( [
+                        'ID'          => $lid,
+                        'post_status' => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED,
+                    ] );
                     update_post_meta( $lid, '_ovr_deleted_by', 'admin' );
                     update_post_meta( $lid, '_ovr_deleted_at', current_time( 'mysql' ) );
                     break;
