@@ -239,6 +239,13 @@ class Database {
             $wpdb->query( "ALTER TABLE {$table_reviews} ADD COLUMN approved_at datetime DEFAULT NULL" ); // phpcs:ignore WordPress.DB
         }
 
+        // Migration-importer dedupe key (stable legacy ID from the source system)
+        // so re-running an import updates rather than duplicates a review.
+        if ( ! $wpdb->get_var( "SHOW COLUMNS FROM {$table_reviews} LIKE 'legacy_id'" ) ) {
+            $wpdb->query( "ALTER TABLE {$table_reviews} ADD COLUMN legacy_id varchar(255) DEFAULT NULL" ); // phpcs:ignore WordPress.DB
+            $wpdb->query( "ALTER TABLE {$table_reviews} ADD KEY legacy_id (legacy_id)" ); // phpcs:ignore WordPress.DB
+        }
+
         self::create_phase2_tables( $charset_collate );
 
         // Seed the email-template catalogue once the table exists (M3 F6).
@@ -250,7 +257,27 @@ class Database {
 
         self::ensure_bump_services();
 
+        self::ensure_user_bio_column();
+
         update_option( 'ovr_db_version', OVR_DB_VERSION );
+    }
+
+    /**
+     * Ensure the standard WordPress `wp_users.description` column exists.
+     *
+     * The platform stores the user's "About Me" bio in that column (the same
+     * field WordPress uses for a profile description). Some database setups
+     * omit it, which silently breaks every bio save. Idempotent: only adds the
+     * column when it is missing, so existing data is never touched.
+     */
+    public static function ensure_user_bio_column(): void {
+        global $wpdb;
+        $cols = $wpdb->get_col( "SHOW COLUMNS FROM {$wpdb->users}", 0 );
+        if ( in_array( 'description', array_map( 'strtolower', $cols ), true ) ) {
+            return;
+        }
+        // Match core's schema: longtext, nullable, default NULL.
+        $wpdb->query( "ALTER TABLE {$wpdb->users} ADD COLUMN description longtext NULL" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
     }
 
     /**

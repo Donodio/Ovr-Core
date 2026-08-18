@@ -49,11 +49,53 @@ class MigrationImporter {
     }
 
     /**
-     * The fields a CSV column can map to. Group prefix is for the optgroup label.
+     * The fields a CSV column can map to, per entity type. Group prefix is for
+     * the optgroup label.
      *
+     * @param string $entity listing | user | review
      * @return array<string, array<string, string>> group => [ key => label ]
      */
-    public static function target_fields(): array {
+    public static function target_fields( string $entity = 'listing' ): array {
+        if ( 'user' === $entity ) {
+            return [
+                __( 'Account', 'ovr-core' ) => [
+                    'user_email' => __( 'Email (required)', 'ovr-core' ),
+                    'username'   => __( 'Username / login', 'ovr-core' ),
+                    'password'   => __( 'Password (placeholder if blank)', 'ovr-core' ),
+                    'role'       => __( 'Role (landlord/subscriber/admin)', 'ovr-core' ),
+                    'legacy_id'  => __( 'Legacy ID (dedupe key)', 'ovr-core' ),
+                ],
+                __( 'Profile', 'ovr-core' ) => [
+                    'first_name'    => __( 'First name', 'ovr-core' ),
+                    'last_name'     => __( 'Last name', 'ovr-core' ),
+                    'display_name'  => __( 'Display name', 'ovr-core' ),
+                    'phone'         => __( 'Phone', 'ovr-core' ),
+                    'bio'           => __( 'Bio', 'ovr-core' ),
+                    'account_status'=> __( 'Account status (active/inactive)', 'ovr-core' ),
+                    'verified'      => __( 'Verified owner (yes/no)', 'ovr-core' ),
+                ],
+            ];
+        }
+
+        if ( 'review' === $entity ) {
+            return [
+                __( 'Link', 'ovr-core' ) => [
+                    'property_ref'  => __( 'Listing legacy ID (dedupe key)', 'ovr-core' ),
+                    'property_title'=> __( 'Listing title (fallback link)', 'ovr-core' ),
+                    'legacy_id'     => __( 'Review legacy ID (dedupe key)', 'ovr-core' ),
+                ],
+                __( 'Review', 'ovr-core' ) => [
+                    'rating'      => __( 'Rating (1–5)', 'ovr-core' ),
+                    'title'       => __( 'Review title', 'ovr-core' ),
+                    'body'        => __( 'Review text', 'ovr-core' ),
+                    'guest_name'  => __( 'Guest name', 'ovr-core' ),
+                    'guest_email' => __( 'Guest email', 'ovr-core' ),
+                    'stay_date'   => __( 'Stay date (YYYY-MM-DD)', 'ovr-core' ),
+                    'status'      => __( 'Status (pending/approved/rejected)', 'ovr-core' ),
+                ],
+            ];
+        }
+
         return [
             __( 'Core', 'ovr-core' ) => [
                 'title'          => __( 'Title', 'ovr-core' ),
@@ -61,6 +103,7 @@ class MigrationImporter {
                 'excerpt'        => __( 'Short description (excerpt)', 'ovr-core' ),
                 'owner_email'    => __( 'Owner email', 'ovr-core' ),
                 'status'         => __( 'Listing status (active/inactive)', 'ovr-core' ),
+                'legacy_id'      => __( 'Legacy ID (dedupe key)', 'ovr-core' ),
             ],
             __( 'Details (meta)', 'ovr-core' ) => [
                 'bedrooms'     => __( 'Bedrooms', 'ovr-core' ),
@@ -87,6 +130,8 @@ class MigrationImporter {
                 'tax_property_type' => __( 'Property type', 'ovr-core' ),
                 'tax_amenity'       => __( 'Amenities (comma-separated)', 'ovr-core' ),
                 'tax_rental_type'   => __( 'Rental type', 'ovr-core' ),
+                'tax_feature'       => __( 'Features (comma-separated)', 'ovr-core' ),
+                'golf_cart'         => __( 'Golf cart (included/extra/yes/no)', 'ovr-core' ),
             ],
             __( 'Images', 'ovr-core' ) => [
                 'featured_image' => __( 'Featured image URL', 'ovr-core' ),
@@ -95,10 +140,10 @@ class MigrationImporter {
         ];
     }
 
-    /** Flat key→label map of all targets. */
-    private static function flat_targets(): array {
+    /** Flat key→label map of all targets for a given entity. */
+    private static function flat_targets( string $entity = 'listing' ): array {
         $flat = [];
-        foreach ( self::target_fields() as $fields ) {
+        foreach ( self::target_fields( $entity ) as $fields ) {
             $flat += $fields;
         }
         return $flat;
@@ -144,11 +189,17 @@ class MigrationImporter {
                 <div class="ovr-adm-card">
                     <div class="ovr-adm-card-body">
                         <p style="margin-top:0;max-width:720px;color:var(--muted)">
-                            <?php esc_html_e( 'Upload a CSV export of your listings. The first row must be column headers. On the next screen you map each column to a listing field, preview a dry run, then import. Image columns may contain public image URLs, which are downloaded into the Media Library.', 'ovr-core' ); ?>
+                            <?php esc_html_e( 'Upload a CSV export of users, listings, or property reviews. The first row must be column headers. On the next screen you map each column to a field, preview a dry run, then import. Image columns on listings may contain public image URLs, which are downloaded into the Media Library.', 'ovr-core' ); ?>
                         </p>
                         <form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
                             <input type="hidden" name="action" value="ovr_import_upload">
                             <?php wp_nonce_field( 'ovr_import_upload' ); ?>
+                            <label class="ovr-adm-label" for="ovr-imp-entity"><?php esc_html_e( 'Import', 'ovr-core' ); ?></label>
+                            <select id="ovr-imp-entity" name="entity" class="ovr-adm-select">
+                                <option value="listing"><?php esc_html_e( 'Listings', 'ovr-core' ); ?></option>
+                                <option value="user"><?php esc_html_e( 'Users', 'ovr-core' ); ?></option>
+                                <option value="review"><?php esc_html_e( 'Property reviews', 'ovr-core' ); ?></option>
+                            </select>
                             <input type="file" name="csv" accept=".csv,text/csv" required>
                             <button type="submit" class="ovr-adm-btn ovr-adm-btn--primary"><span class="material-symbols-outlined">upload_file</span><?php esc_html_e( 'Upload & Continue', 'ovr-core' ); ?></button>
                         </form>
@@ -162,8 +213,9 @@ class MigrationImporter {
     private function render_mapping( array $data ): void {
         $header   = (array) $data['header'];
         $rows     = (array) $data['rows'];
-        $targets  = self::target_fields();
-        $auto     = $this->auto_map( $header );
+        $entity   = (string) ( $data['entity'] ?? 'listing' );
+        $targets  = self::target_fields( $entity );
+        $auto     = $this->auto_map( $header, $entity );
         $statuses = [ 'publish' => __( 'Published', 'ovr-core' ), 'draft' => __( 'Draft', 'ovr-core' ) ];
         ?>
         <div class="wrap ovr-adm">
@@ -171,7 +223,17 @@ class MigrationImporter {
             <div class="ovr-adm-wrap">
                 <div class="ovr-adm-head">
                     <div>
-                        <h1><?php esc_html_e( 'Import Listings — Map Columns', 'ovr-core' ); ?></h1>
+                        <h1>
+                        <?php
+                        if ( 'user' === $entity ) {
+                            esc_html_e( 'Import Users — Map Columns', 'ovr-core' );
+                        } elseif ( 'review' === $entity ) {
+                            esc_html_e( 'Import Reviews — Map Columns', 'ovr-core' );
+                        } else {
+                            esc_html_e( 'Import Listings — Map Columns', 'ovr-core' );
+                        }
+                        ?>
+                        </h1>
                         <p><?php printf( esc_html__( 'File: %1$s · %2$s data rows detected.', 'ovr-core' ), '<strong>' . esc_html( (string) ( $data['filename'] ?? 'upload.csv' ) ) . '</strong>', '<strong>' . number_format_i18n( count( $rows ) ) . '</strong>' ); ?></p>
                     </div>
                     <div class="ovr-adm-actions">
@@ -224,6 +286,27 @@ class MigrationImporter {
                         </div>
                         <div class="ovr-adm-card-body">
                             <div class="ovr-adm-form-grid">
+                                <?php if ( 'user' === $entity ) : ?>
+                                    <div class="ovr-adm-field">
+                                        <label class="ovr-adm-label" for="ovr-imp-role"><?php esc_html_e( 'Default role', 'ovr-core' ); ?></label>
+                                        <select id="ovr-imp-role" name="default_role" class="ovr-adm-select">
+                                            <option value="ovr_landlord"><?php esc_html_e( 'Landlord / owner', 'ovr-core' ); ?></option>
+                                            <option value="subscriber"><?php esc_html_e( 'Subscriber', 'ovr-core' ); ?></option>
+                                            <option value="administrator"><?php esc_html_e( 'Administrator', 'ovr-core' ); ?></option>
+                                        </select>
+                                        <p class="ovr-adm-hint"><?php esc_html_e( 'Assigned when no Role column is mapped. A mapped role overrides this.', 'ovr-core' ); ?></p>
+                                    </div>
+                                <?php elseif ( 'review' === $entity ) : ?>
+                                    <div class="ovr-adm-field">
+                                        <label class="ovr-adm-label" for="ovr-imp-rstatus"><?php esc_html_e( 'Default review status', 'ovr-core' ); ?></label>
+                                        <select id="ovr-imp-rstatus" name="review_status" class="ovr-adm-select">
+                                            <option value="pending"><?php esc_html_e( 'Pending (needs approval)', 'ovr-core' ); ?></option>
+                                            <option value="approved"><?php esc_html_e( 'Approved (live)', 'ovr-core' ); ?></option>
+                                            <option value="rejected"><?php esc_html_e( 'Rejected', 'ovr-core' ); ?></option>
+                                        </select>
+                                        <p class="ovr-adm-hint"><?php esc_html_e( 'Used when no Status column is mapped. Approved reviews update the property rating.', 'ovr-core' ); ?></p>
+                                    </div>
+                                <?php else : ?>
                                 <div class="ovr-adm-field">
                                     <label class="ovr-adm-label"><?php esc_html_e( 'Default owner', 'ovr-core' ); ?></label>
                                     <?php wp_dropdown_users( [ 'name' => 'default_owner', 'show_option_none' => __( '— Current admin —', 'ovr-core' ), 'option_none_value' => 0, 'class' => 'ovr-adm-select' ] ); ?>
@@ -238,6 +321,10 @@ class MigrationImporter {
                                 </div>
                                 <div class="ovr-adm-field ovr-adm-field--full">
                                     <label class="ovr-adm-check"><input type="checkbox" name="import_images" value="1" checked> <?php esc_html_e( 'Download featured / gallery image URLs into the Media Library (slower).', 'ovr-core' ); ?></label>
+                                </div>
+                                <?php endif; ?>
+                                <div class="ovr-adm-field ovr-adm-field--full">
+                                    <label class="ovr-adm-check"><input type="checkbox" name="dedupe_legacy" value="1" checked> <?php esc_html_e( 'Update an existing row when its Legacy ID matches (re-run safe).', 'ovr-core' ); ?></label>
                                 </div>
                             </div>
                         </div>
@@ -270,7 +357,7 @@ class MigrationImporter {
                 <?php if ( $is_dry ) : ?><span class="ovr-adm-badge ovr-adm-badge--blue"><?php esc_html_e( 'Preview — nothing was written', 'ovr-core' ); ?></span><?php endif; ?>
             </div>
             <div class="ovr-adm-card-body">
-                <div class="ovr-adm-stats ovr-adm-stats--3">
+                <div class="ovr-adm-stats">
                     <div class="ovr-adm-stat">
                         <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">add_circle</span></div>
                         <div><div class="ovr-adm-stat-v"><?php echo (int) $res['created']; ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Created', 'ovr-core' ); ?></div></div>
@@ -282,6 +369,10 @@ class MigrationImporter {
                     <div class="ovr-adm-stat">
                         <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">block</span></div>
                         <div><div class="ovr-adm-stat-v"><?php echo (int) $res['skipped']; ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Skipped', 'ovr-core' ); ?></div></div>
+                    </div>
+                    <div class="ovr-adm-stat">
+                        <div class="ovr-adm-stat-ic"><span class="material-symbols-outlined">error</span></div>
+                        <div><div class="ovr-adm-stat-v"><?php echo (int) ( $res['errors'] ?? 0 ); ?></div><div class="ovr-adm-stat-l"><?php esc_html_e( 'Errors', 'ovr-core' ); ?></div></div>
                     </div>
                 </div>
                 <?php if ( ! empty( $res['messages'] ) ) : ?>
@@ -316,6 +407,9 @@ class MigrationImporter {
         }
 
         $parsed['filename'] = sanitize_file_name( (string) ( $_FILES['csv']['name'] ?? 'upload.csv' ) );
+        $parsed['entity']   = in_array( $_POST['entity'] ?? 'listing', [ 'listing', 'user', 'review' ], true )
+            ? (string) $_POST['entity']
+            : 'listing';
         set_transient( $this->transient_key(), $parsed, HOUR_IN_SECONDS );
         wp_safe_redirect( $this->page_url() );
         exit;
@@ -335,17 +429,30 @@ class MigrationImporter {
 
         $map           = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['map'] ) ) : [];
         $is_dry        = 'import' !== ( $_POST['do'] ?? 'dryrun' );
+        $entity        = in_array( (string) ( $data['entity'] ?? 'listing' ), [ 'listing', 'user', 'review' ], true )
+            ? (string) $data['entity']
+            : 'listing';
         $default_owner = (int) ( $_POST['default_owner'] ?? 0 ) ?: get_current_user_id();
         $post_status   = 'draft' === ( $_POST['post_status'] ?? 'publish' ) ? 'draft' : 'publish';
         $dedupe_title  = ! empty( $_POST['dedupe_title'] );
         $import_images = ! empty( $_POST['import_images'] );
+        $dedupe_legacy = ! empty( $_POST['dedupe_legacy'] );
+        $default_role  = in_array( (string) ( $_POST['default_role'] ?? 'ovr_landlord' ), [ 'ovr_landlord', 'subscriber', 'administrator' ], true )
+            ? (string) $_POST['default_role']
+            : 'ovr_landlord';
+        $review_status = in_array( (string) ( $_POST['review_status'] ?? 'pending' ), [ 'pending', 'approved', 'rejected' ], true )
+            ? (string) $_POST['review_status']
+            : 'pending';
 
-        $result = $this->process( (array) $data['rows'], $map, [
+        $result = $this->process( (array) $data['rows'], $map, $entity, [
             'dry'           => $is_dry,
             'default_owner' => $default_owner,
             'post_status'   => $post_status,
             'dedupe_title'  => $dedupe_title,
             'import_images' => $import_images,
+            'dedupe_legacy' => $dedupe_legacy,
+            'default_role'  => $default_role,
+            'review_status' => $review_status,
         ] );
 
         set_transient( $this->transient_key() . '_result', $result, 5 * MINUTE_IN_SECONDS );
@@ -358,14 +465,16 @@ class MigrationImporter {
     /**
      * @param array<int,array<int,string>> $rows
      * @param array<int,string>            $map  column index → target key
+     * @param string                       $entity listing | user | review
      * @param array<string,mixed>          $opts
      * @return array<string,mixed>
      */
-    private function process( array $rows, array $map, array $opts ): array {
+    private function process( array $rows, array $map, string $entity, array $opts ): array {
         $dry      = ! empty( $opts['dry'] );
         $created  = 0;
         $updated  = 0;
         $skipped  = 0;
+        $errors   = 0;
         $messages = [];
 
         if ( ! $dry ) {
@@ -375,10 +484,17 @@ class MigrationImporter {
             require_once ABSPATH . 'wp-admin/includes/image.php';
         }
 
-        // Has the user mapped a title? Without one we can't name listings.
-        if ( ! in_array( 'title', $map, true ) ) {
-            return [ 'dry' => $dry, 'created' => 0, 'updated' => 0, 'skipped' => count( $rows ),
+        if ( 'listing' === $entity && ! in_array( 'title', $map, true ) ) {
+            return [ 'dry' => $dry, 'created' => 0, 'updated' => 0, 'skipped' => count( $rows ), 'errors' => 0,
                 'messages' => [ __( 'No column is mapped to Title — map one and try again.', 'ovr-core' ) ] ];
+        }
+        if ( 'user' === $entity && ! in_array( 'user_email', $map, true ) ) {
+            return [ 'dry' => $dry, 'created' => 0, 'updated' => 0, 'skipped' => count( $rows ), 'errors' => 0,
+                'messages' => [ __( 'No column is mapped to Email — map one and try again.', 'ovr-core' ) ] ];
+        }
+        if ( 'review' === $entity && ! ( in_array( 'property_ref', $map, true ) || in_array( 'property_title', $map, true ) ) ) {
+            return [ 'dry' => $dry, 'created' => 0, 'updated' => 0, 'skipped' => count( $rows ), 'errors' => 0,
+                'messages' => [ __( 'No column is mapped to a property link (Listing legacy ID or Listing title) — map one and try again.', 'ovr-core' ) ] ];
         }
 
         $row_no = 0;
@@ -398,38 +514,60 @@ class MigrationImporter {
                 $fields[ $target ] = isset( $row[ $idx ] ) ? trim( (string) $row[ $idx ] ) : '';
             }
 
-            $title = $fields['title'] ?? '';
-            if ( '' === $title ) {
-                $skipped++;
-                $messages[] = sprintf( __( 'Row %d: skipped (empty title).', 'ovr-core' ), $row_no );
-                continue;
-            }
-
-            // Match existing by title?
-            $existing = 0;
-            if ( ! empty( $opts['dedupe_title'] ) ) {
-                $found = get_page_by_title( $title, OBJECT, 'ovr_property' ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_page_by_title_get_page_by_title
-                if ( $found ) {
-                    $existing = (int) $found->ID;
+            if ( 'user' === $entity ) {
+                if ( '' === ( $fields['user_email'] ?? '' ) ) {
+                    $skipped++;
+                    $messages[] = sprintf( __( 'Row %d: skipped (empty email).', 'ovr-core' ), $row_no );
+                    continue;
                 }
+                $existing = $this->find_existing_user( $fields, $opts );
+            } elseif ( 'review' === $entity ) {
+                $existing = $this->find_existing_review( $fields, $opts );
+                if ( ! $this->resolve_review_property( $fields ) ) {
+                    $skipped++;
+                    $errors++;
+                    $messages[] = sprintf( __( 'Row %d: skipped (no matching property for this review).', 'ovr-core' ), $row_no );
+                    continue;
+                }
+            } else {
+                $title = $fields['title'] ?? '';
+                if ( '' === $title ) {
+                    $skipped++;
+                    $messages[] = sprintf( __( 'Row %d: skipped (empty title).', 'ovr-core' ), $row_no );
+                    continue;
+                }
+                $existing = $this->find_existing_listing( $fields, $opts );
             }
 
             if ( $dry ) {
                 if ( $row_no <= 15 ) {
-                    $messages[] = sprintf(
-                        '%s "%s"%s',
-                        $existing ? __( 'Update', 'ovr-core' ) : __( 'Create', 'ovr-core' ),
-                        $title,
-                        $this->preview_extras( $fields )
-                    );
+                    if ( 'listing' === $entity ) {
+                        $messages[] = sprintf(
+                            '%s "%s"%s',
+                            $existing ? __( 'Update', 'ovr-core' ) : __( 'Create', 'ovr-core' ),
+                            $fields['title'],
+                            $this->preview_extras( $fields )
+                        );
+                    } else {
+                        $label = 'user' === $entity ? ( $fields['user_email'] ?? '' ) : sprintf( '#%s', $fields['property_ref'] ?? $fields['property_title'] ?? '?' );
+                        $messages[] = sprintf( '%s %s', $existing ? __( 'Update', 'ovr-core' ) : __( 'Create', 'ovr-core' ), $label );
+                    }
                 }
                 $existing ? $updated++ : $created++;
                 continue;
             }
 
-            $post_id = $this->upsert_listing( $existing, $title, $fields, $opts, $messages, $row_no );
-            if ( $post_id <= 0 ) {
+            if ( 'user' === $entity ) {
+                $id = $this->upsert_user( $existing, $fields, $opts, $messages, $row_no );
+            } elseif ( 'review' === $entity ) {
+                $id = $this->upsert_review( $existing, $fields, $opts, $messages, $row_no );
+            } else {
+                $id = $this->upsert_listing( $existing, $fields['title'], $fields, $opts, $messages, $row_no );
+            }
+
+            if ( $id <= 0 ) {
                 $skipped++;
+                $errors++;
                 continue;
             }
             $existing ? $updated++ : $created++;
@@ -439,7 +577,7 @@ class MigrationImporter {
             $messages[] = __( 'Import complete.', 'ovr-core' );
         }
 
-        return compact( 'dry', 'created', 'updated', 'skipped', 'messages' );
+        return compact( 'dry', 'created', 'updated', 'skipped', 'errors', 'messages' );
     }
 
     /**
@@ -491,6 +629,11 @@ class MigrationImporter {
             $this->apply_images( $post_id, $fields, $messages, $row_no );
         }
 
+        // Stable legacy key (dedupe / re-run safety).
+        if ( ! empty( $fields['legacy_id'] ) ) {
+            update_post_meta( $post_id, '_ovr_legacy_id', sanitize_text_field( $fields['legacy_id'] ) );
+        }
+
         // Sensible defaults for a freshly imported listing.
         if ( ! $existing ) {
             update_post_meta( $post_id, '_ovr_admin_status', 'approved' );
@@ -500,6 +643,358 @@ class MigrationImporter {
         }
 
         return $post_id;
+    }
+
+    /**
+     * Locate an existing listing for dedupe: by legacy ID first, then (when the
+     * option is on) by title.
+     *
+     * @param array<string,string> $fields
+     * @param array<string,mixed>  $opts
+     */
+    private function find_existing_listing( array $fields, array $opts ): int {
+        if ( ! empty( $opts['dedupe_legacy'] ) && ! empty( $fields['legacy_id'] ) ) {
+            $ids = get_posts( [
+                'post_type'   => 'ovr_property',
+                'post_status' => 'any',
+                'meta_key'    => '_ovr_legacy_id',
+                'meta_value'  => $fields['legacy_id'],
+                'fields'      => 'ids',
+                'posts_per_page' => 1,
+                'no_found_rows'  => true,
+            ] );
+            if ( $ids ) {
+                return (int) $ids[0];
+            }
+        }
+        if ( ! empty( $opts['dedupe_title'] ) && ! empty( $fields['title'] ) ) {
+            $found = get_page_by_title( $fields['title'], OBJECT, 'ovr_property' ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_page_by_title_get_page_by_title
+            if ( $found ) {
+                return (int) $found->ID;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Locate an existing user for dedupe: by legacy ID first, then by email.
+     *
+     * @param array<string,string> $fields
+     */
+    private function find_existing_user( array $fields, array $opts = [] ): int {
+        if ( ! empty( $opts['dedupe_legacy'] ) && ! empty( $fields['legacy_id'] ) ) {
+            $users = get_users( [
+                'meta_key'   => 'ovr_legacy_id',
+                'meta_value' => $fields['legacy_id'],
+                'fields'     => 'ID',
+                'number'     => 1,
+            ] );
+            if ( $users ) {
+                return (int) $users[0];
+            }
+        }
+        if ( ! empty( $fields['user_email'] ) ) {
+            $u = get_user_by( 'email', $fields['user_email'] );
+            if ( $u ) {
+                return (int) $u->ID;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Locate an existing review by its legacy ID (re-run safety).
+     *
+     * @param array<string,string> $fields
+     */
+    private function find_existing_review( array $fields, array $opts = [] ): int {
+        if ( empty( $opts['dedupe_legacy'] ) || empty( $fields['legacy_id'] ) ) {
+            return 0;
+        }
+        global $wpdb;
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}ovr_reviews WHERE legacy_id = %s",
+            $fields['legacy_id']
+        ) );
+    }
+
+    /**
+     * Resolve the property a review attaches to, via listing legacy ID or title.
+     *
+     * @param array<string,string> $fields
+     */
+    private function resolve_review_property( array $fields ): int {
+        if ( ! empty( $fields['property_ref'] ) ) {
+            $ids = get_posts( [
+                'post_type'   => 'ovr_property',
+                'post_status' => 'any',
+                'meta_key'    => '_ovr_legacy_id',
+                'meta_value'  => $fields['property_ref'],
+                'fields'      => 'ids',
+                'posts_per_page' => 1,
+                'no_found_rows'  => true,
+            ] );
+            if ( $ids ) {
+                return (int) $ids[0];
+            }
+        }
+        if ( ! empty( $fields['property_title'] ) ) {
+            $p = get_page_by_title( $fields['property_title'], OBJECT, 'ovr_property' ); // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.get_page_by_title_get_page_by_title
+            if ( $p ) {
+                return (int) $p->ID;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Create or update one user from a row's mapped fields.
+     *
+     * @param array<string,string> $fields
+     * @param array<string,mixed>  $opts
+     * @param array<int,string>    $messages (by ref)
+     */
+    private function upsert_user( int $existing, array $fields, array $opts, array &$messages, int $row_no ): int {
+        $email = sanitize_email( $fields['user_email'] );
+        if ( ! is_email( $email ) ) {
+            $messages[] = sprintf( __( 'Row %d: skipped (invalid email "%s").', 'ovr-core' ), $row_no, $email );
+            return 0;
+        }
+
+        $login = ! empty( $fields['username'] ) ? sanitize_user( $fields['username'] ) : $email;
+        if ( ! $login ) {
+            $login = $email;
+        }
+        $role = $this->map_user_role( $fields['role'] ?? '' );
+        if ( ! $role ) {
+            $role = (string) ( $opts['default_role'] ?? 'ovr_landlord' );
+        }
+
+        $first  = ! empty( $fields['first_name'] ) ? sanitize_text_field( $fields['first_name'] ) : '';
+        $last   = ! empty( $fields['last_name'] ) ? sanitize_text_field( $fields['last_name'] ) : '';
+        $display = ! empty( $fields['display_name'] ) ? sanitize_text_field( $fields['display_name'] ) : '';
+        if ( '' === $display ) {
+            $display = trim( $first . ' ' . $last ) ?: $email;
+        }
+
+        $userdata = [
+            'user_email'   => $email,
+            'user_login'   => $login,
+            'display_name' => $display,
+            'first_name'   => $first,
+            'last_name'    => $last,
+            'role'         => $role,
+        ];
+        if ( ! empty( $fields['password'] ) ) {
+            $userdata['user_pass'] = wp_unslash( $fields['password'] );
+        } else {
+            $userdata['user_pass'] = wp_generate_password( 24, true, true );
+        }
+
+        if ( $existing ) {
+            $userdata['ID'] = $existing;
+            unset( $userdata['user_login'] );
+            $uid = wp_update_user( $userdata );
+        } else {
+            if ( username_exists( $login ) ) {
+                $login = $this->unique_login( $login );
+                $userdata['user_login'] = $login;
+            }
+            $uid = wp_insert_user( $userdata );
+        }
+
+        if ( is_wp_error( $uid ) || ! $uid ) {
+            $messages[] = sprintf( __( 'Row %d: failed to save user "%s".', 'ovr-core' ), $row_no, $email );
+            return 0;
+        }
+        $uid = (int) $uid;
+
+        if ( ! empty( $fields['legacy_id'] ) ) {
+            update_user_meta( $uid, 'ovr_legacy_id', sanitize_text_field( $fields['legacy_id'] ) );
+        }
+        if ( isset( $fields['phone'] ) && '' !== $fields['phone'] ) {
+            update_user_meta( $uid, 'ovr_phone', sanitize_text_field( $fields['phone'] ) );
+        }
+        if ( isset( $fields['bio'] ) && '' !== $fields['bio'] ) {
+            update_user_meta( $uid, 'description', sanitize_textarea_field( $fields['bio'] ) );
+        }
+        if ( isset( $fields['account_status'] ) && '' !== $fields['account_status'] ) {
+            $st = sanitize_key( $fields['account_status'] );
+            update_user_meta( $uid, 'ovr_account_status', in_array( $st, [ 'active', 'inactive' ], true ) ? $st : 'active' );
+        }
+        if ( isset( $fields['verified'] ) && '' !== $fields['verified'] ) {
+            if ( $this->truthy( $fields['verified'] ) ) {
+                update_user_meta( $uid, \OVR\Core\Verification::META_VERIFIED, '1' );
+            } else {
+                delete_user_meta( $uid, \OVR\Core\Verification::META_VERIFIED );
+            }
+        }
+
+        // Subscription plan: if a plan column is supplied, activate that
+        // membership for the user (grants the landlord role + restores listings).
+        if ( isset( $fields['plan'] ) && '' !== (string) $fields['plan'] ) {
+            $slug = $this->resolve_plan_slug( (string) $fields['plan'] );
+            if ( $slug ) {
+                \OVR\Subscription\SubscriptionManager::activate( $uid, $slug );
+                if ( ! empty( $fields['plan_expires'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $fields['plan_expires'] ) ) {
+                    update_user_meta( $uid, \OVR\Subscription\UserSubscription::META_EXPIRES, (string) $fields['plan_expires'] );
+                }
+            } else {
+                $messages[] = sprintf( __( 'Row %d: unknown plan "%s" — skipped plan assignment.', 'ovr-core' ), $row_no, $fields['plan'] );
+            }
+        }
+
+        return $uid;
+    }
+
+    /**
+     * Map a free-text plan column to a known plan slug (Plans::get_plans()).
+     *
+     * @return string|null
+     */
+    private function resolve_plan_slug( string $raw ): ?string {
+        $raw   = trim( $raw );
+        $plans = \OVR\Subscription\Plans::get_plans();
+        $by_key = [];
+        foreach ( $plans as $p ) {
+            $by_key[ strtolower( (string) ( $p['slug'] ?? '' ) ) ] = $p['slug'];
+        }
+        $norm = strtolower( preg_replace( '/[^a-z0-9]+/', '_', $raw ) );
+        if ( isset( $by_key[ $norm ] ) ) {
+            return $by_key[ $norm ];
+        }
+        // Fall back to a keyword/name match.
+        foreach ( $plans as $p ) {
+            $name = strtolower( (string) ( $p['name'] ?? '' ) );
+            if ( '' !== $name && ( false !== strpos( $norm, preg_replace( '/[^a-z0-9]+/', '_', $name ) ) || false !== strpos( $name, $raw ) ) ) {
+                return (string) $p['slug'];
+            }
+        }
+        foreach ( $by_key as $k => $slug ) {
+            if ( false !== strpos( $k, $norm ) || false !== strpos( $norm, $k ) ) {
+                return $slug;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Create or update one review from a row's mapped fields. Links to a property
+     * via property_ref / property_title; status defaults to pending (moderation).
+     *
+     * @param array<string,string> $fields
+     * @param array<string,mixed>  $opts
+     * @param array<int,string>    $messages (by ref)
+     */
+    private function upsert_review( int $existing, array $fields, array $opts, array &$messages, int $row_no ): int {
+        $property_id = $this->resolve_review_property( $fields );
+        if ( ! $property_id ) {
+            $messages[] = sprintf( __( 'Row %d: skipped (no matching property for this review).', 'ovr-core' ), $row_no );
+            return 0;
+        }
+
+        $rating = max( 1, min( 5, (int) ( $fields['rating'] ?? 0 ) ) );
+        if ( ! $rating ) {
+            $messages[] = sprintf( __( 'Row %d: skipped (missing rating).', 'ovr-core' ), $row_no );
+            return 0;
+        }
+        $body = sanitize_textarea_field( $fields['body'] ?? '' );
+        if ( '' === $body ) {
+            $messages[] = sprintf( __( 'Row %d: skipped (missing review text).', 'ovr-core' ), $row_no );
+            return 0;
+        }
+
+        $title     = sanitize_text_field( $fields['title'] ?? '' );
+        $name      = sanitize_text_field( $fields['guest_name'] ?? '' );
+        $email     = sanitize_email( $fields['guest_email'] ?? '' );
+        $stay_raw  = sanitize_text_field( $fields['stay_date'] ?? '' );
+        $stay      = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $stay_raw ) ? $stay_raw : null;
+        $status    = ! empty( $fields['status'] ) ? sanitize_key( $fields['status'] ) : ( $opts['review_status'] ?? 'pending' );
+        if ( ! in_array( $status, [ 'pending', 'approved', 'rejected' ], true ) ) {
+            $status = 'pending';
+        }
+        $legacy    = ! empty( $fields['legacy_id'] ) ? sanitize_text_field( $fields['legacy_id'] ) : null;
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_reviews';
+
+        if ( $existing ) {
+            $wpdb->update(
+                $table,
+                [
+                    'property_id' => $property_id,
+                    'guest_name'  => $name ?: __( 'Anonymous', 'ovr-core' ),
+                    'guest_email' => $email,
+                    'rating'      => $rating,
+                    'title'       => substr( $title, 0, 255 ),
+                    'body'        => $body,
+                    'stay_date'   => $stay,
+                    'status'      => $status,
+                    'legacy_id'   => $legacy,
+                ],
+                [ 'id' => $existing ],
+                [ '%d', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s' ],
+                [ '%d' ]
+            );
+            $review_id = $existing;
+        } else {
+            $inserted = $wpdb->insert(
+                $table,
+                [
+                    'property_id' => $property_id,
+                    'user_id'     => null,
+                    'guest_name'  => $name ?: __( 'Anonymous', 'ovr-core' ),
+                    'guest_email' => $email,
+                    'rating'      => $rating,
+                    'title'       => substr( $title, 0, 255 ),
+                    'body'        => $body,
+                    'stay_date'   => $stay,
+                    'status'      => $status,
+                    'legacy_id'   => $legacy,
+                    'approved_at' => 'approved' === $status ? current_time( 'mysql' ) : null,
+                ],
+                [ '%d', '%d', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' ]
+            );
+            if ( false === $inserted ) {
+                $messages[] = sprintf( __( 'Row %d: failed to save review.', 'ovr-core' ), $row_no );
+                return 0;
+            }
+            $review_id = (int) $wpdb->insert_id;
+        }
+
+        if ( 'approved' === $status ) {
+            \OVR\Property\Reviews::recompute_aggregates( $property_id );
+        }
+
+        return $review_id;
+    }
+
+    /** Map a free-text role column to a known WordPress role slug. */
+    private function map_user_role( string $raw ): string {
+        $r = strtolower( trim( $raw ) );
+        if ( '' === $r ) {
+            return '';
+        }
+        if ( in_array( $r, [ 'landlord', 'owner', 'ovr_landlord' ], true ) ) {
+            return 'ovr_landlord';
+        }
+        if ( in_array( $r, [ 'subscriber', 'guest', 'member' ], true ) ) {
+            return 'subscriber';
+        }
+        if ( in_array( $r, [ 'admin', 'administrator' ], true ) ) {
+            return 'administrator';
+        }
+        return '';
+    }
+
+    /** Generate a login that does not already exist. */
+    private function unique_login( string $login ): string {
+        $base = $login;
+        $i    = 1;
+        while ( username_exists( $login ) ) {
+            $login = $base . '-' . $i++;
+        }
+        return $login;
     }
 
     /** @param array<string,string> $fields */
@@ -545,6 +1040,7 @@ class MigrationImporter {
             'tax_property_type' => 'ovr_property_type',
             'tax_amenity'       => 'ovr_amenity',
             'tax_rental_type'   => 'ovr_rental_type',
+            'tax_feature'       => 'ovr_feature',
         ];
         foreach ( $tax_map as $field => $tax ) {
             if ( empty( $fields[ $field ] ) || ! taxonomy_exists( $tax ) ) {
@@ -561,6 +1057,29 @@ class MigrationImporter {
             if ( '' !== $first ) {
                 update_post_meta( $post_id, '_ovr_village_name', sanitize_text_field( $first ) );
             }
+        }
+        // Golf-cart term → ovr_feature so PropertyQuery::has_golf_cart() matches.
+        if ( ! empty( $fields['golf_cart'] ) ) {
+            $this->apply_golf_cart( $post_id, $fields['golf_cart'] );
+        }
+    }
+
+    /** Set the canonical golf-cart term on a listing from a free-text value. */
+    private function apply_golf_cart( int $post_id, string $value ): void {
+        $v = strtolower( trim( $value ) );
+        if ( in_array( $v, [ 'no', 'n', '0', 'false', 'none', 'off' ], true ) ) {
+            return;
+        }
+        $slug = ( false !== strpos( $v, 'extra' ) || false !== strpos( $v, 'charge' ) )
+            ? 'golf-cart-extra-charge'
+            : 'golf-cart-included';
+
+        $term = term_exists( $slug, 'ovr_feature' );
+        if ( ! $term ) {
+            $term = wp_insert_term( ucwords( str_replace( '-', ' ', $slug ) ), 'ovr_feature', [ 'slug' => $slug ] );
+        }
+        if ( ! is_wp_error( $term ) && ! empty( $term['term_id'] ) ) {
+            wp_set_object_terms( $post_id, (int) $term['term_id'], 'ovr_feature', true );
         }
     }
 
@@ -643,15 +1162,16 @@ class MigrationImporter {
      * Guess a target for each column from its header name.
      *
      * @param array<int,string> $header
+     * @param string            $entity listing | user | review
      * @return array<int,string>
      */
-    private function auto_map( array $header ): array {
+    private function auto_map( array $header, string $entity = 'listing' ): array {
         $rules = [
             'title'          => [ 'title', 'name', 'listing' ],
             'content'        => [ 'description', 'content', 'details', 'about' ],
             'excerpt'        => [ 'summary', 'excerpt', 'short' ],
             'owner_email'    => [ 'owner', 'email', 'host' ],
-            'bedrooms'       => [ 'bedroom', 'beds room', 'br' ],
+            'bedrooms'       => [ 'bedroom', 'bedrooms', 'br' ],
             'bathrooms'      => [ 'bathroom', 'bath', 'ba' ],
             'beds'           => [ 'beds' ],
             'max_guests'     => [ 'guest', 'sleeps', 'occupanc' ],
@@ -671,9 +1191,46 @@ class MigrationImporter {
             'ical_url'       => [ 'ical', 'calendar' ],
             'tax_property_type' => [ 'type', 'property type' ],
             'tax_amenity'    => [ 'amenit', 'feature' ],
+            'tax_village'    => [ 'section', 'village section' ],
+            'tax_feature'    => [ 'feature' ],
+            'golf_cart'      => [ 'golf cart', 'golfcart' ],
+            'legacy_id'      => [ 'legacy', 'old id', 'source id', 'import id' ],
             'featured_image' => [ 'image', 'photo', 'thumbnail', 'featured' ],
             'gallery'        => [ 'gallery', 'images', 'photos' ],
         ];
+
+        if ( 'user' === $entity ) {
+            $rules = [
+                'user_email'    => [ 'email', 'user email', 'login' ],
+                'username'      => [ 'username', 'login', 'user' ],
+                'password'      => [ 'password', 'pass' ],
+                'role'          => [ 'role', 'type' ],
+                'legacy_id'     => [ 'legacy', 'old id', 'source id' ],
+                'first_name'    => [ 'first', 'given' ],
+                'last_name'     => [ 'last', 'surname', 'family' ],
+                'display_name'  => [ 'display', 'full name' ],
+                'phone'         => [ 'phone', 'tel', 'mobile' ],
+                'bio'           => [ 'bio', 'about', 'description' ],
+                'account_status'=> [ 'status', 'account' ],
+                'verified'      => [ 'verified', 'verif' ],
+                'plan'          => [ 'plan', 'membership', 'subscription', 'tier' ],
+                'plan_expires'  => [ 'plan expires', 'expires', 'expiry', 'membership expires', 'renews' ],
+            ];
+        } elseif ( 'review' === $entity ) {
+            $rules = [
+                'property_ref'  => [ 'legacy', 'property id', 'listing id', 'source id' ],
+                'property_title'=> [ 'listing', 'property title', 'title' ],
+                'legacy_id'     => [ 'review id', 'review legacy' ],
+                'rating'        => [ 'rating', 'stars', 'score' ],
+                'title'         => [ 'review title', 'subject' ],
+                'body'          => [ 'review', 'comment', 'text', 'body' ],
+                'guest_name'    => [ 'guest', 'name', 'author' ],
+                'guest_email'    => [ 'guest email', 'reviewer email' ],
+                'stay_date'     => [ 'stay', 'date', 'visited' ],
+                'status'        => [ 'status', 'approved' ],
+            ];
+        }
+
         $auto = [];
         foreach ( $header as $i => $col ) {
             $lc = strtolower( (string) $col );
