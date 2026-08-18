@@ -31,7 +31,7 @@ $logged_out = isset( $_GET['logged_out'] ) && '1' === $_GET['logged_out'];
                     <span class="material-symbols-outlined">apartment</span>
                     <?php esc_html_e( 'Property Owner Login', 'ovr-core' ); ?>
                 </span>
-                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Village Rentals', 'ovr-core' ); ?></div>
+                <div class="ovr-auth-brand"><?php esc_html_e( 'Our Villages Rental', 'ovr-core' ); ?></div>
                 <p class="ovr-auth-subtitle"><?php esc_html_e( 'Sign in to manage your listings and inquiries', 'ovr-core' ); ?></p>
             </div>
 
@@ -40,6 +40,19 @@ $logged_out = isset( $_GET['logged_out'] ) && '1' === $_GET['logged_out'];
                 <div class="ovr-alert ovr-alert-info">
                     <span class="material-symbols-outlined">check_circle</span>
                     <span><?php esc_html_e( 'You have been successfully logged out.', 'ovr-core' ); ?></span>
+                </div>
+            <?php endif; ?>
+
+            <!-- Email verification result -->
+            <?php if ( isset( $_GET['verified'] ) && '1' === $_GET['verified'] ) : ?>
+                <div class="ovr-alert ovr-alert-success">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <span><?php esc_html_e( 'Your email has been verified. You can now sign in.', 'ovr-core' ); ?></span>
+                </div>
+            <?php elseif ( isset( $_GET['verified'] ) && '0' === $_GET['verified'] ) : ?>
+                <div class="ovr-alert ovr-alert-error">
+                    <span class="material-symbols-outlined">error</span>
+                    <span><?php esc_html_e( 'We could not verify your email. The link may have expired — please try registering again.', 'ovr-core' ); ?></span>
                 </div>
             <?php endif; ?>
 
@@ -104,6 +117,26 @@ $logged_out = isset( $_GET['logged_out'] ) && '1' === $_GET['logged_out'];
                         <?php esc_html_e( 'Forgot password?', 'ovr-core' ); ?>
                     </a>
                 </div>
+
+                <?php if ( ! empty( $enable_2fa ) ) : ?>
+                <div class="ovr-form-group">
+                    <label class="ovr-form-label" for="ovr-2fa-code"><?php esc_html_e( 'One-time code (if emailed)', 'ovr-core' ); ?></label>
+                    <div class="ovr-input-icon-wrap">
+                        <span class="ovr-input-icon material-symbols-outlined">pin</span>
+                        <input
+                            type="text"
+                            id="ovr-2fa-code"
+                            name="ovr_2fa_code"
+                            class="ovr-form-input"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            value=""
+                            size="20"
+                            placeholder="<?php esc_attr_e( '6-digit code', 'ovr-core' ); ?>"
+                        >
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <button type="submit" name="ovr_login_submit" class="ovr-btn ovr-btn-primary ovr-btn-full ovr-btn-lg">
                     <span class="material-symbols-outlined">login</span>

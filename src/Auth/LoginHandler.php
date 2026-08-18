@@ -76,7 +76,20 @@ class LoginHandler {
         ] );
 
         if ( is_wp_error( $user ) ) {
-            $this->store_errors( [ __( 'Invalid email or password. Please try again.', 'ovr-core' ) ] );
+            // Surface the security challenges verbatim so privileged users are
+            // never stuck behind a generic "invalid credentials" message:
+            //   • ovr_2fa_required  → an emailed one-time code is expected.
+            //   • ovr_locked_out    → the IP is temporarily throttled.
+            // Everything else stays generic to avoid account enumeration.
+            $message = __( 'Invalid email or password. Please try again.', 'ovr-core' );
+            foreach ( [ 'ovr_2fa_required', 'ovr_locked_out' ] as $code ) {
+                $specific = $user->get_error_message( $code );
+                if ( is_string( $specific ) && '' !== $specific ) {
+                    $message = $specific;
+                    break;
+                }
+            }
+            $this->store_errors( [ $message ] );
             return;
         }
 
@@ -86,6 +99,16 @@ class LoginHandler {
             wp_logout();
             $this->store_errors( [ __( 'Your account has been deactivated. Please contact support.', 'ovr-core' ) ] );
             return;
+        }
+
+        // Admins belong in wp-admin. Never funnel the site owner or an
+        // administrator into the landlord/renter membership flow (subscription
+        // selection, dashboard, onboarding) just because they signed in through
+        // the front-end login page.
+        if ( user_can( $user, 'manage_options' ) ) {
+            $redirect = apply_filters( 'ovr_login_redirect', admin_url(), $user );
+            wp_safe_redirect( $redirect );
+            exit;
         }
 
         // Subscription-based redirect. Status determines where the user goes.
@@ -175,10 +198,12 @@ class LoginHandler {
         }
 
         return TemplateLoader::get_rendered( 'auth/login.php', [
-            'errors'     => self::get_errors(),
-            'login_url'  => Pages::get_page_url( 'ovr_page_login' ),
+            'errors'      => self::get_errors(),
+            'login_url'   => Pages::get_page_url( 'ovr_page_login' ),
             'register_url' => Pages::get_page_url( 'ovr_page_register' ),
-            'forgot_url' => Pages::get_page_url( 'ovr_page_forgot_password' ),
+            'forgot_url'  => Pages::get_page_url( 'ovr_page_forgot_password' ),
+            'enable_2fa'  => ! ( defined( 'OVR_DISABLE_2FA' ) && OVR_DISABLE_2FA )
+                && ! empty( (array) get_option( 'ovr_settings', [] )['enable_2fa'] ),
         ] );
     }
 }

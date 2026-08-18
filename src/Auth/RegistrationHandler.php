@@ -10,6 +10,7 @@ namespace OVR\Auth;
 
 use OVR\Core\Pages;
 use OVR\Core\TemplateLoader;
+use OVR\Email\Mailer;
 use OVR\Subscription\UserSubscription;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -20,6 +21,44 @@ class RegistrationHandler {
 
     public function init(): void {
         add_action( 'init', [ $this, 'process_registration' ] );
+        add_action( 'admin_post_nopriv_ovr_verify_email', [ $this, 'verify_email' ] );
+        add_action( 'admin_post_ovr_verify_email', [ $this, 'verify_email' ] );
+    }
+
+    /**
+     * Build the email-verification confirm URL for a user + one-time token.
+     */
+    public static function verification_url( int $user_id, string $token ): string {
+        return add_query_arg(
+            [ 'action' => 'ovr_verify_email', 'uid' => $user_id, 'token' => $token ],
+            admin_url( 'admin-post.php' )
+        );
+    }
+
+    /**
+     * Confirm an email-verification token (admin-post handler, no login needed).
+     */
+    public function verify_email(): void {
+        $uid   = (int) ( $_GET['uid'] ?? 0 );
+        $token = (string) ( $_GET['token'] ?? '' );
+
+        $ok = false;
+        if ( $uid && '' !== $token ) {
+            $user = get_userdata( $uid );
+            if ( $user ) {
+                $hash = (string) get_user_meta( $uid, 'ovr_email_verification_token', true );
+                if ( '' !== $hash && wp_check_password( $token, $hash ) ) {
+                    delete_user_meta( $uid, 'ovr_email_verification_token' );
+                    update_user_meta( $uid, 'ovr_email_verified', '1' );
+                    $ok = true;
+                }
+            }
+        }
+
+        $redirect = Pages::get_page_url( 'ovr_page_login' );
+        $redirect = add_query_arg( $ok ? 'verified' : 'verified', $ok ? '1' : '0', $redirect );
+        wp_safe_redirect( $redirect );
+        exit;
     }
 
     public function process_registration(): void {
@@ -103,8 +142,22 @@ class RegistrationHandler {
         update_user_meta( $user_id, 'ovr_registered_at', current_time( 'mysql' ) );
         update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_NONE );
 
-        // User stays as default subscriber role. The ovr_landlord role is
-        // granted in SubscriptionManager::activate() when they purchase a plan.
+        // User stays as a subscriber until they purchase a plan; the
+        // ovr_landlord role (with its capabilities) is granted in
+        // SubscriptionManager::activate() when they choose a plan. Record
+        // their landlord intent so onboarding/subscription can use it.
+        update_user_meta( $user_id, 'ovr_is_landlord', $is_landlord ? '1' : '0' );
+
+        // Email verification: mint a one-time token (hashed), mark unverified,
+        // and email the confirm link. Login still works, but the account is
+        // flagged until the visitor clicks the link.
+        $verify_token = wp_generate_password( 32, false );
+        update_user_meta( $user_id, 'ovr_email_verified', '0' );
+        update_user_meta( $user_id, 'ovr_email_verification_token', wp_hash_password( $verify_token ) );
+        Mailer::send( 'email_verification', [
+            'user_name'  => $first_name,
+            'verify_url' => self::verification_url( $user_id, $verify_token ),
+        ], [ 'user_id' => $user_id ] );
 
         // Auto-login.
         wp_set_current_user( $user_id );
@@ -118,8 +171,10 @@ class RegistrationHandler {
          */
         do_action( 'ovr_user_registered', $user_id, $is_landlord );
 
-        // Brand-new user. No subscription yet. Send them to plan selection.
-        wp_safe_redirect( Pages::get_page_url( 'ovr_page_subscription_select' ) );
+        // Brand-new user → onboarding flow. The onboarding template clears the
+        // first-login flag on render, so subsequent visits land on the
+        // dashboard. The subscription gate then steers them to plan selection.
+        wp_safe_redirect( Pages::get_page_url( 'ovr_page_onboarding' ) );
         exit;
     }
 

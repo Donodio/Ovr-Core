@@ -64,7 +64,7 @@ class PasswordResetHandler {
                 if ( ! $sent ) {
                     $message = sprintf(
                         /* translators: 1: Site name, 2: Reset URL */
-                        __( "Hello,\n\nSomeone requested a password reset for your account at %1\$s.\n\nTo reset your password, click the link below:\n%2\$s\n\nIf you didn't request this, you can safely ignore this email.\n\nThanks,\nOur Village Rentals", 'ovr-core' ),
+                        __( "Hello,\n\nSomeone requested a password reset for your account at %1\$s.\n\nTo reset your password, click the link below:\n%2\$s\n\nIf you didn't request this, you can safely ignore this email.\n\nThanks,\nOur Villages Rental", 'ovr-core' ),
                         get_bloginfo( 'name' ),
                         $reset_url
                     );
