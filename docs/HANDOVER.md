@@ -1,4 +1,4 @@
-# Our Village Rentals — Handover & Operations
+# Our Villages Rental — Handover & Operations
 
 _Technical handover for the team that will deploy and run the `ovr-core` plugin.
 Credentials (payment gateway, Backblaze B2, SMTP) remain the client's and are

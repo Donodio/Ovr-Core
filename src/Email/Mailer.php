@@ -34,7 +34,7 @@ class Mailer {
         $body    = self::substitute( (string) $tpl['body_html'], $vars );
         $text    = '' !== (string) $tpl['body_text']
             ? self::substitute( (string) $tpl['body_text'], $vars )
-            : wp_strip_all_tags( $body );
+            : self::text_fallback( $body );
 
         return [
             'subject' => $subject,
@@ -128,21 +128,33 @@ class Mailer {
     }
 
     /**
-     * Wrap an inner HTML body in the branded responsive shell.
+     * Wrap an inner HTML body in the shared branded layout so every email
+     * shares the same header, footer, and brand colours.
      */
     private static function wrap( string $subject, string $body ): string {
-        $name = esc_html( get_bloginfo( 'name' ) );
-        $url  = esc_url( home_url( '/' ) );
-        return '<!DOCTYPE html><html><head><meta charset="utf-8">'
-            . '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            . '<title>' . esc_html( $subject ) . '</title></head>'
-            . '<body style="margin:0;background:#f4f6f6;font-family:Arial,Helvetica,sans-serif;color:#1c2430">'
-            . '<div style="max-width:600px;margin:0 auto;padding:24px">'
-            . '<div style="background:#004c4c;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0;font-size:18px;font-weight:700">'
-            . '<a href="' . $url . '" style="color:#fff;text-decoration:none">' . $name . '</a></div>'
-            . '<div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;font-size:15px">'
-            . $body
-            . '</div></div></body></html>';
+        $content   = $body;
+        $site_name = get_bloginfo( 'name' );
+        $site_url  = home_url( '/' );
+        ob_start();
+        include __DIR__ . '/../../templates/emails/_layout.php';
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * Build a usable plain-text fallback from an HTML body, preserving links
+     * as "label (url)" so action URLs survive in the text part.
+     */
+    private static function text_fallback( string $body ): string {
+        $body = preg_replace_callback(
+            '/<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)<\/a>/is',
+            static function ( $m ) {
+                $label = trim( wp_strip_all_tags( $m[2] ) );
+                return $label ? $label . ' (' . $m[1] . ')' : $m[1];
+            },
+            $body
+        );
+        $text = wp_strip_all_tags( $body );
+        return (string) preg_replace( '/[ \t]+/', ' ', $text );
     }
 
     /**

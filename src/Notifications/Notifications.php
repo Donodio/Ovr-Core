@@ -156,6 +156,7 @@ class Notifications {
             $plan_slug = (string) ( $data['plan_slug'] ?? '' );
             $plan      = $plan_slug ? Plans::get_plan( $plan_slug ) : null;
             $vars['membership_name'] = $plan['name'] ?? ucfirst( str_replace( '_', ' ', $plan_slug ) );
+            $vars['dashboard_url']   = Pages::get_page_url( 'ovr_page_dashboard' );
             Mailer::send( 'subscription_purchase', $vars, [ 'user_id' => $user_id ] );
             return;
         }
@@ -313,7 +314,7 @@ class Notifications {
         Mailer::send( 'review_submitted', [
             'review_property' => $property->post_title,
             'guest_name'      => $review['guest_name'] ?? '',
-            'dashboard_url'   => Pages::get_page_url( 'ovr_page_dashboard' ),
+            'dashboard_url'   => admin_url( 'edit.php?post_type=ovr_property&page=ovr-core-reviews' ),
         ] );
     }
 

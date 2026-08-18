@@ -1,6 +1,6 @@
-# Our Village Rentals — Owner / Landlord Guide
+# Our Villages Rental — Owner / Landlord Guide
 
-_A step-by-step guide for property owners listing on Our Village Rentals.
+_A step-by-step guide for property owners listing on Our Villages Rental.
 Everything here happens on the public website — you don't need the WordPress
 admin._
 

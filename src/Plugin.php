@@ -171,16 +171,16 @@ class Plugin {
         // unconditionally — wp-cron runs outside the admin context.
         \OVR\Admin\DeletedListingsAdmin::register_cron();
 
+        // Subscription expiry cron — defensively (re)schedule so it is always
+        // present even if the plugin was activated before this hook existed.
+        // schedule_cron() is idempotent (checks wp_next_scheduled first).
+        \OVR\Subscription\Lifecycle::schedule_cron();
+
         // Audit event listeners + retention cron (M3 F2). Front + admin: logins,
         // registrations and payments happen outside wp-admin too.
         $this->modules['audit_events'] = new \OVR\Core\AuditEvents();
         $this->modules['audit_events']->init();
         \OVR\Core\AuditLog::register_cron();
-
-        // Email trigger engine (M3 F6) — subscription/review/listing emails fire
-        // outside the admin context too.
-        $this->modules['email_events'] = new \OVR\Email\EmailEvents();
-        $this->modules['email_events']->init();
 
         // Settings behaviour bindings (M3 F5) — image quality, sessions, login
         // throttling, 2FA, favicon. Front + admin.
@@ -359,8 +359,10 @@ class Plugin {
         $this->modules['roles']           = new Roles();
         $this->modules['pages']           = new Pages();
         $this->modules['template_loader'] = new TemplateLoader();
+        $this->modules['theme_schemes']   = new \OVR\Core\ThemeSchemes();
+        $this->modules['property_media']  = new \OVR\Core\PropertyMedia();
 
-        foreach ( [ 'assets', 'database', 'roles', 'pages', 'template_loader' ] as $key ) {
+        foreach ( [ 'assets', 'database', 'roles', 'pages', 'template_loader', 'theme_schemes', 'property_media' ] as $key ) {
             $this->modules[ $key ]->init();
         }
     }

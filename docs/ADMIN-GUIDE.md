@@ -1,4 +1,4 @@
-# Our Village Rentals — Administrator Guide
+# Our Villages Rental — Administrator Guide
 
 _For platform administrators. Everything below lives in **wp-admin**. Most OVR
 tools are under the **Properties** menu (the "OVR" property type), plus a
