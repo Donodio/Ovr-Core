@@ -11,12 +11,14 @@
  * @package OVR
  *
  * @var int    $post_id        Required. Property post ID.
- * @var string $title          Property title (shown at the top of the sidebar).
+ * @var string $title          Property title (already shown in the page header bar).
  * @var float  $base_price     Nightly base rate.
  * @var string $symbol         Currency symbol.
  * @var string $property_type  Property type label (e.g. "Patio Villa").
  * @var int    $bedrooms       Bedroom count.
+ * @var string $rental_type    Rental type label (e.g. "Short Term").
  * @var \WP_Term|null $village  Primary village term.
+ * @var array  $pricing        Rows from SeasonalPricing::get_pricing() (for the range).
  * @var bool   $has_seasonal   Whether seasonal rates exist (flexible-pricing note).
  * @var int    $views          Total page-view count.
  * @var array  $monthly_views  Map of 'Y-m' => count for the visits chart.
@@ -25,6 +27,7 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 use OVR\Core\Pages;
+use OVR\Property\SeasonalPricing;
 
 $post_id       = (int) ( $post_id ?? get_the_ID() );
 $title         = (string) ( $title ?? get_the_title( $post_id ) );
@@ -32,8 +35,10 @@ $base_price    = (float) ( $base_price ?? 0 );
 $symbol        = $symbol ?? '$';
 $property_type = (string) ( $property_type ?? '' );
 $bedrooms      = (int) ( $bedrooms ?? 0 );
+$rental_type   = (string) ( $rental_type ?? '' );
 $village       = $village ?? null;
-$has_seasonal  = ! empty( $has_seasonal );
+$pricing       = is_array( $pricing ?? null ) ? $pricing : SeasonalPricing::get_pricing( $post_id );
+$has_seasonal  = isset( $has_seasonal ) ? ! empty( $has_seasonal ) : ! empty( $pricing );
 $views         = (int) ( $views ?? 0 );
 $monthly_views = is_array( $monthly_views ?? null ) ? $monthly_views : [];
 $is_owner      = ! empty( $is_owner );
@@ -45,18 +50,64 @@ if ( '' === $village_name && $village ) {
     $village_name = (string) $village->name;
 }
 
-// Sub-line under the title: "Patio Villa · 2 Bedrooms · Village of X".
+// Headline: the listing title already sits in the page header bar, so this card
+// leads with the location — "Village of Bonnybrook" — and puts the key facts
+// (type · bedrooms · rental term) on the line beneath it.
+$headline = '' !== $village_name
+    /* translators: %s: village name */
+    ? sprintf( __( 'Village of %s', 'ovr-core' ), $village_name )
+    : $title;
+
 $subbits = array_filter( [
     $property_type,
     $bedrooms > 0
         /* translators: %d: bedroom count */
         ? sprintf( _n( '%d Bedroom', '%d Bedrooms', $bedrooms, 'ovr-core' ), $bedrooms )
         : '',
-    '' !== $village_name
-        /* translators: %s: village name */
-        ? sprintf( __( 'Village of %s', 'ovr-core' ), $village_name )
-        : '',
+    $rental_type,
 ] );
+
+// ── Pricing line ──────────────────────────────────────────────────────────
+// Mirrors the production site: either the low–high range across every rate row
+// or "See Description For Pricing". The "Check Description For Pricing" override
+// only controls this display — the rows themselves are never touched.
+$pricing_hidden = SeasonalPricing::is_hidden( $post_id );
+$price_amounts  = [];
+$price_per      = '';
+foreach ( $pricing as $prow ) {
+    $pd = SeasonalPricing::row_display( (array) $prow );
+    if ( $pd['price'] > 0 ) {
+        $price_amounts[] = (float) $pd['price'];
+        if ( '' === $price_per ) {
+            $price_per = (string) $pd['per'];
+        } elseif ( $price_per !== (string) $pd['per'] ) {
+            $price_per = '—'; // Mixed terms (per week + per month): omit the unit.
+        }
+    }
+}
+$price_text = '';
+$price_note = '';
+if ( ! $pricing_hidden && $price_amounts ) {
+    $low  = min( $price_amounts );
+    $high = max( $price_amounts );
+    if ( $low === $high ) {
+        $price_text = $symbol . number_format( $low, 0 );
+        if ( '' !== $price_per && '—' !== $price_per ) {
+            /* translators: 1: price, 2: rate term (day/week/month) */
+            $price_text = sprintf( __( '%1$s / %2$s', 'ovr-core' ), $price_text, $price_per );
+        }
+    } else {
+        /* translators: 1: lowest rate, 2: highest rate */
+        $price_text = sprintf(
+            __( '%1$s – %2$s', 'ovr-core' ),
+            $symbol . number_format( $low, 0 ),
+            $symbol . number_format( $high, 0 )
+        );
+    }
+    $price_note = __( 'See rates below for full details.', 'ovr-core' );
+} else {
+    $price_text = __( 'See Description For Pricing', 'ovr-core' );
+}
 
 // Owner (post author).
 $author_id   = (int) get_post_field( 'post_author', $post_id );
@@ -70,10 +121,13 @@ if ( $author_id && class_exists( Pages::class ) ) {
 }
 $avatar_url  = $author_id ? get_avatar_url( $author_id, [ 'size' => 120 ] ) : '';
 $listings_n  = $author_id ? (int) count_user_posts( $author_id, 'ovr_property', true ) : 0;
+// Brief owner/property-manager bio (their user profile description).
+$owner_bio   = $author_id ? trim( (string) get_the_author_meta( 'description', $author_id ) ) : '';
 
 // Verification classification (P8 §9): sourced from the OWNER's user record so
-// an admin change re-labels every listing they own. Legacy `ovr_verified` meta
-// still maps to "Verified Homeowner" via Verification::get().
+// an admin change re-labels every listing they own. A simple YES/NO "OVR
+// Verified" flag (boolean `ovr_verified` meta), with legacy 3-state status
+// still honored via Verification::get().
 $verif_status = $author_id ? \OVR\Core\Verification::get( $author_id ) : \OVR\Core\Verification::NOT_VERIFIED;
 $verif_label  = \OVR\Core\Verification::label( $verif_status );
 $is_verified  = \OVR\Core\Verification::is_verified( $verif_status );
@@ -97,36 +151,23 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
 ?>
 <div class="ovr-owner-stack" data-purpose="owner-card">
 
-    <!-- 1. Title + pricing + inquire + compare/view -->
+    <!-- 1. Village + key facts + pricing + inquire + compare/view -->
     <div class="ovr-owner-card">
         <div class="ovr-owner-summary">
-            <h2><?php echo esc_html( $title ); ?></h2>
+            <h2 class="ovr-owner-village"><?php echo esc_html( $headline ); ?></h2>
             <?php if ( $subbits ) : ?>
                 <p><?php echo esc_html( implode( ' · ', $subbits ) ); ?></p>
             <?php endif; ?>
         </div>
 
-        <?php if ( $base_price > 0 ) : ?>
-            <div class="ovr-owner-price">
-                <span class="ovr-owner-price-label"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></span>
-                <span class="ovr-owner-price-amount">
-                    <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?><span>/ <?php esc_html_e( 'night', 'ovr-core' ); ?></span>
-                </span>
-            </div>
-            <?php if ( $has_seasonal ) : ?>
-                <p class="ovr-owner-price-note"><?php esc_html_e( 'Seasonal, weekly & monthly rates available below.', 'ovr-core' ); ?></p>
-            <?php endif; ?>
-        <?php elseif ( $has_seasonal ) : ?>
-            <div class="ovr-owner-price">
-                <span class="ovr-owner-price-label"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></span>
-                <span class="ovr-owner-price-amount" style="font-size:18px"><?php esc_html_e( 'See rates below', 'ovr-core' ); ?></span>
-            </div>
-            <p class="ovr-owner-price-note"><?php esc_html_e( 'Weekly, monthly, seasonal & fixed-term options.', 'ovr-core' ); ?></p>
-        <?php else : ?>
-            <div class="ovr-owner-price">
-                <span class="ovr-owner-price-label"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></span>
-                <span class="ovr-owner-price-amount" style="font-size:18px"><?php esc_html_e( 'See Description For Pricing', 'ovr-core' ); ?></span>
-            </div>
+        <div class="ovr-owner-price">
+            <span class="ovr-owner-price-label"><?php esc_html_e( 'Pricing', 'ovr-core' ); ?></span>
+            <span class="ovr-owner-price-amount<?php echo $price_note ? '' : ' is-text'; ?>">
+                <?php echo esc_html( $price_text ); ?>
+            </span>
+        </div>
+        <?php if ( '' !== $price_note ) : ?>
+            <p class="ovr-owner-price-note"><?php echo esc_html( $price_note ); ?></p>
         <?php endif; ?>
 
         <a href="#ovr-inquiry" class="ovr-btn ovr-btn-full ovr-inquire-cta">
@@ -147,9 +188,11 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
     <div class="ovr-owner-card ovr-owner-pm">
         <div class="ovr-owner-pm-head">
             <p class="ovr-owner-block-label"><?php esc_html_e( 'Owner / Property Manager', 'ovr-core' ); ?></p>
-            <span class="ovr-verified-banner <?php echo $is_verified ? 'is-verified' : 'is-unverified'; ?>">
-                <span class="material-symbols-outlined"><?php echo esc_html( $verif_icon ); ?></span><?php echo esc_html( $verif_label ); ?>
-            </span>
+            <?php if ( $is_verified ) : ?>
+                <span class="ovr-verified-banner is-verified">
+                    <span class="material-symbols-outlined"><?php echo esc_html( $verif_icon ); ?></span><?php echo esc_html( $verif_label ); ?>
+                </span>
+            <?php endif; ?>
         </div>
 
         <div class="ovr-owner-person">
@@ -176,6 +219,9 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
                     printf( esc_html( _n( '%d listing', '%d listings', $listings_n, 'ovr-core' ) ), $listings_n );
                     ?>
                 </p>
+                <?php if ( '' !== $owner_bio ) : ?>
+                    <p class="ovr-owner-bio"><?php echo esc_html( $owner_bio ); ?></p>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -230,10 +276,25 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
 </div>
 
 <style>
+    /* Village headline: the card leads with the location, larger and bolder
+       than the facts line beneath it (the listing title is in the header bar). */
+    .ovr-owner-summary h2.ovr-owner-village{font-size:24px;font-weight:800;line-height:1.2;margin:0 0 6px;letter-spacing:-.01em}
+    .ovr-owner-summary p{font-size:14px}
+    /* "See Description For Pricing" is a sentence, not a figure — size it down
+       so it doesn't wrap awkwardly at the 24px amount size. */
+    .ovr-owner-price{align-items:center}
+    .ovr-owner-price-amount.is-text{font-size:16px;font-weight:600;text-align:right}
+    .ovr-owner-listings-count{color:var(--ovr-on-surface-variant)}
+    .ovr-owner-bio{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--ovr-on-surface-variant)}
     .ovr-phone-reveal{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;margin:0;font:inherit;color:var(--ovr-secondary,#0a66c2);font-weight:600;cursor:pointer;text-decoration:underline}
     .ovr-phone-reveal:hover{opacity:.85}
     .ovr-phone-reveal .material-symbols-outlined{font-size:16px}
     .ovr-owner-phone a{font-weight:600}
+    /* OVR Verified Owner banner — shown ONLY when the owner is verified (YES);
+       nothing renders otherwise. Gold trust badge with a check icon. */
+    .ovr-verified-banner{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.02em;line-height:1;white-space:nowrap}
+    .ovr-verified-banner.is-verified{background:var(--ovr-gold,#DEAF0C);color:#1b1b20;box-shadow:0 1px 3px rgba(222,175,12,.4)}
+    .ovr-verified-banner .material-symbols-outlined{font-size:18px}
 </style>
 <script>
 (function(){

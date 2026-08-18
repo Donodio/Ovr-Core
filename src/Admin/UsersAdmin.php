@@ -50,6 +50,8 @@ class UsersAdmin {
         // does not use (Website, Bio, personal options, application passwords).
         add_action( 'admin_head-user-edit.php', [ $this, 'hide_default_profile_fields' ] );
         add_action( 'admin_head-profile.php',   [ $this, 'hide_default_profile_fields' ] );
+        // Admin avatar upload / replace / remove on the user editor.
+        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_avatar_assets' ] );
     }
 
     /**
@@ -150,16 +152,16 @@ class UsersAdmin {
         if ( $sub ) {
             $meta_query[] = [ 'key' => 'ovr_subscription_plan', 'value' => $sub ];
         }
-        // Verification status filter. "Not verified" also matches users with no
-        // verification meta yet (the default state).
+        // Verification status filter. "Not verified" matches users without the
+        // canonical `ovr_verified` flag (the default state).
         if ( 'not_verified' === $verif ) {
             $meta_query[] = [
                 'relation' => 'OR',
-                [ 'key' => Verification::META_KEY, 'value' => 'not_verified' ],
-                [ 'key' => Verification::META_KEY, 'compare' => 'NOT EXISTS' ],
+                [ 'key' => Verification::META_VERIFIED, 'compare' => 'NOT EXISTS' ],
+                [ 'key' => Verification::META_VERIFIED, 'value' => '1', 'compare' => '!=' ],
             ];
-        } elseif ( $verif ) {
-            $meta_query[] = [ 'key' => Verification::META_KEY, 'value' => $verif ];
+        } elseif ( 'verified' === $verif ) {
+            $meta_query[] = [ 'key' => Verification::META_VERIFIED, 'value' => '1' ];
         }
         // Account status ("active" = explicitly active OR no meta yet) combined
         // with subscription renewal state ("pending renewal" = an expired
@@ -249,11 +251,13 @@ class UsersAdmin {
 
         $total_users = (int) ( $users_data['total_users'] ?? 0 );
 
-        // "Not Yet Verified" — users who have not been marked as a verified
-        // homeowner or registered PM (i.e. total minus the positively verified).
+        // "Not Yet Verified" — users who have not been marked as OVR Verified
+        // (i.e. total minus the positively verified).
         $verified = (int) $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value IN ( %s, %s )",
+                "SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta} WHERE (meta_key = %s AND meta_value = %s) OR (meta_key = %s AND meta_value IN ( %s, %s ))",
+                Verification::META_VERIFIED,
+                '1',
                 Verification::META_KEY,
                 Verification::VERIFIED_HOMEOWNER,
                 Verification::REGISTERED_PM
@@ -350,8 +354,7 @@ class UsersAdmin {
     public function render_profile_fields( \WP_User $user ): void {
         if ( ! current_user_can( 'ovr_manage_users' ) ) {
             return;
-        }
-        $plan      = \OVR\Subscription\UserSubscription::get_plan( (int) $user->ID );
+        }        $plan      = \OVR\Subscription\UserSubscription::get_plan( (int) $user->ID );
         $plan_slug = \OVR\Subscription\UserSubscription::get_plan_slug( (int) $user->ID );
         $plan_name = $plan['name'] ?? $plan_slug;
         $expires   = (string) get_user_meta( (int) $user->ID, \OVR\Subscription\UserSubscription::META_EXPIRES, true );
@@ -431,16 +434,56 @@ class UsersAdmin {
                     <p class="description"><?php esc_html_e( 'Manual credit balance. Used for adjustments and credits applied at renewal.', 'ovr-core' ); ?></p>
                 </td>
             </tr>
-            <?php $verif = \OVR\Core\Verification::get( (int) $user->ID ); ?>
+            <?php $is_verified_user = \OVR\Core\Verification::is_verified_user( (int) $user->ID ); ?>
             <tr>
-                <th><label for="ovr_verification_status"><?php esc_html_e( 'Verification Status', 'ovr-core' ); ?></label></th>
+                <th><label><?php esc_html_e( 'OVR Verified Owner', 'ovr-core' ); ?></label></th>
                 <td>
-                    <select name="ovr_verification_status" id="ovr_verification_status">
-                        <?php foreach ( \OVR\Core\Verification::statuses() as $vkey => $vlabel ) : ?>
-                            <option value="<?php echo esc_attr( $vkey ); ?>" <?php selected( $verif, $vkey ); ?>><?php echo esc_html( $vlabel ); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <fieldset>
+                        <label style="margin-right:18px">
+                            <input type="radio" name="ovr_verified" value="1" <?php checked( $is_verified_user ); ?>>
+                            <?php esc_html_e( 'Yes', 'ovr-core' ); ?>
+                        </label>
+                        <label>
+                            <input type="radio" name="ovr_verified" value="0" <?php checked( ! $is_verified_user ); ?>>
+                            <?php esc_html_e( 'No', 'ovr-core' ); ?>
+                        </label>
+                    </fieldset>
                     <p class="description"><?php esc_html_e( 'Shown as a trust badge on every listing this user owns. Combats fraudulent listings.', 'ovr-core' ); ?></p>
+                </td>
+            </tr>
+            <?php
+            $avatar_id = (int) get_user_meta( (int) $user->ID, 'ovr_avatar_id', true );
+            $avatar_url = $avatar_id ? wp_get_attachment_image_url( $avatar_id, 'thumbnail' ) : '';
+            ?>
+            <tr>
+                <th><label><?php esc_html_e( 'Profile Photo', 'ovr-core' ); ?></label></th>
+                <td>
+                    <div id="ovr-admin-avatar-wrap" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                        <img id="ovr-admin-avatar-preview" src="<?php echo esc_url( $avatar_url ?: '' ); ?>"
+                             alt=""
+                             style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:#e5e7eb;<?php echo $avatar_url ? '' : 'display:none;'; ?>">
+                        <div>
+                            <input type="file" id="ovr-admin-avatar-file" accept="image/jpeg,image/png,image/webp,image/gif" style="margin-bottom:6px">
+                            <p class="description" style="margin:0 0 8px">
+                                <?php esc_html_e( 'Upload or replace the profile photo (JPG, PNG, WebP, GIF; max 5MB). Removing restores the default placeholder.', 'ovr-core' ); ?>
+                            </p>
+                            <div style="display:flex;gap:8px">
+                                <button type="button" class="button" id="ovr-admin-avatar-upload"><?php esc_html_e( 'Upload / Replace', 'ovr-core' ); ?></button>
+                                <button type="button" class="button" id="ovr-admin-avatar-remove"<?php echo $avatar_id ? '' : ' disabled'; ?>><?php esc_html_e( 'Remove', 'ovr-core' ); ?></button>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="description" id="ovr-admin-avatar-status" role="status"></p>
+                </td>
+            </tr>
+            <?php
+            $bio = (string) $user->description;
+            ?>
+            <tr>
+                <th><label for="ovr_user_bio"><?php esc_html_e( 'About Me / Bio', 'ovr-core' ); ?></label></th>
+                <td>
+                    <textarea name="ovr_user_bio" id="ovr_user_bio" class="large-text" rows="4" maxlength="500"><?php echo esc_textarea( $bio ); ?></textarea>
+                    <p class="description"><?php esc_html_e( 'Shown in association with this user\'s listings (their property profile). Uses the same WordPress bio field the user sees on their own profile.', 'ovr-core' ); ?></p>
                 </td>
             </tr>
             <?php $admin_notes = (string) get_user_meta( (int) $user->ID, self::META_ADMIN_NOTES, true ); ?>
@@ -460,6 +503,28 @@ class UsersAdmin {
             .ovr-money-input:focus{box-shadow:none!important}
         </style>
         <?php
+    }
+
+    /**
+     * Enqueue the admin avatar manager on the WP user-edit/profile screens.
+     */
+    public function enqueue_avatar_assets( string $hook ): void {
+        if ( ! in_array( $hook, [ 'user-edit.php', 'profile.php' ], true ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'ovr_manage_users' ) ) {
+            return;
+        }
+        wp_enqueue_script(
+            'ovr-admin-avatar',
+            OVR_PLUGIN_URL . 'assets/js/ovr-admin-avatar.js',
+            [],
+            OVR_VERSION,
+            true
+        );
+        wp_localize_script( 'ovr-admin-avatar', 'ovrAdminAvatar', [
+            'nonce' => wp_create_nonce( 'ovr_avatar_action' ),
+        ] );
     }
 
     /**
@@ -511,6 +576,17 @@ class UsersAdmin {
             update_user_meta( $user_id, 'ovr_phone', sanitize_text_field( wp_unslash( $_POST['ovr_phone'] ) ) );
         }
 
+        // About Me / bio — the SAME WordPress bio field the user edits on their
+        // own profile (wp_users.description). No duplicate bio source. We write
+        // it directly because WP core re-saves `description` from the (hidden)
+        // default bio box AFTER this hook, overwriting a wp_update_user() call.
+        if ( isset( $_POST['ovr_user_bio'] ) ) {
+            global $wpdb;
+            $bio = sanitize_textarea_field( wp_unslash( $_POST['ovr_user_bio'] ) );
+            $wpdb->update( $wpdb->users, [ 'description' => $bio ], [ 'ID' => $user_id ] );
+            clean_user_cache( $user_id );
+        }
+
         if ( isset( $_POST['ovr_balance'] ) ) {
             $bal = (float) wp_unslash( $_POST['ovr_balance'] );
             update_user_meta( $user_id, \OVR\Payment\Wallet::META_BALANCE, number_format( $bal, 2, '.', '' ) );
@@ -525,11 +601,13 @@ class UsersAdmin {
             }
         }
 
-        // Verification classification (P8 §9).
-        if ( isset( $_POST['ovr_verification_status'] ) ) {
-            $vs = sanitize_key( wp_unslash( $_POST['ovr_verification_status'] ) );
-            if ( isset( \OVR\Core\Verification::statuses()[ $vs ] ) ) {
-                update_user_meta( $user_id, \OVR\Core\Verification::META_KEY, $vs );
+        // OVR Verified Owner flag (P8 §9) — canonical YES/NO boolean meta.
+        if ( isset( $_POST['ovr_verified'] ) ) {
+            $verified = '1' === (string) wp_unslash( $_POST['ovr_verified'] );
+            if ( $verified ) {
+                update_user_meta( $user_id, \OVR\Core\Verification::META_VERIFIED, '1' );
+            } else {
+                delete_user_meta( $user_id, \OVR\Core\Verification::META_VERIFIED );
             }
         }
     }

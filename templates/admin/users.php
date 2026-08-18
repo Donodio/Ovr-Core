@@ -151,7 +151,7 @@ use OVR\Subscription\UserSubscription;
         .ovr-u-role--subscriber{background:var(--gray-light);color:var(--muted);border-color:var(--gray-border)}
         .ovr-u-verif{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
         .ovr-u-verif .material-symbols-outlined{font-size:17px}
-        .ovr-u-verif--verified_homeowner,.ovr-u-verif--registered_pm{background:#e6f4ea;color:#1e7e34;border-color:#bfe3c8}
+        .ovr-u-verif--verified,.ovr-u-verif--verified_homeowner,.ovr-u-verif--registered_pm{background:#e6f4ea;color:#1e7e34;border-color:#bfe3c8}
         .ovr-u-verif--not_verified{background:var(--gray-light);color:var(--muted);border-color:var(--gray-border)}
         .ovr-u-phone{font-size:14px;color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums;white-space:nowrap}
         .ovr-u-phone:hover{color:var(--blue);text-decoration:underline}
@@ -310,9 +310,8 @@ use OVR\Subscription\UserSubscription;
                     <div class="ovr-u-filter">
                         <select name="verification">
                             <option value=""><?php esc_html_e( 'Any Verification', 'ovr-core' ); ?></option>
-                            <?php foreach ( \OVR\Core\Verification::statuses() as $vkey => $vlabel ) : ?>
-                                <option value="<?php echo esc_attr( $vkey ); ?>" <?php selected( $verification ?? '', $vkey ); ?>><?php echo esc_html( $vlabel ); ?></option>
-                            <?php endforeach; ?>
+                            <option value="verified" <?php selected( $verification ?? '', 'verified' ); ?>><?php esc_html_e( 'OVR Verified', 'ovr-core' ); ?></option>
+                            <option value="not_verified" <?php selected( $verification ?? '', 'not_verified' ); ?>><?php esc_html_e( 'Not Verified', 'ovr-core' ); ?></option>
                         </select>
                     </div>
                     <button type="submit" class="ovr-u-btn ovr-u-btn--subtle">
@@ -370,6 +369,7 @@ use OVR\Subscription\UserSubscription;
                             $plan_max       = $plan_data['max_listings'] ?? null;
                             $listing_pct    = $plan_max && $plan_max > 0 ? min( 100, round( ( $listing_count / $plan_max ) * 100 ) ) : null;
                             $verif_status   = \OVR\Core\Verification::get( (int) $user->ID );
+                            $is_verified    = \OVR\Core\Verification::is_verified( $verif_status );
                             $phone          = (string) get_user_meta( (int) $user->ID, 'ovr_phone', true );
                             // Role (Admin vs User) and Account Type (Landlord vs Subscriber) pills.
                             $user_roles     = (array) $user->roles;
@@ -425,7 +425,7 @@ use OVR\Subscription\UserSubscription;
                                 <td>
                                     <span class="ovr-u-verif ovr-u-verif--<?php echo esc_attr( $verif_status ); ?>" title="<?php echo esc_attr( \OVR\Core\Verification::label( $verif_status ) ); ?>">
                                         <span class="material-symbols-outlined"><?php echo esc_html( \OVR\Core\Verification::icon( $verif_status ) ); ?></span>
-                                        <?php echo esc_html( \OVR\Core\Verification::label( $verif_status ) ); ?>
+                                        <?php echo esc_html( $is_verified ? __( 'Yes', 'ovr-core' ) : __( 'No', 'ovr-core' ) ); ?>
                                     </span>
                                 </td>
                                 <td>
