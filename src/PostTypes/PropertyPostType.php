@@ -17,6 +17,17 @@ class PropertyPostType {
     /** @var string */
     public const POST_TYPE = 'ovr_property';
 
+    /**
+     * Soft-deleted ("archived") listings use this non-public post status instead
+     * of WP `trash`. A real status keeps them fully recoverable (media, meta and
+     * the post row all stay) and — crucially — out of reach of WordPress core's
+     * global trash sweep, which would otherwise force-delete them after
+     * EMPTY_TRASH_DAYS regardless of our own retention window.
+     *
+     * @var string
+     */
+    public const STATUS_ARCHIVED = 'archived';
+
     public function init(): void {
         add_action( 'init', [ $this, 'register_post_type' ] );
     }
@@ -66,5 +77,18 @@ class PropertyPostType {
         ];
 
         register_post_type( self::POST_TYPE, $args );
+
+        // Soft-delete ("archive") status — non-public so archived listings are
+        // excluded from the public site, search and sitemaps, but still fully
+        // recoverable by owners and admins via the restore flows.
+        register_post_status( self::STATUS_ARCHIVED, [
+            'label'                     => _x( 'Archived', 'post status', 'ovr-core' ),
+            'public'                    => false,
+            'exclude_from_search'       => true,
+            'show_in_admin_all_list'    => false,
+            'show_in_admin_status_list' => true,
+            'protected'                 => true,
+            'label_count'               => _n_noop( 'Archived <span class="count">(%s)</span>', 'Archived <span class="count">(%s)</span>', 'ovr-core' ),
+        ] );
     }
 }

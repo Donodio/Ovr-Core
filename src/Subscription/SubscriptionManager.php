@@ -94,6 +94,14 @@ class SubscriptionManager {
             if ( $i < $base_limit ) {
                 continue;
             }
+            // Remember the listing's pre-expiry owner status so renewal can
+            // restore it exactly (an owner who had set "inactive" stays inactive,
+            // not silently flipped back to "active"). Only publish listings are
+            // touched here, so owner-archived listings are left alone.
+            $prior = (string) get_post_meta( $post_id, '_ovr_listing_status', true );
+            if ( '' !== $prior && 'pending_renewal' !== $prior ) {
+                update_post_meta( $post_id, '_ovr_listing_status_pre_expiry', $prior );
+            }
             update_post_meta( $post_id, '_ovr_listing_status', 'pending_renewal' );
         }
 
@@ -165,7 +173,11 @@ class SubscriptionManager {
         ] );
 
         foreach ( $q->posts as $post_id ) {
-            update_post_meta( $post_id, '_ovr_listing_status', 'active' );
+            // Restore the owner's pre-expiry status when known, otherwise 'active'.
+            $prior = (string) get_post_meta( $post_id, '_ovr_listing_status_pre_expiry', true );
+            $restore = in_array( $prior, [ 'active', 'inactive', 'pending_renewal', 'draft' ], true ) ? $prior : 'active';
+            update_post_meta( $post_id, '_ovr_listing_status', $restore );
+            delete_post_meta( $post_id, '_ovr_listing_status_pre_expiry' );
             wp_cache_delete( 'ovr_pricing_' . $post_id, 'ovr' );
         }
     }

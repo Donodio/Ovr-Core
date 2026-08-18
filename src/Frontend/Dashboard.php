@@ -33,48 +33,40 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 class Dashboard {
 
     public function init(): void {
-        add_action( 'admin_post_ovr_inquiry_reply', [ $this, 'handle_inquiry_reply' ] );
+        add_action( 'admin_post_ovr_inquiry_delete', [ $this, 'handle_inquiry_delete' ] );
     }
 
     /**
-     * Record an in-app reply to an inquiry from the dashboard (server-rendered,
-     * no-JS). Appends to the inquiry's response history and marks it replied.
+     * Safely delete an inquiry record from the dashboard. Inquiries are treated
+     * as important records, so deletion is nonce-protected, ownership-checked,
+     * and confirmed client-side (the template adds a confirm step). This is a
+     * permanent delete matching the platform's retention purge behaviour; the
+     * record is never half-removed.
      */
-    public function handle_inquiry_reply(): void {
+    public function handle_inquiry_delete(): void {
         if ( ! is_user_logged_in() ) {
-            wp_die( '403' );
+            wp_die( esc_html__( 'You must be logged in.', 'ovr-core' ) );
         }
         $id = (int) ( $_POST['inquiry_id'] ?? 0 );
-        check_admin_referer( 'ovr_inquiry_reply_' . $id );
+        check_admin_referer( 'ovr_inquiry_delete_' . $id );
 
         global $wpdb;
-        $table   = $wpdb->prefix . 'ovr_inquiries';
-        $message = sanitize_textarea_field( wp_unslash( $_POST['reply_message'] ?? '' ) );
-        $row     = $wpdb->get_row( $wpdb->prepare( "SELECT landlord_id, responses FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+        $table = $wpdb->prefix . 'ovr_inquiries';
+        $row   = $wpdb->get_row( $wpdb->prepare( "SELECT landlord_id FROM {$table} WHERE id = %d", $id ), ARRAY_A );
 
         $back = add_query_arg( [ 'tab' => 'inquiries' ], Pages::get_page_url( 'ovr_page_dashboard' ) );
 
-        if ( ! $row || ( (int) $row['landlord_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) || '' === $message ) {
-            wp_safe_redirect( add_query_arg( 'ovr_reply', 'error', $back ) );
+        // A landlord may only remove their own property's inquiries; admins may
+        // remove any. Invalid IDs simply bounce back (never delete blindly).
+        if ( ! $row || ( (int) $row['landlord_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) ) {
+            wp_safe_redirect( add_query_arg( 'ovr_inquiry', 'error', $back ) );
             exit;
         }
 
-        $history   = $row['responses'] ? (array) json_decode( (string) $row['responses'], true ) : [];
-        $history[] = [
-            'at'      => current_time( 'mysql' ),
-            'by'      => get_current_user_id(),
-            'by_name' => wp_get_current_user()->display_name,
-            'message' => $message,
-        ];
+        $wpdb->delete( $table, [ 'id' => $id ], [ '%d' ] );
+        \OVR\Core\AuditLog::record( 'inquiry.delete', 'inquiry', $id );
 
-        $wpdb->update(
-            $table,
-            [ 'responses' => wp_json_encode( $history ), 'status' => 'replied', 'replied_at' => current_time( 'mysql' ) ],
-            [ 'id' => $id ]
-        );
-        \OVR\Core\AuditLog::record( 'inquiry.reply', 'inquiry', $id );
-
-        wp_safe_redirect( add_query_arg( 'ovr_reply', 'sent', $back ) );
+        wp_safe_redirect( add_query_arg( 'ovr_inquiry', 'deleted', $back ) );
         exit;
     }
 
@@ -175,15 +167,19 @@ class Dashboard {
                 break;
 
             case 'add-listing':
-                $pid  = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
-                $post = $pid ? get_post( $pid ) : null;
-                // Only the owner may edit, and only an OVR property.
-                if ( $post && ( 'ovr_property' !== $post->post_type || (int) $post->post_author !== $user->ID ) ) {
+                $pid      = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
+                $post     = $pid ? get_post( $pid ) : null;
+                $is_admin = current_user_can( 'manage_options' );
+                // Only the owner (or an admin) may edit, and only an OVR property.
+                // Admins don't own every listing but are allowed to open any of
+                // them in this editor — otherwise the "Edit" button on a listing
+                // page bounces an admin to the "subscription required" block.
+                if ( $post && ( 'ovr_property' !== $post->post_type || ( (int) $post->post_author !== $user->ID && ! $is_admin ) ) ) {
                     $post = null;
                 }
                 $data['post']          = $post;
-                $data['can_create']    = $post ? true : UserSubscription::can_create_listing( $user->ID );
-                $data['block_reason']  = $post ? '' : UserSubscription::listing_block_reason( $user->ID );
+                $data['can_create']    = $post ? true : ( $is_admin || UserSubscription::can_create_listing( $user->ID ) );
+                $data['block_reason']  = $post ? '' : ( $is_admin ? '' : UserSubscription::listing_block_reason( $user->ID ) );
                 $data['save_action']   = admin_url( 'admin-post.php' );
                 $data['ajax_url']      = admin_url( 'admin-ajax.php' );
                 $data['listing_nonce'] = wp_create_nonce( 'ovr_listing_action' );
@@ -329,7 +325,7 @@ class Dashboard {
     private static function get_properties( \WP_User $user, int $limit = 999 ): array {
         $q = new \WP_Query( [
             'post_type'      => 'ovr_property',
-            'post_status'    => [ 'publish', 'draft', 'pending' ],
+            'post_status'    => [ 'publish', 'draft', 'pending', \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED ],
             'author'         => $user->ID,
             'posts_per_page' => $limit,
             'orderby'        => 'modified',

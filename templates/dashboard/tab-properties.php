@@ -19,7 +19,8 @@ $notice  = isset( $_GET['ovr_listing'] ) ? sanitize_key( wp_unslash( $_GET['ovr_
 $notices = [
     'created'     => __( 'Your listing has been published.', 'ovr-core' ),
     'updated'     => __( 'Your listing has been updated.', 'ovr-core' ),
-    'deleted'     => __( 'Your listing has been deleted. You can restore it from Trash within the retention window.', 'ovr-core' ),
+    'deleted'     => __( 'Your listing has been moved to your archive. You can restore it anytime within the retention window.', 'ovr-core' ),
+    'restored'    => __( 'Your listing has been restored and is visible again.', 'ovr-core' ),
     'bumped'      => __( 'Your listing has been bumped to the top of its results.', 'ovr-core' ),
     'activated'   => __( 'Your listing is now active and visible in search.', 'ovr-core' ),
     'deactivated' => __( 'Your listing has been deactivated and hidden from search.', 'ovr-core' ),
@@ -125,11 +126,6 @@ foreach ( $properties as $p ) {
             </a>
         </div>
     <?php else : ?>
-        <div class="ovr-mylist__toolbar">
-            <button type="button" class="ovr-mylist__reset" id="ovr-mylist-reset" title="<?php esc_attr_e( 'Clear filters', 'ovr-core' ); ?>">
-                <span class="material-symbols-outlined">filter_alt_off</span><?php esc_html_e( 'Reset', 'ovr-core' ); ?>
-            </button>
-        </div>
         <div class="ovr-mylist__scroll">
             <table class="ovr-mylist__table">
                 <thead>
@@ -148,6 +144,7 @@ foreach ( $properties as $p ) {
                                 <option value=""><?php esc_html_e( 'All', 'ovr-core' ); ?></option>
                                 <option value="active"><?php esc_html_e( 'Active', 'ovr-core' ); ?></option>
                                 <option value="inactive"><?php esc_html_e( 'Inactive', 'ovr-core' ); ?></option>
+                                <option value="archived"><?php esc_html_e( 'Archived', 'ovr-core' ); ?></option>
                                 <option value="draft"><?php esc_html_e( 'Draft', 'ovr-core' ); ?></option>
                             </select>
                         </td>
@@ -173,18 +170,26 @@ foreach ( $properties as $p ) {
                         'active'          => 'var(--ovr-secondary-container)',
                         'inactive'        => 'var(--ovr-error-container)',
                         'pending_renewal' => 'var(--ovr-tertiary-container)',
+                        'archived'        => 'var(--ovr-surface-container)',
                         'draft'           => 'var(--ovr-surface-container)',
                     ][ $listing_st ] ?? 'var(--ovr-surface-container)';
                     $status_text = [
                         'active'          => __( 'Active', 'ovr-core' ),
                         'inactive'        => __( 'Inactive', 'ovr-core' ),
                         'pending_renewal' => __( 'Pending', 'ovr-core' ),
+                        'archived'        => __( 'Archived', 'ovr-core' ),
                         'draft'           => __( 'Draft', 'ovr-core' ),
                     ][ $listing_st ] ?? $listing_st;
 
                     $del_url = wp_nonce_url(
                         admin_url( 'admin-post.php?action=ovr_delete_listing&post=' . $p->ID ),
                         'ovr_delete_listing_' . $p->ID
+                    );
+                    $is_archived = ( 'archived' === $listing_st
+                        || \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED === get_post_status( $p->ID ) );
+                    $restore_url = wp_nonce_url(
+                        admin_url( 'admin-post.php?action=ovr_restore_listing&post=' . $p->ID ),
+                        'ovr_restore_listing_' . $p->ID
                     );
                     $bump_url = wp_nonce_url(
                         admin_url( 'admin-post.php?action=ovr_bump_listing&post=' . $p->ID ),
@@ -220,12 +225,18 @@ foreach ( $properties as $p ) {
                             <a href="<?php echo esc_url( $upgrade_url ); ?>" class="ovr-mylist__act ovr-mylist__act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Upgrade', 'ovr-core' ); ?>">
                                 <span class="material-symbols-outlined">rocket_launch</span>
                             </a>
+                            <?php if ( $is_archived ) : ?>
+                                <a href="<?php echo esc_url( $restore_url ); ?>" class="ovr-mylist__act ovr-mylist__act--edit" title="<?php esc_attr_e( 'Restore from archive', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Restore', 'ovr-core' ); ?>">
+                                    <span class="material-symbols-outlined">restore_from_trash</span>
+                                </a>
+                            <?php else : ?>
                             <a href="<?php echo esc_url( $del_url ); ?>" class="ovr-mylist__act ovr-mylist__act--danger"
                                data-ovr-delete
                                data-title="<?php echo esc_attr( $del_title ); ?>"
                                title="<?php esc_attr_e( 'Delete', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Delete', 'ovr-core' ); ?>">
                                 <span class="material-symbols-outlined">delete</span>
                             </a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -239,20 +250,20 @@ foreach ( $properties as $p ) {
 <div class="ovr-mylist-modal" id="ovr-del-modal" aria-hidden="true">
     <div class="ovr-mylist-modal__backdrop" data-del-cancel></div>
     <div class="ovr-mylist-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ovr-del-title">
-        <?php // The handler calls wp_trash_post() (ListingForm::handle_delete), so this
-              // is reversible. The previous copy said "permanently delete … cannot be
-              // undone", which contradicted both the actual behaviour and the success
-              // notice above ("You can restore it from Trash within the retention
-              // window") and could scare an owner off a recoverable action. ?>
+        <?php // The handler archives the listing (ListingForm::handle_delete) via a
+               // non-public post status, so this is reversible. The previous copy said
+               // "permanently delete … cannot be undone", which contradicted both the
+               // actual behaviour and the success notice above ("restore it … within
+               // the retention window") and could scare an owner off a recoverable action. ?>
         <div class="ovr-mylist-modal__icon"><span class="material-symbols-outlined">delete</span></div>
-        <h3 class="ovr-mylist-modal__title" id="ovr-del-title"><?php esc_html_e( 'Move Listing to Trash?', 'ovr-core' ); ?></h3>
+        <h3 class="ovr-mylist-modal__title" id="ovr-del-title"><?php esc_html_e( 'Move Listing to Archive?', 'ovr-core' ); ?></h3>
         <p class="ovr-mylist-modal__body">
-            <?php esc_html_e( 'This listing will be removed from search and from your active listings. You can restore it from Trash within the retention window.', 'ovr-core' ); ?>
+            <?php esc_html_e( 'This listing will be removed from search and from your active listings. You can restore it from your archive within the retention window.', 'ovr-core' ); ?>
         </p>
         <p class="ovr-mylist-modal__target" id="ovr-del-target"></p>
         <div class="ovr-mylist-modal__actions">
             <button type="button" class="ovr-mylist-modal__btn ovr-mylist-modal__btn--cancel" data-del-cancel><?php esc_html_e( 'Cancel', 'ovr-core' ); ?></button>
-            <a href="#" class="ovr-mylist-modal__btn ovr-mylist-modal__btn--delete" id="ovr-del-confirm"><?php esc_html_e( 'Move to Trash', 'ovr-core' ); ?></a>
+            <a href="#" class="ovr-mylist-modal__btn ovr-mylist-modal__btn--delete" id="ovr-del-confirm"><?php esc_html_e( 'Move to Archive', 'ovr-core' ); ?></a>
         </div>
     </div>
 </div>
@@ -278,9 +289,6 @@ foreach ( $properties as $p ) {
 .ovr-mylist__f{width:100%;min-width:80px;padding:7px 10px;font-size:13px;font-family:inherit;color:var(--ovr-on-surface,#1c2430);background:#fff;border:1px solid var(--ovr-outline,#c6d0cf);border-radius:8px;box-sizing:border-box}
 .ovr-mylist__f:focus{outline:none;border-color:var(--ovr-primary,#006c4a);box-shadow:0 0 0 3px rgba(0,108,74,.14)}
 .ovr-mylist__toolbar{display:flex;justify-content:flex-start;margin-bottom:12px}
-.ovr-mylist__reset{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid var(--ovr-outline,#c6d0cf);border-radius:8px;background:#fff;color:var(--ovr-on-surface,#1c2430);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;text-transform:none;letter-spacing:normal}
-.ovr-mylist__reset:hover{background:var(--ovr-surface-container,#eef2f1)}
-.ovr-mylist__reset .material-symbols-outlined{font-size:16px}
 .ovr-mylist__table td{padding:10px 12px;border-bottom:1px solid var(--ovr-outline-variant,#eee);vertical-align:middle}
 .ovr-mylist__table tbody tr:hover td{background:var(--ovr-surface-container-low,#f6faf9)}
 .ovr-mylist__no-match td{text-align:center;padding:36px 16px;color:var(--ovr-on-surface-variant,#5f6b7a);font-style:italic}
@@ -297,9 +305,10 @@ foreach ( $properties as $p ) {
 .ovr-mylist__act:hover{background:var(--ovr-surface-container,#f0f3f2)}
 .ovr-mylist__act:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(0,108,74,.35)}
 .ovr-mylist__act .material-symbols-outlined{font-size:18px}
-/* Edit — high-contrast solid green (P1.4): white label on OVR green, never blue-on-blue. */
-.ovr-mylist__act--edit{background:#006c4a;color:#fff;border-color:#006c4a}
-.ovr-mylist__act--edit:hover{background:#00563b;border-color:#00563b;color:#fff}
+/* Edit — light green fill with a dark green icon (readable at a glance, never
+   a dark-on-dark button). */
+.ovr-mylist__act--edit{background:#e2f2ea;color:#00563b;border-color:#9fcebb}
+.ovr-mylist__act--edit:hover{background:#cde8db;border-color:#00563b;color:#00412c}
 .ovr-mylist__act--edit:focus-visible{box-shadow:0 0 0 3px rgba(0,108,74,.45)}
 .ovr-mylist__act--edit[aria-disabled="true"],.ovr-mylist__act--edit:disabled{background:#9db8ad;border-color:#9db8ad;color:#eef4f1;cursor:not-allowed;pointer-events:none}
 .ovr-mylist__act--upgrade{background:#fff6d9;color:#6b4e00;border-color:#e7cf7e}

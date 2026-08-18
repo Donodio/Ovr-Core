@@ -2,13 +2,15 @@
 /**
  * Deleted Listings admin module (Feature G).
  *
- * Soft-deleted listings are WordPress-trashed (post_status=trash) by the
- * landlord's Delete action, so nothing is destroyed up front. This screen lets
- * an admin review trashed ovr_property posts and either Restore them or
- * Permanently Delete them, and shows how long each has until automatic cleanup.
+ * Soft-deleted ("archived") listings use a dedicated non-public post status
+ * (ovr_property => 'archived') set by the landlord's Delete action, so nothing
+ * is destroyed up front and they stay clear of WordPress core's global trash
+ * sweep. This screen lets an admin review archived ovr_property posts and either
+ * Restore them or Permanently Delete them, and shows how long each has until
+ * automatic cleanup.
  *
  * A daily cron (ovr_hard_delete_listings) permanently removes any listing that
- * has been in the trash longer than the configured retention window
+ * has been archived longer than the configured retention window
  * (Settings → Listings → "Deleted Listing Retention", default 180 days / 6 months).
  *
  * @package OVR\Admin
@@ -46,6 +48,41 @@ class DeletedListingsAdmin {
             wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', self::CRON_HOOK );
         }
         self::maybe_migrate_retention();
+        self::maybe_migrate_trash_to_archive();
+    }
+
+    /**
+     * One-time migration: listings soft-deleted under the old WordPress-trash
+     * mechanism are moved to the dedicated 'archived' status so they remain in
+     * the archive UI and are no longer swept by WP core's global trash purge
+     * (EMPTY_TRASH_DAYS). Idempotent — guarded by an option, and only ever
+     * touches ovr_property posts currently in 'trash'.
+     */
+    private static function maybe_migrate_trash_to_archive(): void {
+        if ( get_option( 'ovr_trash_to_archive_migrated' ) ) {
+            return;
+        }
+
+        $trashed = get_posts( [
+            'post_type'      => 'ovr_property',
+            'post_status'    => 'trash',
+            'posts_per_page' => 200,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+        ] );
+
+        foreach ( (array) $trashed as $pid ) {
+            wp_update_post( [ 'ID' => (int) $pid, 'post_status' => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED ] );
+            if ( ! get_post_meta( (int) $pid, '_ovr_deleted_at', true ) ) {
+                $ts = (int) get_post_meta( (int) $pid, '_wp_trash_meta_time', true );
+                update_post_meta( (int) $pid, '_ovr_deleted_at', $ts ? gmdate( 'Y-m-d H:i:s', $ts ) : current_time( 'mysql' ) );
+            }
+            if ( ! get_post_meta( (int) $pid, '_ovr_deleted_by', true ) ) {
+                update_post_meta( (int) $pid, '_ovr_deleted_by', 'admin' );
+            }
+        }
+
+        update_option( 'ovr_trash_to_archive_migrated', 1 );
     }
 
     /**
@@ -103,10 +140,10 @@ class DeletedListingsAdmin {
         $paged    = max( 1, isset( $_GET['paged'] ) ? absint( $_GET['paged'] ) : 1 );
         $offset   = ( $paged - 1 ) * $per_page;
 
-        $total = (int) wp_count_posts( 'ovr_property' )->trash;
+        $total = (int) wp_count_posts( 'ovr_property' )->{ \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED };
         $trashed = get_posts( [
             'post_type'      => 'ovr_property',
-            'post_status'    => 'trash',
+            'post_status'    => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED,
             'posts_per_page' => $per_page,
             'offset'         => $offset,
             'orderby'        => 'modified',
@@ -121,7 +158,7 @@ class DeletedListingsAdmin {
         $trash_count = count( $trashed );
         $due_count   = 0;
         foreach ( $trashed as $p ) {
-            $tt = (int) get_post_meta( $p->ID, '_wp_trash_meta_time', true );
+            $tt = (int) strtotime( (string) get_post_meta( $p->ID, '_ovr_deleted_at', true ) );
             if ( $tt && ( $tt + $retention * DAY_IN_SECONDS ) <= $now ) {
                 $due_count++;
             }
@@ -184,7 +221,7 @@ class DeletedListingsAdmin {
                         </thead>
                         <tbody>
                         <?php foreach ( $trashed as $p ) :
-                            $trash_time = (int) get_post_meta( $p->ID, '_wp_trash_meta_time', true );
+                            $trash_time = (int) strtotime( (string) get_post_meta( $p->ID, '_ovr_deleted_at', true ) );
                             $owner      = get_userdata( (int) $p->post_author );
                             $deleted_by = get_post_meta( $p->ID, '_ovr_deleted_by', true );
                             $purge_ts   = $trash_time ? $trash_time + $retention * DAY_IN_SECONDS : 0;
@@ -269,10 +306,8 @@ class DeletedListingsAdmin {
         if ( $post && 'ovr_property' === $post->post_type ) {
             $deleted_by = get_post_meta( $post_id, '_ovr_deleted_by', true );
 
-            wp_untrash_post( $post_id );
-            // wp_untrash_post restores to 'draft' on some setups; force publish
-            // so the listing returns to its live state (visibility still gated
-            // by _ovr_listing_status / _ovr_admin_status).
+            // Bring the archived listing back to its live (publish) state.
+            // Visibility is still gated by _ovr_listing_status / _ovr_admin_status.
             wp_update_post( [ 'ID' => $post_id, 'post_status' => 'publish' ] );
 
             delete_post_meta( $post_id, '_ovr_deleted_by' );
@@ -296,6 +331,12 @@ class DeletedListingsAdmin {
         }
         $post = get_post( $post_id );
         if ( $post && 'ovr_property' === $post->post_type ) {
+            // Guard: only archived (soft-deleted) listings may be permanently
+            // removed, so a crafted URL can never skip the soft-delete step.
+            if ( \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED !== $post->post_status ) {
+                wp_safe_redirect( add_query_arg( 'ovr_trash', 'error', $this->page_url() ) );
+                exit;
+            }
             $title      = $post->post_title;
             $deleted_by = get_post_meta( $post_id, '_ovr_deleted_by', true );
             wp_delete_post( $post_id, true );
@@ -313,15 +354,15 @@ class DeletedListingsAdmin {
 
         $expired = get_posts( [
             'post_type'      => 'ovr_property',
-            'post_status'    => 'trash',
+            'post_status'    => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED,
             'posts_per_page' => 100,
             'fields'         => 'ids',
             'meta_query'     => [
                 [
-                    'key'     => '_wp_trash_meta_time',
-                    'value'   => $cutoff,
+                    'key'     => '_ovr_deleted_at',
+                    'value'   => gmdate( 'Y-m-d H:i:s', $cutoff ),
                     'compare' => '<=',
-                    'type'    => 'NUMERIC',
+                    'type'    => 'DATETIME',
                 ],
             ],
         ] );

@@ -56,6 +56,11 @@ class Lifecycle {
                 ],
                 [
                     'key'     => UserSubscription::META_EXPIRES,
+                    'value'   => '',
+                    'compare' => '!=',
+                ],
+                [
+                    'key'     => UserSubscription::META_EXPIRES,
                     'value'   => $today,
                     'compare' => '<',
                     'type'    => 'DATE',
