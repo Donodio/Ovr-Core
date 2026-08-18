@@ -6,11 +6,13 @@
  *
  *   POST /wp-admin/admin-post.php?action=ovr_start_checkout
  *
- * Phase 1: Stripe stub records a pending payment row and redirects back
- * with a query string. Phase 2 will swap in real Checkout Session URLs.
+ * Starts a checkout for the active gateway (Stripe Checkout Sessions, PayPal
+ * Orders, or the internal Wallet) and finalizes it server-side on the buyer's
+ * return redirect by re-confirming the payment with the provider. Never treats
+ * a redirect alone as proof of payment.
  *
  * Also surfaces a one-time admin notice on plan-management screens letting
- * admins know they need to configure Stripe API keys.
+ * admins know they need to configure their payment API keys.
  *
  * @package OVR\Payment
  * @since   1.0.0
@@ -420,7 +422,7 @@ class CheckoutHandler {
      */
     public function maybe_finalize_gateway_return(): void {
         $gw = isset( $_GET['ovr_gw'] ) ? sanitize_key( wp_unslash( $_GET['ovr_gw'] ) ) : '';
-        if ( ! in_array( $gw, [ 'stripe', 'paypal' ], true ) ) {
+        if ( ! in_array( $gw, [ 'stripe', 'paypal', 'authorize_net' ], true ) ) {
             return;
         }
 
@@ -506,14 +508,36 @@ class CheckoutHandler {
      */
     public function maybe_mark_checkout_cancelled(): void {
         $status = isset( $_GET['ovr_checkout'] ) ? sanitize_key( wp_unslash( $_GET['ovr_checkout'] ) ) : '';
-        $token  = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
-
-        if ( 'cancelled' !== $status || '' === $token ) {
+        if ( 'cancelled' !== $status ) {
             return;
         }
 
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_payments';
+
+        // Authorize.net returns to its cancel_url carrying ovr_gw + payment_id.
+        $gw = isset( $_GET['ovr_gw'] ) ? sanitize_key( wp_unslash( $_GET['ovr_gw'] ) ) : '';
+        if ( 'authorize_net' === $gw ) {
+            $payment_id = isset( $_GET['payment_id'] ) ? absint( $_GET['payment_id'] ) : 0;
+            if ( $payment_id ) {
+                $updated = $wpdb->update(
+                    $table,
+                    [ 'status' => 'cancelled' ],
+                    [ 'id' => $payment_id, 'status' => 'pending' ],
+                    [ '%s' ],
+                    [ '%d', '%s' ]
+                );
+                if ( $updated ) {
+                    do_action( 'ovr_checkout_cancelled', (string) $payment_id );
+                }
+            }
+            return;
+        }
+
+        $token = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
+        if ( '' === $token ) {
+            return;
+        }
 
         $updated = $wpdb->update(
             $table,

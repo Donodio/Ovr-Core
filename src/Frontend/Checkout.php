@@ -5,8 +5,8 @@
  * Review-and-pay step for a subscription plan. Renders the order summary + a
  * payment form, then hands off to the existing `ovr_start_checkout` flow
  * (CheckoutHandler) on submit. Card fields in the template are display-only and
- * are never submitted to the server — real card capture belongs to a future
- * PCI-compliant tokenizer (Stripe Elements / Authorize.net Accept.js).
+ * are never submitted to the server — card capture is delegated to the
+ * provider's hosted checkout (Stripe Checkout / PayPal).
  *
  * @package OVR\Frontend
  * @since   1.0.0
@@ -70,9 +70,11 @@ class Checkout {
 
             $property_id = isset( $_GET['property'] ) ? absint( $_GET['property'] ) : 0;
             $property    = $property_id ? get_post( $property_id ) : null;
+            // A landlord may only boost their own listing; administrators are
+            // authorized to manage any listing (admin override).
             $owns        = $property
                 && 'ovr_property' === $property->post_type
-                && (int) $property->post_author === get_current_user_id();
+                && ( (int) $property->post_author === get_current_user_id() || current_user_can( 'manage_options' ) );
 
             // Upgrade selected but no (valid) listing → guide them to Bump.
             if ( $product && ! $owns ) {

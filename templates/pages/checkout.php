@@ -5,8 +5,8 @@
  * Order summary + payment form for a subscription plan. SECURITY: the card
  * fields are display-only (no `name`, never submitted) — only the plan, the
  * chosen gateway, and the nonce post to the existing `ovr_start_checkout`
- * handler. Real card capture must use a PCI-compliant tokenizer (Stripe
- * Elements / Authorize.net Accept.js) before going live.
+ * handler. Card capture happens on the provider's hosted checkout (Stripe
+ * Checkout / PayPal), so no card data ever reaches this site.
  *
  * @package OVR
  * @var array    $order   Normalized line item: type, eyebrow, name, sub, price, fields.

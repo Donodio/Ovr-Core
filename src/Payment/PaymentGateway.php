@@ -2,8 +2,10 @@
 /**
  * Payment Gateway Interface.
  *
- * Phase 1 ships a Stripe stub. Phase 2 (or any third party) implements
- * this interface to add a real provider.
+ * Implemented by the active providers — Stripe Checkout Sessions, PayPal
+ * Orders, and the internal Wallet. Each gateway starts a checkout, returns the
+ * redirect URL for the provider's hosted flow, and finalizes the payment on the
+ * buyer's return by re-confirming the transaction with the provider.
  *
  * @package OVR\Payment
  * @since   1.0.0
