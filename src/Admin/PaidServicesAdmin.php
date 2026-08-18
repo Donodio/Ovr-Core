@@ -28,6 +28,7 @@ class PaidServicesAdmin {
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
         add_action( 'admin_init', [ PaidService::class, 'maybe_seed' ] );
+        add_action( 'admin_init', [ PaidService::class, 'ensure_deals_services' ] );
         add_action( 'admin_post_ovr_paid_service_save',    [ $this, 'handle_save' ] );
         add_action( 'admin_post_ovr_paid_service_toggle',  [ $this, 'handle_toggle' ] );
         add_action( 'admin_post_ovr_paid_service_delete',  [ $this, 'handle_delete' ] );
@@ -285,7 +286,7 @@ class PaidServicesAdmin {
      */
     private function purchase_stats(): array {
         global $wpdb;
-        $keys  = "('_ovr_bump_expires','_ovr_featured_expires','_ovr_slider_expires')";
+        $keys  = "('_ovr_bump_expires','_ovr_featured_expires','_ovr_slider_expires','_ovr_deal_expires')";
         $today = current_time( 'Y-m-d' );
         $soon  = gmdate( 'Y-m-d', strtotime( $today . ' +7 days' ) );
 

@@ -274,6 +274,59 @@ class SeasonalPricing {
     }
 
     /**
+     * Price range (min → max) across a property's structured pricing rows,
+     * grouped by rate type so unlike units (nightly vs monthly) are never mixed.
+     * Returns e.g. [ 'min' => 1200.0, 'max' => 1800.0, 'per' => 'month' ], or
+     * null when there is no usable range (no rows, hidden pricing, or a single
+     * price). Used by property cards to show a compact "$X – $Y / month" label.
+     *
+     * @return array{min:float, max:float, per:string}|null
+     */
+    public static function price_range( int $property_id ): ?array {
+        $rows = self::get_pricing( $property_id );
+        if ( empty( $rows ) || self::is_hidden( $property_id ) ) {
+            return null;
+        }
+
+        // Group amounts by rate type so we only compare like-for-like.
+        $groups = [];
+        foreach ( $rows as $row ) {
+            $rate  = self::row_rate( (array) $row );
+            if ( $rate['amount'] <= 0 ) {
+                continue;
+            }
+            $type = $rate['type'];
+            if ( ! isset( $groups[ $type ] ) ) {
+                $groups[ $type ] = [ 'min' => $rate['amount'], 'max' => $rate['amount'] ];
+            } else {
+                $groups[ $type ]['min'] = min( $groups[ $type ]['min'], $rate['amount'] );
+                $groups[ $type ]['max'] = max( $groups[ $type ]['max'], $rate['amount'] );
+            }
+        }
+        if ( empty( $groups ) ) {
+            return null;
+        }
+
+        // Prefer the most common/per-unit rate type; fall back to any group.
+        $per_label = self::PER_UNITS;
+        $per_by_type = [];
+        foreach ( $per_label as $key => $info ) {
+            $per_by_type[ $info['rate_type'] ] = $info['label'];
+        }
+
+        $type = (string) ( array_keys( $groups )[0] ?? '' );
+        foreach ( [ 'nightly', 'weekly', 'monthly', 'flat' ] as $t ) {
+            if ( isset( $groups[ $t ] ) ) { $type = $t; break; }
+        }
+        $g = $groups[ $type ];
+
+        if ( $g['min'] === $g['max'] ) {
+            return null; // single price — not really a "range"
+        }
+        return [ 'min' => $g['min'], 'max' => $g['max'], 'per' => $per_by_type[ $type ] ?? '' ];
+    }
+
+    /**
      * Get the current nightly rate for a property based on date.
      */
     public static function get_current_rate( int $property_id, string $date = '' ): float {

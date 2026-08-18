@@ -9,6 +9,7 @@
 namespace OVR\Search;
 
 use OVR\Core\TemplateLoader;
+use OVR\Core\Pages;
 use OVR\Property\PropertyQuery;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,7 +18,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class SearchHandler {
 
-    public function init(): void {}
+    /**
+     * Bump to force a one-time rewrite flush after adding/changing rules.
+     */
+    private const REWRITE_VERSION = '2';
+
+    public function init(): void {
+        add_action( 'init', [ self::class, 'register_search_pagination_rewrite' ] );
+    }
+
+    /**
+     * Pretty pagination (/search/page/2/) is otherwise swallowed by the core
+     * `search/(.+?)/?$` rule, which resolves it as a keyword search for
+     * "page/2". Register an explicit rule (built from the real search-page
+     * slug) at the top of the rules list so paging reaches our page.
+     */
+    public static function register_search_pagination_rewrite(): void {
+        $page_id = absint( get_option( 'ovr_page_search' ) );
+        if ( ! $page_id ) {
+            return;
+        }
+        $slug = get_post_field( 'post_name', $page_id );
+        if ( ! $slug ) {
+            return;
+        }
+
+        $escaped = preg_quote( $slug, '#' );
+        add_rewrite_rule(
+            '^' . $escaped . '/page/([0-9]{1,})/?$',
+            'index.php?pagename=' . rawurlencode( $slug ) . '&paged=$matches[1]',
+            'top'
+        );
+
+        // One-time flush so the new rule is persisted (mirrors Pages.php).
+        if ( get_option( 'ovr_rewrite_version' ) !== self::REWRITE_VERSION ) {
+            flush_rewrite_rules();
+            update_option( 'ovr_rewrite_version', self::REWRITE_VERSION );
+        }
+    }
 
     /**
      * Render search results page.
@@ -31,16 +69,44 @@ class SearchHandler {
             $debug = self::render_debug_panel( $filters, $query );
         }
 
-        $html = TemplateLoader::get_rendered( 'search/results.php', [
-            'query'    => $query,
-            'filters'  => $filters,
-            'total'    => $query->found_posts,
-            'max_pages'=> $query->max_num_pages,
-            'paged'    => $filters['paged'],
-            'view'     => sanitize_key( $_GET['view'] ?? 'grid' ),
-        ] );
+        $html = self::render_region( $filters, $query, sanitize_key( $_GET['view'] ?? 'grid' ) );
 
         return $debug . $html;
+    }
+
+    /**
+     * Render just the results region (works for both the full page and the
+     * village-chip AJAX refresh, where only this block is swapped in).
+     *
+     * @param array     $filters Sanitized search filters.
+     * @param \WP_Query $query   The already-run results query.
+     * @param string    $view    Active results view ('grid' | 'list' | 'map').
+     */
+    public static function render_region( array $filters, \WP_Query $query, string $view = 'grid' ): string {
+        return TemplateLoader::get_rendered( 'search/results.php', [
+            'query'     => $query,
+            'filters'   => $filters,
+            'total'     => $query->found_posts,
+            'max_pages' => $query->max_num_pages,
+            'paged'     => $filters['paged'],
+            'view'      => $view,
+        ] );
+    }
+
+    /**
+     * Build the canonical search URL for a filter set (used by the chip AJAX
+     * handler so the address bar always matches the rendered results).
+     *
+     * @param array  $filters Sanitized search filters.
+     * @param string $view    Active results view (grid/list/map), '' to omit.
+     */
+    public static function filter_url( array $filters, string $view = '' ): string {
+        $clean  = array_filter( $filters, static fn( $v ) => $v !== '' && $v !== 0 && $v !== [] && $v !== false );
+        $params = http_build_query( $clean );
+        if ( in_array( $view, [ 'grid', 'list', 'map' ], true ) ) {
+            $params .= ( '' !== $params ? '&' : '' ) . 'view=' . rawurlencode( $view );
+        }
+        return Pages::get_page_url( 'ovr_page_search' ) . '?' . $params;
     }
 
     /**
@@ -166,39 +232,68 @@ class SearchHandler {
      * empty values here means an unset/blank dropdown contributes nothing.
      */
     public static function get_filters_from_request(): array {
-        $clean_slugs = static function ( $raw ): array {
-            return array_values( array_filter( array_map( 'sanitize_key', (array) $raw ), 'strlen' ) );
+        $raw = $_GET; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        // Pretty-permalink paging (/page/2/) arrives via query_var, not $_GET.
+        if ( empty( $raw['paged'] ) ) {
+            $raw['paged'] = get_query_var( 'paged', 1 );
+        }
+        // Robustness: some contexts (e.g. core paginate_links or third-party
+        // code) emit `?page=N` instead of `?paged=N`. Read it as a fallback so
+        // pagination never silently collapses to page 1.
+        if ( empty( $raw['paged'] ) && ! empty( $raw['page'] ) ) {
+            $raw['paged'] = $raw['page'];
+        }
+        return self::sanitize_filters( $raw );
+    }
+
+    /**
+     * Sanitize a raw (unsanitized) filter array into the canonical shape.
+     * The front-end posts the chip's target query string for the AJAX
+     * refresh; `wp_parse_str` rehydrates it into an array and the same
+     * laundering logic applies, so the server-side result set matches what a
+     * GET request would produce.
+     *
+     * @param array $raw Raw values (typically $_GET or a parsed query string).
+     */
+    public static function sanitize_filters( array $raw ): array {
+        $clean_slugs = static function ( $raw_slugs ): array {
+            return array_values( array_filter( array_map( 'sanitize_key', (array) $raw_slugs ), 'strlen' ) );
         };
 
         return [
-            'keyword'       => sanitize_text_field( wp_unslash( $_GET['keyword'] ?? '' ) ),
+            'keyword'         => sanitize_text_field( wp_unslash( (string) ( $raw['keyword'] ?? '' ) ) ),
             // Village is the free-text Village Name (matched against meta).
-            'village'       => isset( $_GET['village'] ) ? array_values( array_filter( array_map( 'sanitize_text_field', (array) wp_unslash( $_GET['village'] ) ), 'strlen' ) ) : [],
+            'village'         => isset( $raw['village'] ) ? array_values( array_filter( array_map( 'sanitize_text_field', (array) wp_unslash( $raw['village'] ) ), 'strlen' ) ) : [],
+            // Free-text Village Name search (phase 21 sidebar input).
+            'village_name'    => sanitize_text_field( wp_unslash( (string) ( $raw['village_name'] ?? '' ) ) ),
             // Village Section is the ovr_village taxonomy slug (curated facet).
-            'village_section' => isset( $_GET['village_section'] ) ? $clean_slugs( $_GET['village_section'] ) : [],
-            'property_type' => isset( $_GET['property_type'] ) ? $clean_slugs( $_GET['property_type'] ) : [],
+            'village_section' => $clean_slugs( $raw['village_section'] ?? [] ),
+            'property_type'   => $clean_slugs( $raw['property_type'] ?? [] ),
             // Rental term — the ovr_rental_type taxonomy (Long-Term / Short-Term).
-            'rental_type'   => isset( $_GET['rental_type'] ) ? $clean_slugs( $_GET['rental_type'] ) : [],
-            'amenities'     => isset( $_GET['amenities'] )     ? $clean_slugs( $_GET['amenities'] )     : [],
-            'views'         => isset( $_GET['views'] )         ? $clean_slugs( $_GET['views'] )         : [],
-            'features'      => isset( $_GET['features'] )      ? $clean_slugs( $_GET['features'] )      : [],
-            'bedrooms'      => absint( $_GET['bedrooms'] ?? 0 ),
-            'bathrooms'     => floatval( $_GET['bathrooms'] ?? 0 ),
+            'rental_type'     => $clean_slugs( $raw['rental_type'] ?? [] ),
+            'amenities'       => $clean_slugs( $raw['amenities'] ?? [] ),
+            'views'           => $clean_slugs( $raw['views'] ?? [] ),
+            'features'        => $clean_slugs( $raw['features'] ?? [] ),
+            'bedrooms'        => absint( $raw['bedrooms'] ?? 0 ),
+            'bathrooms'       => floatval( $raw['bathrooms'] ?? 0 ),
             // Free-text street-address search (matched against the _ovr_address meta).
-            'address'       => sanitize_text_field( wp_unslash( $_GET['address'] ?? '' ) ),
-            'price_min'     => floatval( $_GET['price_min'] ?? 0 ),
-            'price_max'     => floatval( $_GET['price_max'] ?? 0 ),
-            'guests'        => absint( $_GET['guests'] ?? 0 ),
-            'pets'          => ! empty( $_GET['pets'] ),
+            'address'         => sanitize_text_field( wp_unslash( (string) ( $raw['address'] ?? '' ) ) ),
+            'price_min'       => floatval( $raw['price_min'] ?? 0 ),
+            'price_max'       => floatval( $raw['price_max'] ?? 0 ),
+            'guests'          => absint( $raw['guests'] ?? 0 ),
+            'pets'            => ! empty( $raw['pets'] ),
             // Availability date range (Feature 2/8): excludes listings hard-
             // blocked over the stay. Only ISO YYYY-MM-DD values are honoured.
-            'checkin'       => self::clean_date( $_GET['checkin'] ?? '' ),
-            'checkout'      => self::clean_date( $_GET['checkout'] ?? '' ),
+            'checkin'         => self::clean_date( $raw['checkin'] ?? '' ),
+            'checkout'        => self::clean_date( $raw['checkout'] ?? '' ),
             // Owner filter (Phase 22): show only one landlord's listings.
-            'owner_id'      => absint( $_GET['owner_id'] ?? 0 ),
-            'sort'          => sanitize_key( $_GET['sort'] ?? 'newest' ),
-            'per_page'      => absint( $_GET['per_page'] ?? 12 ),
-            'paged'         => absint( $_GET['paged'] ?? get_query_var( 'paged', 1 ) ),
+            'owner_id'        => absint( $raw['owner_id'] ?? 0 ),
+            'sort'            => sanitize_key( (string) ( $raw['sort'] ?? 'newest' ) ),
+            'per_page'        => absint( $raw['per_page'] ?? 12 ),
+            'paged'           => absint( $raw['paged'] ?? 1 ),
+            // Deals & Cancellations view: constrains results to properties with
+            // an active (paid, unexpired) deals promotion.
+            'deals_only'      => ! empty( $raw['deals_only'] ) || 'deals' === ( $raw['view'] ?? '' ),
         ];
     }
 

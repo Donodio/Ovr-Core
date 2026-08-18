@@ -38,6 +38,7 @@ class UpgradeActivator {
         'bump'            => [ 'flag' => '_ovr_is_bumped',   'expires' => '_ovr_bump_expires' ],
         'homepage_slider' => [ 'flag' => '_ovr_in_slider',   'expires' => '_ovr_slider_expires' ],
         'featured'        => [ 'flag' => '_ovr_is_featured', 'expires' => '_ovr_featured_expires' ],
+        'deals'           => [ 'flag' => '_ovr_is_deal',     'expires' => '_ovr_deal_expires' ],
     ];
 
     /** Post meta storing the Unix timestamp a "bump" started (newest-first sort). */

@@ -67,6 +67,14 @@ class PaidService {
             'icon'     => 'trending_up',
             'features' => [ 'Rises above standard listings in the normal search result order', 'Never outranks a Featured listing', 'Only changes ordering — no info, badge or page changes', 'Re-sorts flooded results by newest bump first' ],
         ],
+        // "Deals & Cancellations": a promotional upgrade that makes a property
+        // eligible for the public Deals & Cancellations results, surfacing
+        // short-notice availability, cancellations and special deals.
+        'deals' => [
+            'label'    => 'Deals & Cancellations',
+            'icon'     => 'local_offer',
+            'features' => [ 'Listed on the public Deals & Cancellations page', 'Surfaces short-notice availability and special deals', 'Visible for the purchased duration, then expires automatically' ],
+        ],
     ];
 
     private static function table(): string {
@@ -284,6 +292,45 @@ class PaidService {
             self::save( $row );
         }
 
+        self::ensure_deals_services();
+
         update_option( self::SEED_OPTION, 1 );
+    }
+
+    /**
+     * Idempotently ensure the "Deals & Cancellations" services exist. Deals is a
+     * later addition, so existing installs that already seeded the catalogue
+     * need these rows added without re-seeding everything. Keyed on
+     * service_type + duration so re-running never creates duplicates.
+     */
+    public static function ensure_deals_services(): void {
+        global $wpdb;
+        $table = self::table();
+
+        $legacy = (array) get_option( 'ovr_paid_services', [] );
+        $price  = static function ( string $key, float $default ) use ( $legacy ): float {
+            $v = $legacy['deals'][ $key ] ?? null;
+            return is_numeric( $v ) ? (float) $v : $default;
+        };
+
+        // Default price ~$10 (configurable via the Paid Services admin screen).
+        $deals = [
+            [ 'name' => __( 'Deals & Cancellations — 30 Days', 'ovr-core' ), 'service_type' => 'deals', 'price' => $price( 'price_30', 10 ), 'duration_days' => 30, 'badge' => '', 'priority_weight' => 15, 'max_simultaneous' => 0, 'sort_order' => 50 ],
+            [ 'name' => __( 'Deals & Cancellations — 60 Days', 'ovr-core' ), 'service_type' => 'deals', 'price' => $price( 'price_60', 15 ), 'duration_days' => 60, 'badge' => '', 'priority_weight' => 15, 'max_simultaneous' => 0, 'sort_order' => 51 ],
+        ];
+
+        foreach ( $deals as $row ) {
+            $exists = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} WHERE service_type = %s AND duration_days = %d",
+                $row['service_type'],
+                $row['duration_days']
+            ) );
+            if ( $exists > 0 ) {
+                continue;
+            }
+            $row['description'] = self::TYPES[ $row['service_type'] ]['label'] ?? '';
+            $row['is_active']   = 1;
+            self::save( $row );
+        }
     }
 }
