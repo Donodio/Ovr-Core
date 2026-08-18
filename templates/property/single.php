@@ -124,6 +124,12 @@ $village_name = (string) ( $meta['village_name'] ?? '' ); // Specific village (f
 $ptypes        = wp_get_post_terms( $post_id, 'ovr_property_type' );
 $property_type = ( ! is_wp_error( $ptypes ) && ! empty( $ptypes ) ) ? $ptypes[0]->name : '';
 
+// Rental type (Short Term / Long Term / Seasonal …) for the summary card.
+$rtypes      = wp_get_post_terms( $post_id, 'ovr_rental_type' );
+$rental_type = ( ! is_wp_error( $rtypes ) && ! empty( $rtypes ) )
+    ? implode( ', ', wp_list_pluck( $rtypes, 'name' ) )
+    : '';
+
 $settings = get_option( 'ovr_settings', [] );
 $symbol   = $settings['currency_symbol'] ?? '$';
 
@@ -131,14 +137,20 @@ $author_id  = (int) get_post_field( 'post_author', $post_id );
 // Edit button shows to the listing owner OR an admin (Phase 15). It points at
 // the front-end dashboard editor (?tab=add-listing&post=ID) — landlords have no
 // wp-admin access, so get_edit_post_link() produced a dead/blocked link.
+// Admins get the dedicated wp-admin editor (which carries the Admin tab and
+// never demands a personal subscription).
 $is_owner   = is_user_logged_in() && get_current_user_id() === $author_id;
 $can_edit   = $is_owner || current_user_can( 'manage_options' );
 $edit_link  = '';
-if ( $can_edit && class_exists( Pages::class ) ) {
-    $edit_link = add_query_arg(
-        [ 'tab' => 'add-listing', 'post' => $post_id ],
-        Pages::get_page_url( 'ovr_page_dashboard' )
-    );
+if ( $can_edit ) {
+    if ( current_user_can( 'manage_options' ) ) {
+        $edit_link = admin_url( 'admin.php?page=ovr-edit-listing&post=' . $post_id );
+    } elseif ( class_exists( Pages::class ) ) {
+        $edit_link = add_query_arg(
+            [ 'tab' => 'add-listing', 'post' => $post_id ],
+            Pages::get_page_url( 'ovr_page_dashboard' )
+        );
+    }
 }
 $search_url = class_exists( Pages::class ) ? Pages::get_page_url( 'ovr_page_search' ) : home_url( '/' );
 
@@ -256,9 +268,8 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
     <div class="ovr-detail-subbar">
         <div class="ovr-detail-subbar-inner">
             <div class="ovr-detail-subbar-main">
-                <a href="<?php echo esc_url( $back_url ); ?>" class="ovr-detail-back">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                    <?php esc_html_e( 'Back To Search Results', 'ovr-core' ); ?>
+                <a href="<?php echo esc_url( $back_url ); ?>" class="ovr-detail-back" aria-label="<?php esc_attr_e( 'Back to results', 'ovr-core' ); ?>">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
                 </a>
                 <div class="ovr-detail-titlewrap">
                     <div class="ovr-detail-idrow">
@@ -278,11 +289,11 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
             <div class="ovr-detail-tools">
                 <?php if ( $edit_link ) : ?>
                     <a class="ovr-detail-tool" href="<?php echo esc_url( $edit_link ); ?>" aria-label="<?php esc_attr_e( 'Edit listing', 'ovr-core' ); ?>">
-                        <span class="material-symbols-outlined">edit</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
                     </a>
                 <?php endif; ?>
                 <button type="button" class="ovr-detail-tool" onclick="window.print()" aria-label="<?php esc_attr_e( 'Print listing', 'ovr-core' ); ?>">
-                    <span class="material-symbols-outlined">print</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                 </button>
             </div>
         </div>
@@ -333,14 +344,16 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                         <span class="material-symbols-outlined"><?php echo esc_html( $pets_icon ); ?></span>
                         <?php echo esc_html( $pets_label ); ?>
                     </span>
-                    <?php if ( $sqft > 0 ) : ?>
-                        <span class="ovr-detail-spec"><span class="material-symbols-outlined">straighten</span>
-                            <?php
-                            /* translators: %s: square footage */
-                            printf( esc_html__( '%s sq ft', 'ovr-core' ), esc_html( number_format_i18n( $sqft ) ) );
-                            ?>
-                        </span>
-                    <?php endif; ?>
+                    <?php
+                    // Golf cart status — always surfaced in the specs strip
+                    // (it replaces the square-footage chip). The term historically
+                    // lives in ovr_feature, but legacy listings store it as an
+                    // ovr_amenity, so both are checked.
+                    $has_golf_cart = \OVR\Property\PropertyQuery::has_golf_cart( $post_id );
+                    ?>
+                    <span class="ovr-detail-spec"><span class="material-symbols-outlined">golf_course</span>
+                        <?php echo $has_golf_cart ? esc_html__( 'Golf Cart Included', 'ovr-core' ) : esc_html__( 'No Golf Cart', 'ovr-core' ); ?>
+                    </span>
                 </div>
 
                 <!-- Status chips -->
@@ -374,7 +387,9 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                     'symbol'        => $symbol,
                     'property_type' => $property_type,
                     'bedrooms'      => $bedrooms,
+                    'rental_type'   => $rental_type,
                     'village'       => $village,
+                    'pricing'       => $pricing,
                     'has_seasonal'  => ! empty( $pricing ),
                     'views'         => $views,
                     'monthly_views' => $monthly,
@@ -389,7 +404,7 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
         <?php
         echo TemplateLoader::get_rendered( 'property/calendar.php', [
             'post_id'      => $post_id,
-            'months_ahead' => 6,
+            'months_ahead' => 15,
             'min_stay'     => $min_stay,
         ] );
         ?>
@@ -407,8 +422,8 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
             <div class="ovr-tabs" data-ovr-tabs>
                 <div class="ovr-tabs-nav" role="tablist">
                     <button type="button" class="ovr-tab is-active" role="tab" aria-selected="true" data-ovr-tab="desc"><?php esc_html_e( 'General Description', 'ovr-core' ); ?></button>
-                    <button type="button" class="ovr-tab" role="tab" aria-selected="false" data-ovr-tab="features"><?php esc_html_e( 'Features', 'ovr-core' ); ?></button>
-                    <button type="button" class="ovr-tab" role="tab" aria-selected="false" data-ovr-tab="reviews"><?php esc_html_e( 'Reviews', 'ovr-core' ); ?></button>
+                    <button type="button" class="ovr-tab" role="tab" aria-selected="false" data-ovr-tab="features"><?php esc_html_e( 'Amenities', 'ovr-core' ); ?></button>
+                    <button type="button" class="ovr-tab" role="tab" aria-selected="false" data-ovr-tab="reviews"><?php esc_html_e( 'Testimonials', 'ovr-core' ); ?></button>
                 </div>
                 <div class="ovr-tab-panels">
 
@@ -425,39 +440,49 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                         </div>
 
                         <?php
-                        // The "minor" owner sections (What's Nearby / Policies / Payment
-                        // Information) are folded into the long description so the page
-                        // isn't a stack of full-width cards (Section 9). They render as
-                        // compact blocks under the description text.
+                        // The "minor" owner sections are folded into the long
+                        // description so the page isn't a stack of full-width
+                        // cards (Section 9). They render as compact blocks under
+                        // the description text. Each is independent: a section
+                        // only appears when its content is populated. "Location"
+                        // is now branded "What's Near" on the front end; Policies
+                        // and Payment Information are included alongside it.
+                        // Meaningful-content detection: strip HTML and collapse
+                        // whitespace so empty paragraphs / whitespace-only markup
+                        // count as empty (requirement: no empty sections).
+                        $has_meaningful = static function ( string $html ): bool {
+                            $text = wp_strip_all_tags( $html );
+                            $text = preg_replace( '/\s+/u', '', (string) $text );
+                            return '' !== $text;
+                        };
                         $fold_sections = [
-                            [ 'icon' => 'explore',      'title' => __( "What's Nearby", 'ovr-core' ),        'body' => (string) get_post_meta( $post_id, '_ovr_nearby', true ) ],
-                            [ 'icon' => 'policy',       'title' => __( 'Policies', 'ovr-core' ),             'body' => (string) get_post_meta( $post_id, '_ovr_policies', true ) ],
-                            [ 'icon' => 'payments',     'title' => __( 'Payment Information', 'ovr-core' ),   'body' => (string) get_post_meta( $post_id, '_ovr_payment_info', true ) ],
+                            [ 'icon' => 'explore', 'title' => __( "What's Near", 'ovr-core' ), 'body' => (string) get_post_meta( $post_id, '_ovr_nearby', true ) ],
+                            [ 'icon' => 'gavel', 'title' => __( 'Policies', 'ovr-core' ), 'body' => (string) get_post_meta( $post_id, '_ovr_policies', true ) ],
+                            [ 'icon' => 'payments', 'title' => __( 'Payment Information', 'ovr-core' ), 'body' => (string) get_post_meta( $post_id, '_ovr_payment_info', true ) ],
                         ];
                         $has_folded = false;
                         foreach ( $fold_sections as $fsec ) {
-                            if ( '' !== trim( (string) $fsec['body'] ) ) { $has_folded = true; break; }
+                            if ( $has_meaningful( $fsec['body'] ) ) { $has_folded = true; break; }
                         }
                         if ( $has_folded ) :
                         ?>
                             <div class="ovr-tab-folded">
                                 <?php foreach ( $fold_sections as $fsec ) :
-                                    $fbody = trim( (string) $fsec['body'] );
-                                    if ( '' === $fbody ) { continue; }
+                                    if ( ! $has_meaningful( $fsec['body'] ) ) { continue; }
                                     ?>
                                     <div class="ovr-tab-folded-block">
                                         <h4 class="ovr-tab-subhead" style="margin:18px 0 6px">
                                             <span class="material-symbols-outlined" style="font-size:18px;color:var(--ovr-secondary);vertical-align:-3px"><?php echo esc_html( $fsec['icon'] ); ?></span>
                                             <?php echo esc_html( $fsec['title'] ); ?>
                                         </h4>
-                                        <div class="ovr-tab-prose"><?php echo wp_kses_post( wpautop( $fbody ) ); ?></div>
+                                        <div class="ovr-tab-prose"><?php echo wp_kses_post( wpautop( $fsec['body'] ) ); ?></div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
                         <?php if ( $village_name || $village || $location_short ) : ?>
                             <div class="ovr-tab-near">
-                                <h3 class="ovr-tab-subhead"><?php esc_html_e( "What's nearby", 'ovr-core' ); ?></h3>
+                                <h3 class="ovr-tab-subhead"><?php esc_html_e( 'Location', 'ovr-core' ); ?></h3>
                                 <p class="ovr-tab-prose" style="margin:0">
                                     <span class="material-symbols-outlined" style="font-size:18px;color:var(--ovr-secondary);vertical-align:-3px">location_on</span>
                                     <?php
@@ -513,6 +538,9 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                             };
 
                             $groups = [];
+                            if ( $sqft > 0 ) {
+                                $groups[] = [ __( 'Home Details', 'ovr-core' ), [ (object) [ 'name' => sprintf( /* translators: %s: square footage */ __( '%s square feet', 'ovr-core' ), number_format_i18n( $sqft ) ) ] ], 'straighten' ];
+                            }
                             if ( $ok( $feat_terms ) ) {
                                 usort( $feat_terms, $by_order );
                                 $groups[] = [ __( 'Features', 'ovr-core' ), $feat_terms, 'check_circle' ];
@@ -528,7 +556,7 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                                 <h2 class="ovr-h2" style="margin-bottom:20px"><?php esc_html_e( 'What this place offers', 'ovr-core' ); ?></h2>
 
                                 <?php foreach ( $groups as $blk ) : ?>
-                                    [ $blk_title, $blk_terms, $blk_icon ] = $blk;
+                                    <?php [ $blk_title, $blk_terms, $blk_icon ] = $blk; ?>
                                     <h3 class="ovr-tab-subhead" style="margin:16px 0 8px"><?php echo esc_html( $blk_title ); ?></h3>
                                     <ul class="ovr-amenity-list" style="list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px 32px">
                                         <?php foreach ( $blk_terms as $t ) : ?>
@@ -550,14 +578,6 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                 </div>
             </div>
         </section>
-
-        <!-- Policies & Payment -->
-        <?php
-        echo TemplateLoader::get_rendered( 'property/policies.php', [
-            'post_id' => $post_id,
-            'meta'    => $meta,
-        ] );
-        ?>
 
         <!-- Documents & Resources (Feature D: ordered, titled downloads) -->
         <?php
@@ -586,12 +606,35 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
         <?php endif; ?>
 
         <!-- Map & Location (video lives in the hero; panorama opens via the Virtual Tour button) -->
-        <?php if ( $lat && $lng ) :
+        <?php
+        // Pick the coordinates to render. When the listing has no precise
+        // coordinates but does name a village, geocode the village name
+        // (cached) so the section still shows an approximate location rather
+        // than disappearing entirely.
+        $map_lat = $lat;
+        $map_lng = $lng;
+        if ( ! ( $map_lat && $map_lng ) ) {
+            $village_query = $village_name ?: ( $village ? $village->name : '' );
+            if ( '' !== trim( (string) $village_query ) ) {
+                $approx = \OVR\Property\Geocoder::geocode( $village_query, $city, $state, (string) ( $meta['zip'] ?? '' ) );
+                if ( $approx ) {
+                    $map_lat = (float) $approx['lat'];
+                    $map_lng = (float) $approx['lng'];
+                }
+            }
+        }
+
+        // Only render the section when there is some location context to show.
+        $has_location = ( $map_lat && $map_lng ) || '' !== trim( (string) $village_name ) || ! empty( $village );
+        if ( $has_location ) :
             // Caption that grounds the map in The Villages (DESIGN.md: avoid city-wide busy maps).
             $map_caption = '';
             if ( $village ) {
                 /* translators: %s: village name */
                 $map_caption = sprintf( __( 'Village of %s', 'ovr-core' ), $village->name );
+            } elseif ( '' !== trim( (string) $village_name ) ) {
+                /* translators: %s: village name */
+                $map_caption = sprintf( __( 'Village of %s', 'ovr-core' ), $village_name );
             }
             if ( $location_short ) {
                 $map_caption = $map_caption ? $map_caption . ' · ' . $location_short : $location_short;
@@ -601,17 +644,18 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                 <div class="ovr-detail-card">
                     <h2 class="ovr-detail-heading"><?php esc_html_e( 'Map & Location', 'ovr-core' ); ?></h2>
 
-                    <?php if ( $lat && $lng ) : ?>
+                    <?php if ( $map_lat && $map_lng ) : ?>
                         <div class="ovr-media-map">
-                            <iframe
-                                src="https://www.openstreetmap.org/export/embed.html?bbox=<?php echo esc_attr( ( $lng - 0.008 ) . ',' . ( $lat - 0.006 ) . ',' . ( $lng + 0.008 ) . ',' . ( $lat + 0.006 ) ); ?>&amp;layer=mapnik&amp;marker=<?php echo esc_attr( $lat . ',' . $lng ); ?>"
-                                loading="lazy"
-                                referrerpolicy="no-referrer-when-downgrade"
-                                title="<?php esc_attr_e( 'Property location map', 'ovr-core' ); ?>"></iframe>
+                            <div class="ovr-detail-map"
+                                 id="ovr-detail-map"
+                                 data-ovr-single-map
+                                 data-lat="<?php echo esc_attr( (string) $map_lat ); ?>"
+                                 data-lng="<?php echo esc_attr( (string) $map_lng ); ?>"></div>
                             <?php if ( $map_caption ) : ?>
                                 <div class="ovr-media-map-caption">
                                     <span class="material-symbols-outlined">location_on</span>
                                     <?php echo esc_html( $map_caption ); ?>
+                                    <span class="ovr-media-map-approx"><?php esc_html_e( '(approximate location)', 'ovr-core' ); ?></span>
                                 </div>
                             <?php endif; ?>
                         </div>

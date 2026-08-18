@@ -299,87 +299,6 @@
     });
 
     /* ====================================================================
-       4. REVIEWS SECTION
-       ==================================================================== */
-       
-    // Toggle review form
-    document.addEventListener('click', function(e) {
-        var toggleBtn = e.target.closest('[data-ovr-review-toggle]');
-        if (!toggleBtn) return;
-        
-        var form = document.getElementById('ovr-review-form');
-        if (form) {
-            form.hidden = !form.hidden;
-            if (!form.hidden) {
-                var firstInput = form.querySelector('input, textarea');
-                if (firstInput) firstInput.focus();
-            }
-        }
-    });
-
-    // Handle review submission
-    document.addEventListener('submit', function(e) {
-        var form = e.target.closest('[data-ovr-review-form]');
-        if (!form) return;
-        if (!window.fetch) return;
-        
-        e.preventDefault();
-        
-        var responseEl = form.querySelector('[data-ovr-review-result]');
-        var submitBtn  = form.querySelector('button[type="submit"]');
-        var origLabel  = submitBtn ? submitBtn.innerHTML : '';
-        
-        if (responseEl) responseEl.innerHTML = '';
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="vertical-align:middle">progress_activity</span> ' + (i18n.loading || 'Submitting…');
-        }
-        
-        var formData = new FormData(form);
-        formData.set('action', 'ovr_submit_review');
-        formData.append('nonce', ovr.nonce || '');
-        formData.append('property_id', form.getAttribute('data-property-id'));
-        
-        fetch(ovr.ajaxUrl, {
-            method: 'POST',
-            credentials: 'same-origin',
-            body: formData
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            var ok = res && res.success;
-            var msg = (res && res.data && res.data.message) || (ok ? 'Review submitted!' : 'Error submitting review.');
-            
-            if (responseEl) {
-                responseEl.innerHTML =
-                    '<div class="ovr-alert ' + (ok ? 'ovr-alert-success' : 'ovr-alert-error') + '" style="margin-top:16px;font-size:14px">' +
-                        '<span class="material-symbols-outlined">' + (ok ? 'check_circle' : 'error') + '</span>' +
-                        '<span>' + msg + '</span>' +
-                    '</div>';
-            }
-            if (ok) {
-                form.reset();
-                setTimeout(function() { form.hidden = true; }, 3000);
-            }
-        })
-        .catch(function() {
-            if (responseEl) {
-                responseEl.innerHTML =
-                    '<div class="ovr-alert ovr-alert-error" style="margin-top:16px;font-size:14px">' +
-                        '<span class="material-symbols-outlined">error</span>' +
-                        '<span>Network error. Please try again.</span>' +
-                    '</div>';
-            }
-        })
-        .finally(function() {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = origLabel;
-            }
-        });
-    });
-
-    /* ====================================================================
        5. TABS (General Description / Features / Reviews)
        ==================================================================== */
 
@@ -429,5 +348,74 @@
             '.ovr-cal-day.is-range-mid{background:var(--ovr-primary-container);color:var(--ovr-on-primary-container)}';
         document.head.appendChild(style);
     }
+
+    /* ====================================================================
+       7. SINGLE-PROPERTY MAP (Leaflet thumb-tack; approximate location)
+       ==================================================================== */
+
+    function initSingleMap() {
+        var el = document.getElementById('ovr-detail-map');
+        if (!el) return;
+        if (!window.L) {
+            // Leaflet may still be loading (async/late enqueue). Retry briefly.
+            setTimeout(initSingleMap, 300);
+            return;
+        }
+        if (el.dataset.ovrMapReady) return;
+        el.dataset.ovrMapReady = '1';
+
+        var lat = parseFloat(el.getAttribute('data-lat'));
+        var lng = parseFloat(el.getAttribute('data-lng'));
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        var mapEl = document.createElement('div');
+        mapEl.className = 'ovr-detail-map-canvas';
+
+        // Approximate: nudge the marker a few tens of metres off the exact
+        // coordinates so the home's precise position stays private, while still
+        // landing on (or beside) the correct street.
+        var jitter = 0.0006;
+        var markerLat = lat + jitter;
+        var markerLng = lng - jitter;
+
+        var map = window.L.map(mapEl, { scrollWheelZoom: false }).setView([markerLat, markerLng], 16);
+        var tiles = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Never leave a blank box: if the tile server is unreachable (blocked /
+        // offline), show a graceful note instead of an empty map.
+        var tileErrors = 0;
+        tiles.on('tileerror', function () {
+            tileErrors++;
+            if (tileErrors >= 3 && !mapEl.dataset.ovrMapFallback) {
+                mapEl.dataset.ovrMapFallback = '1';
+                var note = document.createElement('div');
+                note.className = 'ovr-detail-map-fallback';
+                note.textContent = 'Map unavailable at the moment. Please see the location details below.';
+                mapEl.appendChild(note);
+            }
+        });
+
+        var icon = window.L.divIcon({
+            className: 'ovr-tack',
+            html: '<span class="material-symbols-outlined">location_on</span>',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -30]
+        });
+        window.L.marker([markerLat, markerLng], { icon: icon, title: '' }).addTo(map);
+
+        el.appendChild(mapEl);
+
+        // The map container may be zero-height until CSS loads; invalidate on
+        // resize and once after a tick so tiles render at correct dimensions.
+        window.addEventListener('resize', function () { map.invalidateSize(); });
+        setTimeout(function () { map.invalidateSize(); }, 100);
+        window.addEventListener('load', function () { map.invalidateSize(); });
+    }
+
+    initSingleMap();
 
 })();

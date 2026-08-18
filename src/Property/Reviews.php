@@ -54,9 +54,12 @@ class Reviews {
             return new \WP_Error( 'invalid_property', __( 'Property not found.', 'ovr-core' ) );
         }
 
-        $settings = get_option( 'ovr_settings', [] );
-        $auto_approve = empty( $settings['review_approval'] );
-        $status = $auto_approve ? 'approved' : 'pending';
+        // Public submissions always land in 'pending' and require admin
+        // approval before they count (owner-verification / reputation). An admin
+        // adding a review through the moderation screen bypasses this by writing
+        // the row directly, so this path is submission-only.
+        $auto_approve = false;
+        $status       = 'pending';
 
         $result = $wpdb->insert( $table, [
             'property_id' => $property_id,
@@ -110,21 +113,27 @@ class Reviews {
     }
 
     /**
-     * Approved reviews for a property.
+     * Approved reviews for a property, optionally gated by a minimum star
+     * rating. The property-page Testimonials tab uses the same 4-star threshold
+     * as the site-wide reputation system (only 4-and-above reviews are surfaced
+     * publicly); pass 1 to show every approved review.
      *
      * @return array<int, array>
      */
-    public static function get_for_property( int $property_id, int $limit = 20 ): array {
+    public static function get_for_property( int $property_id, int $limit = 20, int $min_rating = 4 ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'ovr_reviews';
+
+        $min_rating = max( 1, min( 5, $min_rating ) );
 
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT * FROM {$table}
-                 WHERE property_id = %d AND status = 'approved'
+                 WHERE property_id = %d AND status = 'approved' AND rating >= %d
                  ORDER BY created_at DESC
                  LIMIT %d",
                 $property_id,
+                $min_rating,
                 $limit
             ),
             ARRAY_A

@@ -26,6 +26,10 @@ class AjaxHandler {
         add_action( 'wp_ajax_ovr_search_properties', [ $this, 'search_properties' ] );
         add_action( 'wp_ajax_nopriv_ovr_search_properties', [ $this, 'search_properties' ] );
 
+        // Village chip refresh — re-renders the results region without reload.
+        add_action( 'wp_ajax_ovr_search_chips', [ $this, 'search_chips' ] );
+        add_action( 'wp_ajax_nopriv_ovr_search_chips', [ $this, 'search_chips' ] );
+
         add_action( 'wp_ajax_ovr_load_more', [ $this, 'load_more' ] );
         add_action( 'wp_ajax_nopriv_ovr_load_more', [ $this, 'load_more' ] );
 
@@ -54,6 +58,10 @@ class AjaxHandler {
 
         // Frontend: direct profile-photo upload (simple, in-house — no Gravatar).
         add_action( 'wp_ajax_ovr_upload_avatar', [ $this, 'upload_avatar' ] );
+        // Admin: remove a user's profile photo (own or managed), restoring the
+        // default placeholder. Admins may manage any user; a normal user may
+        // only remove their own.
+        add_action( 'wp_ajax_ovr_remove_avatar', [ $this, 'remove_avatar' ] );
         // Serve the uploaded photo wherever WordPress asks for the user's avatar.
         add_filter( 'get_avatar_data', [ $this, 'filter_avatar_data' ], 10, 2 );
 
@@ -257,6 +265,15 @@ class AjaxHandler {
 
         $user_id = get_current_user_id();
 
+        // Admin may manage another user's avatar (target user via POST).
+        $target = isset( $_POST['user_id'] ) ? absint( wp_unslash( $_POST['user_id'] ) ) : 0;
+        if ( $target && $target !== $user_id ) {
+            if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'ovr_manage_users' ) ) {
+                wp_send_json_error( [ 'message' => __( 'You are not allowed to change this user\'s photo.', 'ovr-core' ) ], 403 );
+            }
+            $user_id = $target;
+        }
+
         // Clean up a previously uploaded avatar to avoid orphaned media.
         $previous = (int) get_user_meta( $user_id, 'ovr_avatar_id', true );
         if ( $previous && $previous !== (int) $att_id ) {
@@ -268,6 +285,39 @@ class AjaxHandler {
         wp_send_json_success( [
             'url'     => wp_get_attachment_image_url( $att_id, 'thumbnail' ),
             'message' => __( 'Profile photo updated.', 'ovr-core' ),
+        ] );
+    }
+
+    /**
+     * Admin (or the account owner) removes a user's profile photo, restoring the
+     * generated placeholder. Only admins may remove another user's photo.
+     */
+    public function remove_avatar(): void {
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'message' => __( 'Please sign in.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! check_ajax_referer( 'ovr_avatar_action', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+
+        $user_id = get_current_user_id();
+        $target  = isset( $_POST['user_id'] ) ? absint( wp_unslash( $_POST['user_id'] ) ) : 0;
+        if ( $target && $target !== $user_id ) {
+            if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'ovr_manage_users' ) ) {
+                wp_send_json_error( [ 'message' => __( 'You are not allowed to change this user\'s photo.', 'ovr-core' ) ], 403 );
+            }
+            $user_id = $target;
+        }
+
+        $previous = (int) get_user_meta( $user_id, 'ovr_avatar_id', true );
+        if ( $previous ) {
+            wp_delete_attachment( $previous, true );
+        }
+        delete_user_meta( $user_id, 'ovr_avatar_id' );
+
+        wp_send_json_success( [
+            'message' => __( 'Profile photo removed.', 'ovr-core' ),
+            'url'     => self::local_default_avatar( $user_id, 96 ),
         ] );
     }
 
@@ -422,6 +472,42 @@ class AjaxHandler {
     }
 
     /**
+     * AJAX refresh of the results region when a village chip is clicked.
+     *
+     * Expects `qs` — the raw query string of the chip's target URL (e.g.
+     * `village_section[0]=fruit&paged=1`). It is parsed exactly the way PHP
+     * parses $_GET and laundered through the same sanitizer, so the AJAX
+     * result set is identical to a hard navigation to the chip's URL — minus
+     * the page reload. Returns the freshly rendered region plus the canonical
+     * URL for pushState.
+     */
+    public function search_chips(): void {
+        check_ajax_referer( 'ovr_public_nonce', 'nonce' );
+
+        $qs = wp_unslash( (string) ( $_POST['qs'] ?? '' ) );
+        if ( '' === $qs ) {
+            wp_send_json_error( [ 'message' => __( 'Missing query.', 'ovr-core' ) ], 400 );
+        }
+
+        wp_parse_str( $qs, $parsed );
+        $parsed = is_array( $parsed ) ? $parsed : [];
+        $parsed['paged'] = 1; // chips always return to the first page.
+
+        $filters = SearchHandler::sanitize_filters( $parsed );
+        $view    = isset( $parsed['view'] ) ? sanitize_key( $parsed['view'] ) : 'grid';
+        if ( ! in_array( $view, [ 'grid', 'list', 'map' ], true ) ) {
+            $view = 'grid';
+        }
+        $query = PropertyQuery::query( $filters );
+
+        wp_send_json_success( [
+            'html'  => SearchHandler::render_region( $filters, $query, $view ),
+            'url'   => SearchHandler::filter_url( $filters, $view ),
+            'total' => $query->found_posts,
+        ] );
+    }
+
+    /**
      * AJAX property search.
      */
     public function search_properties(): void {
@@ -561,7 +647,7 @@ class AjaxHandler {
         }
 
         wp_send_json_success( [
-            'message'   => __( 'Thank you! Your review has been submitted.', 'ovr-core' ),
+            'message'   => __( 'Thank you! Your testimonial is awaiting moderation.', 'ovr-core' ),
             'review_id' => $result,
         ] );
     }
@@ -689,6 +775,11 @@ class AjaxHandler {
         // Honeypot spam guard — silent success if filled.
         if ( ! empty( $data['ovr_hp'] ) ) {
             return 0; // Pretend success without inserting.
+        }
+
+        // "I'm not a robot" confirmation (inquiry form) must be ticked.
+        if ( empty( $data['ovr_human'] ) ) {
+            return new \WP_Error( 'human_required', __( 'Please confirm you are not a robot.', 'ovr-core' ), 400 );
         }
 
         global $wpdb;

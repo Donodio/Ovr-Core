@@ -96,15 +96,10 @@ class ReviewEndpoint {
             ReviewRequest::mark_completed( $token, (int) $result );
         }
 
-        $settings = get_option( 'ovr_settings', [] );
-        $auto_approve = empty( $settings['review_approval'] );
-
         return new \WP_REST_Response( [
             'id'      => $result,
-            'status'  => $auto_approve ? 'approved' : 'pending',
-            'message' => $auto_approve
-                ? __( 'Thanks for your review!', 'ovr-core' )
-                : __( 'Thanks! Your review is awaiting moderation.', 'ovr-core' ),
+            'status'  => 'pending',
+            'message' => __( 'Thanks! Your review is awaiting moderation.', 'ovr-core' ),
         ], 201 );
     }
 

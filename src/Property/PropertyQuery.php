@@ -33,7 +33,41 @@ class PropertyQuery {
             return $query;
         }
 
+        // Price / rating sorts: LEFT JOIN the sort meta and COALESCE so listings
+        // without that meta are kept (unpriced/rated sort last) instead of being
+        // INNER-JOINed away.
+        if ( ! empty( $args['_ovr_sort_meta'] ) ) {
+            add_filter( 'posts_clauses', [ self::class, 'sort_order_clauses' ], 10, 2 );
+            $query = new \WP_Query( $args );
+            remove_filter( 'posts_clauses', [ self::class, 'sort_order_clauses' ], 10 );
+            return $query;
+        }
+
         return new \WP_Query( $args );
+    }
+
+    /**
+     * posts_clauses filter for price/rating sorts. LEFT JOINs the sort meta so
+     * every matching listing is retained (a meta_key orderby would INNER-JOIN
+     * and drop listings missing the meta) and orders by COALESCE(meta, sentinel)
+     * — unpriced/untated listings sort to the end in ascending order.
+     */
+    public static function sort_order_clauses( array $clauses, \WP_Query $q ): array {
+        $spec = $q->get( '_ovr_sort_meta' );
+        if ( ! is_array( $spec ) || empty( $spec['key'] ) ) {
+            return $clauses;
+        }
+        global $wpdb;
+        $meta_key = sanitize_key( (string) $spec['key'] );
+        $dir      = ( 'DESC' === strtoupper( (string) ( $spec['dir'] ?? 'ASC' ) ) ) ? 'DESC' : 'ASC';
+
+        $clauses['join'] .= $wpdb->prepare( " LEFT JOIN {$wpdb->postmeta} ovr_sort ON ovr_sort.post_id = {$wpdb->posts}.ID AND ovr_sort.meta_key = %s ", $meta_key );
+        // ASC: missing → +infinity (sorts last). DESC: missing → -infinity.
+        $clauses['orderby'] = ( 'DESC' === $dir )
+            ? " COALESCE( ovr_sort.meta_value + 0, -1 * 9e18 ) DESC, {$wpdb->posts}.post_date DESC"
+            : " COALESCE( ovr_sort.meta_value + 0, 9e18 ) ASC, {$wpdb->posts}.post_date DESC";
+        $clauses['groupby'] = "{$wpdb->posts}.ID";
+        return $clauses;
     }
 
     /**
@@ -42,6 +76,42 @@ class PropertyQuery {
      * (SubscriptionManager::expire() writes pending_renewal).
      */
     public const HIDDEN_OWNER_STATUSES = [ 'inactive', 'pending_renewal' ];
+
+    /**
+     * Golf-cart condition slugs. These live in BOTH the ovr_feature and
+     * ovr_amenity taxonomies (legacy data was imported as amenities), so any
+     * code that reads golf-cart state must check both.
+     */
+    public const GOLF_CART_SLUGS = [ 'golf-cart-included', 'golf-cart-extra-charge' ];
+
+    /**
+     * Whether a listing offers a golf cart. True when the listing carries any
+     * golf-cart condition term in the ovr_feature OR ovr_amenity taxonomy.
+     */
+    public static function has_golf_cart( int $post_id ): bool {
+        foreach ( self::GOLF_CART_SLUGS as $slug ) {
+            if ( has_term( $slug, 'ovr_feature', $post_id ) || has_term( $slug, 'ovr_amenity', $post_id ) ) {
+                return true;
+            }
+        }
+
+        // Fallback: legacy/imported listings store the golf-cart condition under
+        // many term names ("Gas Golf Cart", "Electric Golf Cart", "Golf Cart
+        // Included", …). Match any ovr_feature / ovr_amenity term whose name
+        // contains "golf cart" so the spec strip reflects the real selection.
+        foreach ( [ 'ovr_feature', 'ovr_amenity' ] as $tax ) {
+            $terms = wp_get_post_terms( $post_id, $tax );
+            if ( ! is_wp_error( $terms ) ) {
+                foreach ( $terms as $t ) {
+                    if ( preg_match( '/golf\s*cart/i', (string) $t->name ) ) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
 
     /**
      * meta_query clauses that exclude listings hidden from the public site:
@@ -71,8 +141,11 @@ class PropertyQuery {
      * admins can always view their own listing regardless of status.
      */
     public static function is_publicly_visible( int $post_id ): bool {
-        // Soft-deleted (trashed) listings must never render publicly.
-        if ( 'trash' === get_post_status( $post_id ) ) {
+        // Soft-deleted (archived) and any non-public post status must never
+        // render publicly. Public search already scopes to 'publish', so this
+        // guard is the backstop for direct single-listing access.
+        if ( \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED === get_post_status( $post_id )
+            || 'trash' === get_post_status( $post_id ) ) {
             return false;
         }
         $owner = (string) get_post_meta( $post_id, '_ovr_listing_status', true );
@@ -220,8 +293,8 @@ class PropertyQuery {
             return array_values( array_filter( array_map( 'sanitize_key', (array) $raw ), 'strlen' ) );
         };
 
-        // Village filter — matches the free-text Village Name meta. Selected
-        // names are matched exactly.
+        // Village filter — matches the listing's specific-village meta
+        // (_ovr_village_name). Selected names are matched exactly.
         $village_names = array_values( array_filter(
             array_map( static fn( $v ) => sanitize_text_field( (string) $v ), (array) ( $filters['village'] ?? [] ) ),
             'strlen'
@@ -231,6 +304,18 @@ class PropertyQuery {
                 'key'     => '_ovr_village_name',
                 'value'   => $village_names,
                 'compare' => 'IN',
+            ];
+        }
+
+        // Free-text Village Name search — substring of the listing's
+        // specific-village meta (phase 21 sidebar text input). LIKE keeps
+        // partial typing ("Mallory") useful instead of requiring an exact name.
+        $village_name_search = sanitize_text_field( (string) ( $filters['village_name'] ?? '' ) );
+        if ( '' !== $village_name_search ) {
+            $args['meta_query'][] = [
+                'key'     => '_ovr_village_name',
+                'value'   => $village_name_search,
+                'compare' => 'LIKE',
             ];
         }
 
@@ -290,12 +375,40 @@ class PropertyQuery {
         // Features filter — must have ALL selected features.
         $feature_terms = $clean_slugs( $filters['features'] ?? [] );
         if ( $feature_terms ) {
-            $args['tax_query'][] = [
-                'taxonomy' => 'ovr_feature',
-                'field'    => 'slug',
-                'terms'    => $feature_terms,
-                'operator' => 'AND',
-            ];
+            // Golf-cart terms exist in BOTH the ovr_feature and ovr_amenity
+            // taxonomies (legacy listings were imported with the golf-cart
+            // condition stored as an amenity). Match either taxonomy so the
+            // filter returns every property that actually carries a golf cart,
+            // regardless of where the term was saved.
+            $golf_slugs   = self::GOLF_CART_SLUGS;
+            $golf_matches = array_intersect( $feature_terms, $golf_slugs );
+            $other        = array_values( array_diff( $feature_terms, $golf_slugs ) );
+
+            if ( $golf_matches ) {
+                $args['tax_query'][] = [
+                    'relation' => 'OR',
+                    [
+                        'taxonomy' => 'ovr_feature',
+                        'field'    => 'slug',
+                        'terms'    => $golf_matches,
+                        'operator' => 'AND',
+                    ],
+                    [
+                        'taxonomy' => 'ovr_amenity',
+                        'field'    => 'slug',
+                        'terms'    => $golf_matches,
+                        'operator' => 'AND',
+                    ],
+                ];
+            }
+            if ( $other ) {
+                $args['tax_query'][] = [
+                    'taxonomy' => 'ovr_feature',
+                    'field'    => 'slug',
+                    'terms'    => $other,
+                    'operator' => 'AND',
+                ];
+            }
         }
 
         // Bedrooms filter.
@@ -393,6 +506,13 @@ class PropertyQuery {
             $args['meta_query'][] = self::active_boost_clause( '_ovr_in_slider', '_ovr_slider_expires' );
         }
 
+        // Deals & Cancellations only — active paid deal (flag set AND not
+        // expired). Eligibility is date-driven, so an expired promotion never
+        // appears even if the flag meta lingers.
+        if ( ! empty( $filters['deals_only'] ) ) {
+            $args['meta_query'][] = self::active_boost_clause( '_ovr_is_deal', '_ovr_deal_expires' );
+        }
+
         // Sorting.
         //
         // CRITICAL: We deliberately avoid `meta_key` with `orderby=meta_value_num`
@@ -405,19 +525,17 @@ class PropertyQuery {
         $sort = sanitize_key( $filters['sort'] ?? 'newest' );
         switch ( $sort ) {
             case 'price_low':
-                $args['meta_key'] = '_ovr_base_price';
-                $args['orderby']  = 'meta_value_num';
-                $args['order']    = 'ASC';
-                break;
             case 'price_high':
-                $args['meta_key'] = '_ovr_base_price';
-                $args['orderby']  = 'meta_value_num';
-                $args['order']    = 'DESC';
+                // CRITICAL: do NOT use meta_key+orderby=meta_value_num OR a
+                // meta_query EXISTS here — both INNER-JOIN wp_postmeta and
+                // silently drop every listing that has no _ovr_base_price.
+                // Keep the sort key out of the query entirely and let
+                // sort_order_clauses LEFT JOIN + COALESCE it, preserving all
+                // posts (unpriced ones sort to the end).
+                $args['_ovr_sort_meta'] = [ 'key' => '_ovr_base_price', 'dir' => ( 'price_high' === $sort ? 'DESC' : 'ASC' ) ];
                 break;
             case 'rating':
-                $args['meta_key'] = '_ovr_rating_avg';
-                $args['orderby']  = 'meta_value_num';
-                $args['order']    = 'DESC';
+                $args['_ovr_sort_meta'] = [ 'key' => '_ovr_rating_avg', 'dir' => 'DESC' ];
                 break;
             default: // newest
                 $args['orderby'] = 'date';
@@ -487,6 +605,24 @@ class PropertyQuery {
         $ids    = ( new \WP_Query( $args ) )->posts;
         $points = [];
 
+        // Rebuild the current results URL so every map-popup "View listing"
+        // link can carry ?ovr_ref= and the property page's Back button returns
+        // to these exact filters (not the bare search page).
+        $ref_url = '';
+        if ( isset( $_GET['view'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $allowed = array_intersect_key(
+                wp_unslash( $_GET ), // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+                array_fill_keys( array_keys( $filters ), true )
+            );
+            $allowed = array_filter( $allowed, static function ( $v ) { return $v !== '' && $v !== null; } );
+            if ( $allowed ) {
+                $ref_url = add_query_arg( $allowed, \OVR\Core\Pages::get_page_url( 'ovr_page_search' ) );
+            }
+        }
+        if ( '' !== $ref_url ) {
+            $ref_url = rawurlencode( $ref_url );
+        }
+
         // Availability state for the map (M3 F10): one query for the listings
         // that are hard-blocked for tonight, so each pin can show available vs
         // booked without a per-point query.
@@ -525,7 +661,7 @@ class PropertyQuery {
             $points[] = [
                 'id'       => $pid,
                 'title'    => get_the_title( $pid ),
-                'url'      => get_permalink( $pid ),
+                'url'      => '' !== $ref_url ? add_query_arg( 'ovr_ref', $ref_url, get_permalink( $pid ) ) : get_permalink( $pid ),
                 'thumb'    => get_the_post_thumbnail_url( $pid, 'medium' ) ?: '',
                 'price'    => (float) get_post_meta( $pid, '_ovr_base_price', true ),
                 'beds'     => (int) get_post_meta( $pid, '_ovr_bedrooms', true ),

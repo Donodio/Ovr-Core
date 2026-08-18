@@ -31,15 +31,11 @@ $inquiry_status = isset( $_GET['ovr_inquiry'] ) ? sanitize_key( wp_unslash( $_GE
 ?>
 <aside class="ovr-inquiry-card ovr-card" style="padding:24px;position:sticky;top:104px">
 
-    <!-- Price header -->
-    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:24px">
-        <span class="ovr-price-display" style="font-size:32px;color:var(--ovr-primary)">
-            <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?>
-        </span>
-        <span style="color:var(--ovr-on-surface-variant);font-size:16px">
-            / <?php esc_html_e( 'night', 'ovr-core' ); ?>
-        </span>
-    </div>
+    <!-- Availability reminder (client request: replaces the nightly price) -->
+    <p style="margin:0 0 20px;padding:12px 14px;border:1px solid var(--ovr-outline-variant);border-radius:var(--ovr-radius-md);background:var(--ovr-surface-container-low);color:var(--ovr-on-surface);font-size:14px;line-height:1.5">
+        <span class="material-symbols-outlined" style="font-size:18px;color:var(--ovr-secondary);vertical-align:-3px;margin-right:4px">calendar_month</span>
+        <?php esc_html_e( 'Be sure to check the Availability Calendar above before contacting the owner.', 'ovr-core' ); ?>
+    </p>
 
     <?php if ( 'sent' === $inquiry_status ) : ?>
         <div class="ovr-alert ovr-alert-success" style="margin-bottom:20px">
@@ -107,8 +103,12 @@ $inquiry_status = isset( $_GET['ovr_inquiry'] ) ? sanitize_key( wp_unslash( $_GE
                     class="ovr-form-select"
                     style="padding-right:40px;"
                     required>
-                <?php for ( $i = 1; $i <= $max_guests; $i++ ) : ?>
-                    <option value="<?php echo esc_attr( $i ); ?>">
+                <?php
+                // Default to 2 guests (double-occupancy assumption), when the
+                // property allows at least two; otherwise fall back to option 1.
+                $guest_default = $max_guests >= 2 ? 2 : 1;
+                for ( $i = 1; $i <= $max_guests; $i++ ) : ?>
+                    <option value="<?php echo esc_attr( $i ); ?>" <?php selected( $i, $guest_default ); ?>>
                         <?php
                         /* translators: %d: guest count */
                         printf( esc_html( _n( '%d guest', '%d guests', $i, 'ovr-core' ) ), $i );
@@ -130,20 +130,24 @@ $inquiry_status = isset( $_GET['ovr_inquiry'] ) ? sanitize_key( wp_unslash( $_GE
                        class="ovr-form-input"
                        required>
             </div>
-            <div class="ovr-form-group" style="margin-bottom:12px">
-                <label class="ovr-form-label" for="ovr-guest-email-<?php echo esc_attr( $post_id ); ?>">
-                    <?php esc_html_e( 'Email Address', 'ovr-core' ); ?>
-                </label>
-                <input type="email"
-                       id="ovr-guest-email-<?php echo esc_attr( $post_id ); ?>"
-                       name="guest_email"
-                       class="ovr-form-input"
-                       autocomplete="email"
-                       required>
-            </div>
-        <?php else : ?>
-            <input type="hidden" name="guest_name"  value="<?php echo esc_attr( $current_user->display_name ); ?>">
-            <input type="hidden" name="guest_email" value="<?php echo esc_attr( $current_user->user_email ); ?>">
+        <?php endif; ?>
+
+        <!-- Email — always shown (client request: previously hidden for logged-in users) -->
+        <div class="ovr-form-group" style="margin-bottom:12px">
+            <label class="ovr-form-label" for="ovr-guest-email-<?php echo esc_attr( $post_id ); ?>">
+                <?php esc_html_e( 'Email Address', 'ovr-core' ); ?>
+            </label>
+            <input type="email"
+                   id="ovr-guest-email-<?php echo esc_attr( $post_id ); ?>"
+                   name="guest_email"
+                   class="ovr-form-input"
+                   autocomplete="email"
+                   <?php if ( $is_logged_in && ! empty( $current_user ) ) : ?>value="<?php echo esc_attr( $current_user->user_email ); ?>"<?php endif; ?>
+                   required>
+        </div>
+
+        <?php if ( $is_logged_in && ! empty( $current_user ) ) : ?>
+            <input type="hidden" name="guest_name" value="<?php echo esc_attr( $current_user->display_name ); ?>">
         <?php endif; ?>
 
         <!-- Phone — required for every inquiry (Phase 23) -->
@@ -173,28 +177,35 @@ $inquiry_status = isset( $_GET['ovr_inquiry'] ) ? sanitize_key( wp_unslash( $_GE
                       required></textarea>
         </div>
 
+        <!-- Human check (reCAPTCHA-style "I'm not a robot" confirmation) -->
+        <div class="ovr-human-check">
+            <label class="ovr-human-label">
+                <input type="checkbox" name="ovr_human" value="1" required>
+                <span class="ovr-human-box" aria-hidden="true"><span class="material-symbols-outlined">check</span></span>
+                <span class="ovr-human-text"><?php esc_html_e( 'I\'m not a robot', 'ovr-core' ); ?></span>
+                <span class="ovr-human-brand" aria-hidden="true">reCAPTCHA</span>
+            </label>
+        </div>
+
         <!-- Submit -->
         <button type="submit" class="ovr-btn ovr-btn-secondary ovr-btn-full ovr-btn-lg">
-            <?php
-                if ( isset( $meta['booking_mode'] ) && 'direct' === $meta['booking_mode'] ) {
-                    esc_html_e( 'Book Now', 'ovr-core' );
-                } else {
-                    esc_html_e( 'Request to Book', 'ovr-core' );
-                }
-            ?>
+            <?php esc_html_e( 'Inquire – Email Owner', 'ovr-core' ); ?>
         </button>
-
-        <p style="text-align:center;margin-top:12px;font-size:13px;color:var(--ovr-on-surface-variant)">
-            <?php
-                if ( isset( $meta['booking_mode'] ) && 'direct' === $meta['booking_mode'] ) {
-                    esc_html_e( 'You will be redirected to payment.', 'ovr-core' );
-                } else {
-                    esc_html_e( 'You won\'t be charged yet.', 'ovr-core' );
-                }
-            ?>
-        </p>
 
         <!-- Inline response slot for AJAX -->
         <div class="ovr-inquiry-response" data-ovr-inquiry-response role="status" aria-live="polite"></div>
     </form>
 </aside>
+
+<style>
+    .ovr-human-check{margin-bottom:14px}
+    .ovr-human-label{display:flex;align-items:center;gap:10px;border:1px solid var(--ovr-outline-variant);border-radius:var(--ovr-radius-md);background:var(--ovr-surface, #fff);padding:12px 14px;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+    .ovr-human-label input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+    .ovr-human-box{flex:0 0 22px;width:22px;height:22px;border:2px solid var(--ovr-outline,#9aa0a6);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:16px;transition:background .15s,border-color .15s}
+    .ovr-human-label input:checked + .ovr-human-box{background:var(--ovr-primary,#000961);border-color:var(--ovr-primary,#000961)}
+    .ovr-human-label input:focus-visible + .ovr-human-box{box-shadow:0 0 0 3px rgba(0,108,74,.35)}
+    .ovr-human-text{flex:1;font-size:14px;font-weight:600;color:var(--ovr-on-surface)}
+    .ovr-human-brand{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ovr-on-surface-variant);background:var(--ovr-surface-container-low);border-radius:6px;padding:3px 7px;white-space:nowrap}
+    .ovr-human-label:has(input:checked) .ovr-human-box .material-symbols-outlined{opacity:1}
+    .ovr-human-box .material-symbols-outlined{font-size:16px;opacity:0}
+</style>

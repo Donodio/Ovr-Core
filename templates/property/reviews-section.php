@@ -13,7 +13,13 @@ use OVR\Property\Reviews;
 $post_id    = (int) ( $post_id ?? 0 );
 if ( ! $post_id ) return;
 
-$reviews    = Reviews::get_for_property( $post_id, 20 );
+// Only 4-star-and-above reviews are surfaced publicly (matching the site-wide
+// reputation rule). Reads the same min_display_rating setting the Testimonials
+// carousel uses, defaulting to 4.
+$ovr_rt_settings = get_option( 'ovr_settings', [] );
+$min_rating      = isset( $ovr_rt_settings['min_display_rating'] ) ? max( 1, min( 5, (int) $ovr_rt_settings['min_display_rating'] ) ) : 4;
+
+$reviews    = Reviews::get_for_property( $post_id, 20, $min_rating );
 $rating_avg = (float) get_post_meta( $post_id, '_ovr_rating_avg',   true );
 $rating_n   = (int)   get_post_meta( $post_id, '_ovr_rating_count', true );
 ?>
@@ -28,22 +34,22 @@ $rating_n   = (int)   get_post_meta( $post_id, '_ovr_rating_count', true );
                     <span style="font-weight:400;color:var(--ovr-on-surface-variant);font-size:18px">·</span>
                     <span style="font-weight:400;color:var(--ovr-on-surface-variant);font-size:18px">
                         <?php
-                        /* translators: %d: review count */
-                        printf( esc_html( _n( '%d review', '%d reviews', $rating_n, 'ovr-core' ) ), $rating_n );
+                        /* translators: %d: testimonial count */
+                        printf( esc_html( _n( '%d testimonial', '%d testimonials', $rating_n, 'ovr-core' ) ), $rating_n );
                         ?>
                     </span>
                 <?php else : ?>
-                    <?php esc_html_e( 'No reviews yet', 'ovr-core' ); ?>
+                    <?php esc_html_e( 'No testimonials yet', 'ovr-core' ); ?>
                 <?php endif; ?>
             </h2>
             <p style="margin:0;font-size:14px;color:var(--ovr-on-surface-variant)">
-                <?php esc_html_e( 'Honest impressions from past guests.', 'ovr-core' ); ?>
+                <?php esc_html_e( 'If you rented and had a great experience, please provide a testimonial.', 'ovr-core' ); ?>
             </p>
         </div>
 
         <button type="button" class="ovr-btn ovr-btn-primary ovr-btn-pill" data-ovr-review-toggle>
             <span class="material-symbols-outlined" style="font-size:18px">rate_review</span>
-            <?php esc_html_e( 'Write a review', 'ovr-core' ); ?>
+            <?php esc_html_e( 'Write a Testimonial', 'ovr-core' ); ?>
         </button>
     </header>
 
@@ -51,6 +57,7 @@ $rating_n   = (int)   get_post_meta( $post_id, '_ovr_rating_count', true );
     <form id="ovr-review-form"
           data-ovr-review-form
           data-property-id="<?php echo esc_attr( (string) $post_id ); ?>"
+          data-nonce="<?php echo esc_attr( wp_create_nonce( 'ovr_public_nonce' ) ); ?>"
           hidden
           style="margin-bottom:32px;padding:24px;background:var(--ovr-surface-container-low);border:1px solid var(--ovr-outline-variant);border-radius:var(--ovr-radius-lg)">
 
@@ -200,7 +207,8 @@ $rating_n   = (int)   get_post_meta( $post_id, '_ovr_rating_count', true );
         paint(parseInt(hidden.value, 10) || 0);
     });
 
-    // Submit via REST
+    // Submit via AJAX (same proven path as the inquiry form: admin-ajax + the
+    // public nonce printed on every page as ovrData.nonce).
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         var output = form.querySelector('[data-ovr-review-result]');
@@ -218,27 +226,25 @@ $rating_n   = (int)   get_post_meta( $post_id, '_ovr_rating_count', true );
 
         var fd = new FormData(form);
         fd.append('property_id', form.dataset.propertyId);
-        var payload = {};
-        fd.forEach(function (v, k) { payload[k] = v; });
+        fd.append('action', 'ovr_submit_review');
+        // Prefer the nonce stamped on the form; fall back to the global (some
+        // themes strip the localized script, which previously 403'd every submit).
+        fd.append('nonce', form.dataset.nonce || (window.ovrData && window.ovrData.nonce) || '');
 
-        var rest = (window.ovrData && window.ovrData.restUrl) || '/wp-json/ovr/v1/';
-        var nonce = (window.wpApiSettings && window.wpApiSettings.nonce) || '';
-
-        fetch(rest + 'reviews', {
+        fetch((window.ovrData && window.ovrData.ajaxUrl) || '/wp-admin/admin-ajax.php', {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-            body: JSON.stringify(payload)
+            body: fd
         })
-        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, body: d }; }); })
+        .then(function (r) { return r.json(); })
         .then(function (res) {
-            if (res.ok) {
-                output.innerHTML = '<span style="color:#00714e">' + (res.body.message || 'Thanks!') + '</span>';
+            if (res && res.success) {
+                output.innerHTML = '<span style="color:#00714e">' + (res.data.message || 'Thanks!') + '</span>';
                 form.reset();
                 paint(0);
-                setTimeout(function () { window.location.reload(); }, 1800);
+                form.hidden = true;
             } else {
-                output.innerHTML = '<span style="color:#ba1a1a">' + (res.body.message || 'Failed.') + '</span>';
+                output.innerHTML = '<span style="color:#ba1a1a">' + ((res && res.data && res.data.message) || 'Failed.') + '</span>';
             }
         })
         .catch(function () {

@@ -354,6 +354,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center;
     transition: transform var(--ovr-transition-slow);
 }
 
@@ -687,6 +688,17 @@
     margin: 8px 0;
 }
 
+.ovr-mobile-group { margin: 4px 0; }
+.ovr-mobile-group-title {
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ovr-primary);
+}
+.ovr-mobile-group .ovr-mobile-link { padding-left: 20px; font-size: 15px; }
+
 .ovr-topnav-inner {
     max-width: var(--ovr-container-max);
     margin: 0 auto;
@@ -728,6 +740,49 @@
     border-bottom: 2px solid var(--ovr-primary);
     padding-bottom: 4px;
 }
+
+/* Mega-menu dropdown (Villages panel) */
+.ovr-nav-item { position: relative; }
+.ovr-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 16px;
+    color: var(--ovr-on-surface-variant);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color var(--ovr-transition);
+}
+.ovr-nav-link:hover,
+.ovr-nav-link[aria-expanded="true"] { color: var(--ovr-primary); }
+.ovr-nav-caret { font-size: 18px; }
+.ovr-nav-dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    min-width: 240px;
+    background: #fff;
+    border: 1px solid var(--ovr-outline-variant, #e0e0e0);
+    border-radius: var(--ovr-radius-lg, 12px);
+    box-shadow: 0 16px 40px rgba(0, 9, 73, 0.16);
+    padding: 8px;
+    display: none;
+    z-index: 200;
+}
+.ovr-nav-item.is-open .ovr-nav-dropdown { display: block; }
+.ovr-nav-dropdown-link {
+    display: block;
+    padding: 10px 12px;
+    border-radius: var(--ovr-radius-md, 8px);
+    color: var(--ovr-on-surface, #1b1b20);
+    text-decoration: none;
+    font-size: 15px;
+}
+.ovr-nav-dropdown-link:hover { background: var(--ovr-surface-container-low, #f3f4f6); color: var(--ovr-primary); }
+.ovr-nav-dropdown-divider { height: 1px; background: var(--ovr-outline-variant, #e0e0e0); margin: 6px 4px; }
 
 .ovr-nav-actions {
     display: flex;
@@ -2383,8 +2438,8 @@
 
 /* ── Redesigned property card (ID, stats row, rates note, CTA) ── */
 .ovr-property-card .ovr-card-image {
-    aspect-ratio: auto;
-    height: 240px;
+    aspect-ratio: 4 / 3;
+    height: auto;
 }
 .ovr-card-image-link { display: block; width: 100%; height: 100%; }
 .ovr-property-card.is-featured {
@@ -2922,56 +2977,64 @@
 .ovr-detail-subbar-inner {
     max-width: var(--ovr-container-max);
     margin: 0 auto;
-    padding: 16px var(--ovr-gutter);
+    padding: 10px var(--ovr-gutter);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
 }
 .ovr-detail-subbar-main {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: center;
+    gap: 14px;
     min-width: 0;
 }
+.ovr-detail-back,
+.ovr-detail-back:visited,
+.ovr-detail-back:hover {
+    color: #fff !important;
+}
 .ovr-detail-back {
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    color: #fff;
-    font-size: 15px;
-    font-weight: 600;
-    white-space: nowrap;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    background: #000961;
+    text-decoration: none;
     flex-shrink: 0;
+    transition: background var(--ovr-transition), transform var(--ovr-transition);
 }
-.ovr-detail-back:hover { color: #fff; opacity: 0.85; }
-.ovr-detail-back .material-symbols-outlined { font-size: 20px; }
+.ovr-detail-back:hover { background: #001a8c; transform: scale(1.05); }
+.ovr-detail-back .material-symbols-outlined { font-size: 20px; font-variation-settings: 'FILL' 1; color: #fff !important; }
 .ovr-detail-titlewrap {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
 }
 .ovr-detail-idrow {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 .ovr-detail-id {
     flex-shrink: 0;
     background: var(--ovr-gold);
     color: var(--ovr-ink-text);
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.03em;
-    padding: 4px 12px;
+    padding: 2px 8px;
     border-radius: var(--ovr-radius-sm);
+    line-height: 1.5;
 }
 .ovr-detail-sectionchip {
     flex-shrink: 0;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -2980,7 +3043,7 @@
 }
 .ovr-detail-title {
     margin: 0;
-    font-size: 26px;
+    font-size: 22px;
     line-height: 1.2;
     font-weight: 800;
     color: #fff;
@@ -2988,22 +3051,23 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.ovr-detail-tools { display: flex; gap: 8px; flex-shrink: 0; }
+.ovr-detail-tools { display: flex; gap: 6px; flex-shrink: 0; }
 .ovr-detail-tool {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--ovr-radius-md);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    background: transparent;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    background: #000961;
     color: #fff;
     cursor: pointer;
     text-decoration: none;
-    transition: background var(--ovr-transition);
+    transition: background var(--ovr-transition), transform var(--ovr-transition);
 }
-.ovr-detail-tool:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+.ovr-detail-tool:hover { background: #001a8c; color: #fff; transform: scale(1.05); }
+.ovr-detail-tool .material-symbols-outlined { color: #fff; font-variation-settings: 'FILL' 1; }
 
 /* ── Body container ── */
 .ovr-detail-body {
@@ -3368,7 +3432,7 @@
 .ovr-legend-booked { background: var(--ovr-error-container); border: 1px solid var(--ovr-error); }
 
 /* ── Rates table ── */
-.ovr-rates-wrap { overflow-x: auto; border: 1px solid var(--ovr-border-gray); border-radius: var(--ovr-radius-lg); }
+.ovr-rates-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--ovr-border-gray); border-radius: var(--ovr-radius-lg); }
 .ovr-rates-table { width: 100%; border-collapse: collapse; text-align: left; min-width: 640px; }
 .ovr-rates-table thead { background: var(--ovr-primary); }
 .ovr-rates-table th {
@@ -3477,6 +3541,40 @@
     border-top: 1px solid var(--ovr-border-gray);
 }
 .ovr-media-map-caption .material-symbols-outlined { color: var(--ovr-secondary); font-size: 22px; }
+.ovr-media-map-approx { font-weight: 400; color: var(--ovr-on-surface-variant); font-size: 13px; }
+.ovr-detail-map {
+    position: relative;
+    width: 100%;
+    height: 480px;
+    background: var(--ovr-surface-container-low);
+    border-radius: var(--ovr-radius-lg);
+    overflow: hidden;
+}
+.ovr-detail-map-canvas { width: 100%; height: 100%; }
+.ovr-detail-map-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    color: var(--ovr-on-surface-variant);
+    font-size: 14px;
+    background: var(--ovr-surface-container-low);
+}
+.ovr-detail-map .ovr-tack {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ovr-primary, #000961);
+    text-shadow: 0 2px 6px rgba(255, 255, 255, 0.9);
+}
+.ovr-detail-map .ovr-tack .material-symbols-outlined {
+    font-size: 30px;
+    color: var(--ovr-primary, #000961);
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+}
 .ovr-media-extra {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -3581,10 +3679,10 @@
 }
 @media (max-width: 600px) {
     .ovr-detail-subbar-inner { padding: 10px var(--ovr-gutter); gap: 10px; }
-    .ovr-detail-subbar-main { gap: 10px; flex-wrap: wrap; }
-    .ovr-detail-back { font-size: 14px; }
+    .ovr-detail-subbar-main { gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+    .ovr-detail-back { font-size: 13px; }
     .ovr-detail-title { font-size: 20px; white-space: normal; }
-    .ovr-detail-id { font-size: 13px; }
+    .ovr-detail-id { font-size: 12px; padding: 2px 8px; }
     .ovr-detail-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
     .ovr-detail-spec { justify-content: flex-start; }
     .ovr-detail-spec + .ovr-detail-spec { border-left: none; }
@@ -3635,28 +3733,40 @@
 .ovr-ss-villages-inner {
     max-width: 1600px;
     margin: 0 auto;
-    padding: 24px var(--ovr-gutter);
+    padding: 14px var(--ovr-gutter);
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: 24px;
+    align-items: center;
+    gap: 18px;
 }
 .ovr-ss-village {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
+    justify-content: flex-start;
     gap: 8px;
-    width: 192px;
-    max-width: 42vw;
+    box-sizing: border-box;
+    flex: 1 1 160px;
+    min-width: 140px;
+    max-width: 240px;
     text-decoration: none;
+    padding: 8px;
+    border-radius: var(--ovr-radius-lg);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    transition: background var(--ovr-transition), border-color var(--ovr-transition);
 }
+.ovr-ss-village.is-active { background: rgba(222, 175, 12, 0.18); }
+.ovr-ss-village:hover { background: rgba(255, 255, 255, 0.16); }
 .ovr-ss-village-img {
     display: block;
     width: 100%;
-    height: 128px;
+    aspect-ratio: 3 / 2;
+    flex-shrink: 0;
     overflow: hidden;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: var(--ovr-radius-lg);
+    border: none;
+    border-radius: 8px;
     transition: border-color var(--ovr-transition);
 }
 .ovr-ss-village-img img {
@@ -3664,18 +3774,71 @@
     height: 100%;
     object-fit: cover;
     transition: transform 0.5s ease;
+    border-radius: 8px;
 }
-.ovr-ss-village:hover .ovr-ss-village-img { border-color: var(--ss-gold); }
 .ovr-ss-village:hover .ovr-ss-village-img img { transform: scale(1.08); }
 .ovr-ss-village-name {
     color: #fff;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+    width: 100%;
+    min-height: calc(1.2em * 2);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 .ovr-ss-village:hover .ovr-ss-village-name { color: var(--ss-gold); }
+
+/* All Villages chip — icon tile instead of a photo so it reads as the
+   "everything" default state, not another village. */
+.ovr-ss-village--all .ovr-ss-village-img--all {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(222, 175, 12, 0.16);
+    border: 1px solid rgba(222, 175, 12, 0.35);
+    color: var(--ss-gold);
+}
+.ovr-ss-village--all .ovr-ss-village-img--all .material-symbols-outlined {
+    font-size: 34px;
+}
+.ovr-ss-village--all.is-active .ovr-ss-village-img--all {
+    background: var(--ss-gold);
+    color: var(--ss-navy);
+}
+
+/* Chips that are mid-AJAX-refresh dim slightly and show a spinner cursor so a
+   click never feels unresponsive (the strip re-renders without a reload). */
+.ovr-ss-village.is-loading {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+/* Mobile & tablet: collapse back to a horizontally scrollable strip. */
+@media (max-width: 1024px) {
+    .ovr-ss-villages-inner {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        align-items: center;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+    }
+    .ovr-ss-village {
+        flex: 0 0 170px;
+        width: 170px;
+        min-width: 0;
+        max-width: none;
+        height: 158px;
+        scroll-snap-align: start;
+    }
+}
 
 /* ── Navy results header bar ── */
 .ovr-search-stitch .ovr-results-header {
@@ -4107,6 +4270,7 @@
 
 .ovr-map-listcol { min-width: 0; display: flex; flex-direction: column; }
 .ovr-map-cards {
+    min-width: 0; /* allow the grid to shrink inside the flex list column */
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
@@ -4163,7 +4327,7 @@
 /* Mobile/tablet: one card column; switch flips between list and map. */
 @media (max-width: 1024px) {
     .ovr-map-split { grid-template-columns: 1fr; gap: 0; }
-    .ovr-map-cards { grid-template-columns: 1fr; }
+    .ovr-map-cards { grid-template-columns: minmax(0, 1fr); }
     .ovr-map-canvas { display: none; }
     .ovr-map-split.show-map .ovr-map-canvas { display: block; }
     .ovr-map-split.show-map .ovr-map-listcol { display: none; }
@@ -4326,43 +4490,42 @@
     border-color: var(--ovr-secondary);
 }
 
-.ovr-village-card-top {
+/* Photo-first card: image on top (uniform height, crops to fill), name beneath. */
+.ovr-village-card-photo {
     position: relative;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 18px 18px 22px;
-    background: linear-gradient(135deg, #010b62 0%, #013a78 100%);
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
     overflow: hidden;
+    background: linear-gradient(135deg, #010b62 0%, #013a78 100%);
 }
 
-.ovr-village-card-top::after {
-    content: "";
+.ovr-village-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform var(--ovr-transition);
+}
+
+.ovr-village-card:hover .ovr-village-card-img { transform: scale(1.06); }
+
+/* Themed placeholder when a village has no assigned image — keeps every
+   card the same shape and a touch taller/“busier” than the old two-column row. */
+.ovr-village-card-photo-fallback {
     position: absolute;
-    right: -30px;
-    bottom: -50px;
-    width: 130px;
-    height: 130px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.07);
-}
-
-.ovr-village-card-icon {
-    position: relative;
-    z-index: 1;
-    width: 48px;
-    height: 48px;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.16);
-    color: #fff;
-    font-size: 26px;
+    font-size: 72px;
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .ovr-village-card-badge {
-    position: relative;
+    position: absolute;
+    top: 12px;
+    right: 12px;
     z-index: 1;
     padding: 6px 12px;
     border-radius: 999px;
@@ -4370,6 +4533,7 @@
     font-weight: 600;
     color: #1b1b20;
     background: var(--ovr-tertiary-container);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
     white-space: nowrap;
 }
 
@@ -4379,6 +4543,7 @@
     flex: 1 1 auto;
     gap: 14px;
     padding: 18px 20px 20px;
+    min-height: 96px;
 }
 
 .ovr-village-card-name {
@@ -4386,6 +4551,13 @@
     font-weight: 700;
     line-height: 1.25;
     color: var(--ovr-on-surface);
+}
+
+.ovr-village-card-location {
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--ovr-on-surface-variant);
+    margin-top: -8px;
 }
 
 .ovr-village-card-cta {
@@ -4428,4 +4600,24 @@
     .ovr-villages-grid { grid-template-columns: 1fr; }
     .ovr-villages-stats { gap: 18px; padding: 14px 22px; }
     .ovr-villages-group-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
+/* Reduced motion: collapse hover/slide transforms so nothing moves for users
+   who have requested it. Static layout is unaffected. */
+@media (prefers-reduced-motion: reduce) {
+    .ovr-property-card .ovr-card-image img,
+    .ovr-property-card:hover .ovr-card-image img,
+    .ovr-village-card-arrow,
+    .ovr-village-card:hover .ovr-village-card-arrow,
+    .ovr-btn,
+    .ovr-btn-primary,
+    .ovr-btn-secondary,
+    .ovr-btn-gold,
+    .ovr-btn-outline {
+        transition: none;
+        transform: none;
+    }
+    .ovr-hps-track {
+        transition: none;
+    }
 }

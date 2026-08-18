@@ -37,7 +37,10 @@ if ( empty( $gallery ) && has_post_thumbnail( $post_id ) ) {
 }
 
 if ( empty( $gallery ) ) {
-    return; // Nothing to render.
+    // No photos uploaded — render the "photos coming soon" placeholder as the
+    // main image so the hero area is never blank. `0` is a sentinel: no
+    // attachment exists, so $get_img() falls back to the bundled placeholder.
+    $gallery = [ 0 ];
 }
 
 $gallery     = array_values( $gallery );
@@ -112,10 +115,13 @@ $last_thumb_ix = $thumb_count; // index of the 3rd thumbnail (when present).
             <div class="ovr-gallery-thumbs">
                 <?php for ( $i = 1; $i <= $thumb_count; $i++ ) :
                     $is_more_tile = ( $has_more && $i === $last_thumb_ix );
+                    // The "+ More Images" tile opens the full gallery from the
+                    // FIRST photo (index 0), not from this third thumbnail.
+                    $open_at = $is_more_tile ? 0 : $i;
                 ?>
                     <button type="button"
                             class="ovr-gallery-tile ovr-gallery-thumb"
-                            data-ovr-gallery-open="<?php echo esc_attr( $i ); ?>"
+                            data-ovr-gallery-open="<?php echo esc_attr( $open_at ); ?>"
                             aria-label="<?php
                                 /* translators: %d: photo index */
                                 printf( esc_attr__( 'Open photo %d in gallery', 'ovr-core' ), $i + 1 ); ?>">
