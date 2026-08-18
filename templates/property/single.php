@@ -84,6 +84,7 @@ $pets_icon  = 'none' === $pets_policy ? 'block' : 'pets';
 $is_feat    = ! empty( $meta['is_featured'] );
 $rating_avg = (float) ( $meta['rating_avg']   ?? 0 );
 $rating_n   = (int)   ( $meta['rating_count'] ?? 0 );
+$pets       = 'allowed' === $pets_policy;
 $min_stay   = (int)   ( $meta['min_stay']   ?? 1 );
 $video_url  = (string)( $meta['video_url']    ?? '' );
 $pano_url   = (string)( $meta['panorama_url'] ?? '' );
