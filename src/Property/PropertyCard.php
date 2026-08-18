@@ -150,6 +150,7 @@ class PropertyCard {
             'sqft'        => $meta['sqft'],
             'base_price'  => $meta['base_price'],
             'has_pricing' => ! empty( SeasonalPricing::get_pricing( $post_id ) ),
+            'price_range' => SeasonalPricing::price_range( $post_id ),
             'rating_avg'  => $meta['rating_avg'],
             'rating_count'=> $meta['rating_count'],
             'is_featured' => (bool) $meta['is_featured'],

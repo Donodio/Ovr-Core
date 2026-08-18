@@ -24,9 +24,11 @@ class FeaturedCities {
     private string $hook_suffix = '';
 
     public function init(): void {
-        add_action( 'admin_menu', [ $this, 'register_page' ] );
-        add_action( 'admin_post_' . self::SAVE_ACTION, [ $this, 'handle_save' ] );
-        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue' ] );
+        // RETIRED (Village Sections spec): Village Sections are now the primary
+        // location taxonomy. The Featured Cities portal, save handler and admin
+        // enqueue are deliberately NOT registered so no active admin workflow
+        // exposes it. The stored `ovr_featured_cities` option is preserved for
+        // data safety / rollback — nothing is deleted.
     }
 
     public function register_page(): void {

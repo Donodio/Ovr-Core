@@ -42,7 +42,10 @@ $symbol           = (string) ( $symbol ?? '$' );
 $featured_variant = ! empty( $featured_variant );
 
 $bath_display = rtrim( rtrim( number_format( $bathrooms, 1 ), '0' ), '.' );
-$type_label   = $property_type ?: ( $village ? $village : __( 'Rental Home', 'ovr-core' ) );
+// Location-first label: the village/section name is the more useful bit of
+// information in this slot (client request). The property type remains
+// available in filters, detail pages and the admin editor.
+$type_label   = $village ?: ( $property_type ?: __( 'Rental Home', 'ovr-core' ) );
 
 // Cap the blurb at 200 characters (the CSS also clamps it to 3 lines).
 $excerpt = trim( wp_strip_all_tags( $excerpt ) );
@@ -106,7 +109,15 @@ $has_pricing = ! empty( $has_pricing );
                 <span><span class="material-symbols-outlined">shower</span><?php echo esc_html( $bath_display ); ?></span>
             </div>
             <div class="ovr-ss-card-price">
-                <?php if ( $has_price ) : ?>
+                <?php
+                // Price-range label built from structured pricing (e.g. "$1,200 –
+                // $1,800 / month") when the listing has a genuine range; otherwise
+                // fall back to the legacy nightly rate, then "Seasonal Rates".
+                $price_range = ! empty( $price_range ) ? $price_range : null;
+                if ( $price_range && $price_range['max'] > $price_range['min'] ) : ?>
+                    <?php echo esc_html( $symbol . number_format( $price_range['min'], 0 ) . ' – ' . $symbol . number_format( $price_range['max'], 0 ) ); ?>
+                    <?php if ( '' !== $price_range['per'] ) : ?><span>/ <?php echo esc_html( $price_range['per'] ); ?></span><?php endif; ?>
+                <?php elseif ( $has_price ) : ?>
                     <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?><span>/ <?php esc_html_e( 'night', 'ovr-core' ); ?></span>
                 <?php elseif ( $has_pricing ) : ?>
                     <?php esc_html_e( 'Seasonal Rates', 'ovr-core' ); ?>

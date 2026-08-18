@@ -144,6 +144,35 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
         foreach ( (array) $sel_villages as $sv ) : ?>
             <input type="hidden" name="village[]" value="<?php echo esc_attr( (string) $sv ); ?>">
         <?php endforeach;
+
+        // Village Name — the free-text filter (phase 21): type a specific
+        // village (e.g. "Mallory Square") rather than choosing from a checkbox
+        // list. Matched against the listing's _ovr_village_name meta.
+        $village_name_filter = '';
+        if ( isset( $_GET['village_name'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            $village_name_filter = sanitize_text_field( wp_unslash( $_GET['village_name'] ) );
+        }
+        ?>
+        <div class="ovr-filter-field">
+            <label for="ovr-filter-village-name"><?php esc_html_e( 'Village Name', 'ovr-core' ); ?></label>
+            <input type="text"
+                   id="ovr-filter-village-name"
+                   name="village_name"
+                   class="ovr-form-input"
+                   list="ovr-village-name-datalist"
+                   value="<?php echo esc_attr( $village_name_filter ); ?>"
+                   placeholder="<?php esc_attr_e( 'e.g. Mallory Square', 'ovr-core' ); ?>">
+            <?php if ( ! empty( $village_names ) ) : ?>
+                <datalist id="ovr-village-name-datalist">
+                    <?php foreach ( $village_names as $vname ) : ?>
+                        <option value="<?php echo esc_attr( $vname ); ?>">
+                    <?php endforeach; ?>
+                </datalist>
+            <?php endif; ?>
+            <p class="ovr-filter-hint" style="margin:6px 0 0;font-size:12px;color:var(--ovr-on-surface-variant)"><?php esc_html_e( 'Start typing to see matching villages.', 'ovr-core' ); ?></p>
+        </div>
+
+        <?php
         $render_group( 'property_type', __( 'Property Type', 'ovr-core' ), $type_opts, $sel_types );
         ?>
 
@@ -163,7 +192,31 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
         <?php
         $render_group( 'amenities', __( 'Amenities', 'ovr-core' ), $amenity_opts, $sel_amenities );
         $render_group( 'views', __( 'Views', 'ovr-core' ), $view_opts, $sel_views );
-        $render_group( 'features', __( 'Features', 'ovr-core' ), $feature_opts, $sel_features );
+
+        // Features → single "Golf Cart" checkbox (client request: a golf cart is
+        // the defining feature for Villages homes; keep the facet a single
+        // toggle instead of a long checkbox list). Any other feature selections
+        // from older bookmarks survive as hidden fields below.
+        $gc_terms = array_keys( $feature_opts );
+        $gc_key   = isset( $feature_opts['golf-cart-included'] ) ? 'golf-cart-included' : ( $gc_terms[0] ?? '' );
+        $gc_sel   = in_array( $gc_key, $sel_features, true );
+        foreach ( $feature_opts as $fslug => $fname ) {
+            if ( $fslug === $gc_key ) { continue; }
+            if ( in_array( $fslug, $sel_features, true ) ) {
+                ?>
+                <input type="hidden" name="features[]" value="<?php echo esc_attr( $fslug ); ?>">
+                <?php
+            }
+        }
+        ?>
+        <div class="ovr-filter-field">
+            <label class="ovr-mf-label"><?php esc_html_e( 'Features', 'ovr-core' ); ?></label>
+            <label class="ovr-mf-item">
+                <input type="checkbox" class="ovr-mf-check" name="features[]" value="<?php echo esc_attr( $gc_key ); ?>" <?php checked( $gc_sel ); ?>>
+                <span><?php esc_html_e( 'Golf Cart', 'ovr-core' ); ?></span>
+            </label>
+        </div>
+        <?php
         ?>
 
         <!-- Pets -->

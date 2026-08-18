@@ -20,7 +20,50 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class VillagesArchive {
 
+    /** Term meta key the Village Sections admin stores each section's image against. */
+    public const IMAGE_META = 'ovr_village_image_id';
+
     public function init(): void {}
+
+    /**
+     * Resolve a village term's display image (large), or ''.
+     *
+     * Honours the per-section image an admin assigned in the Village Sections
+     * portal (stored as term meta). Falls back to the curated section image
+     * seeded by the Homepage module, then to none (the template shows a themed
+     * placeholder so every card keeps the same shape).
+     */
+    public static function image_url( \WP_Term $term ): string {
+        // Own image first.
+        $img_id = (int) get_term_meta( $term->term_id, self::IMAGE_META, true );
+        if ( $img_id ) {
+            $url = wp_get_attachment_image_url( $img_id, 'large' );
+            if ( $url ) {
+                return $url;
+            }
+        }
+        // Inherit the parent Section's image (child villages rarely carry their
+        // own) so a whole section stays visually consistent.
+        if ( $term->parent ) {
+            $parent_img = (int) get_term_meta( (int) $term->parent, self::IMAGE_META, true );
+            if ( $parent_img ) {
+                $url = wp_get_attachment_image_url( $parent_img, 'large' );
+                if ( $url ) {
+                    return $url;
+                }
+            }
+        }
+        // Curated homepage section image (P17) — keyed by term id in an option.
+        $curated = get_option( 'ovr_village_section_images', [] );
+        if ( is_array( $curated ) && ! empty( $curated[ $term->term_id ] ) ) {
+            $cid = (int) $curated[ $term->term_id ];
+            $url = wp_get_attachment_image_url( $cid, 'large' );
+            if ( $url ) {
+                return $url;
+            }
+        }
+        return '';
+    }
 
     public static function render(): string {
         return TemplateLoader::get_rendered( 'pages/villages.php', [
@@ -92,6 +135,15 @@ class VillagesArchive {
             $groups[ $group_label ]   = $groups[ $group_label ] ?? [];
             $groups[ $group_label ][] = $term;
         }
+
+        // Attach each village's display image so the template can render a
+        // uniform photo-first card (name beneath the image).
+        foreach ( $groups as &$villages ) {
+            foreach ( $villages as $term ) {
+                $term->image_url = self::image_url( $term );
+            }
+        }
+        unset( $villages );
 
         // Drop any empty groups (a heading whose only members had 0 posts —
         // already filtered by hide_empty, but be defensive).

@@ -14,7 +14,6 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 use OVR\Property\PropertyCard;
 use OVR\Property\PropertyQuery;
 use OVR\Search\SearchFilters;
-use OVR\Admin\FeaturedCities;
 use OVR\Core\TemplateLoader;
 use OVR\Core\Pages;
 
@@ -61,6 +60,7 @@ $range_end   = min( $total, $paged * $per_page );
 $has_active_filters = (
     '' !== ( $filters['keyword'] ?? '' ) ||
     ! empty( $filters['village'] ) ||
+    '' !== ( $filters['village_name'] ?? '' ) ||
     ! empty( $filters['village_section'] ) ||
     ! empty( $filters['property_type'] ) ||
     ! empty( $filters['rental_type'] ) ||
@@ -73,6 +73,7 @@ $has_active_filters = (
     (float) ( $filters['price_max'] ?? 0 ) > 0 ||
     (int) ( $filters['guests'] ?? 0 ) > 0 ||
     ! empty( $filters['pets'] ) ||
+    ! empty( $filters['deals_only'] ) ||
     '' !== ( $filters['checkin'] ?? '' ) ||
     '' !== ( $filters['checkout'] ?? '' ) ||
     (int) ( $filters['owner_id'] ?? 0 ) > 0 ||
@@ -80,12 +81,35 @@ $has_active_filters = (
 );
 
 // Village Section strip (client request): the row of chips at the top of the
-// results filters by Village Section. Clicking a section shows only its
-// listings; clicking the already-active one clears the section filter. Skipped
-// on single-owner views ("Listings by [owner]"), where it has no place.
+// results filters by Village Section. The first chip is always "All Villages"
+// (active when no section filter is set) — clicking it resets the section and
+// village filters back to "everything". Each village chip shows only its
+// listings; clicking the already-active one also clears the section filter.
+// Skipped on single-owner views ("Listings by [owner]"), where it has no place.
 $section_chips = [];
 if ( ! $owner_active ) {
     $sel_sections = array_map( 'strval', (array) ( $filters['village_section'] ?? [] ) );
+
+    // "All Villages" — the default/unfiltered state; first in the strip. Uses
+    // the "The Villages" section's image (the community-wide artwork) when one
+    // is assigned; otherwise falls back to the bundled stone-wall "The Villages"
+    // banner so it reads as a real community tile, not a plain icon box.
+    $all_img = OVR_PLUGIN_URL . 'assets/images/the-villages-banner.svg';
+    $all_term = get_term_by( 'slug', 'the-villages', 'ovr_village' );
+    if ( $all_term && ! is_wp_error( $all_term ) ) {
+        $term_img = SearchFilters::get_village_image( $all_term );
+        if ( '' !== $term_img ) {
+            $all_img = $term_img;
+        }
+    }
+    $section_chips[] = [
+        'name'   => __( 'All Villages', 'ovr-core' ),
+        'image'  => $all_img,
+        'active' => empty( $sel_sections ),
+        'url'    => $build_url( [ 'village_section' => [], 'village' => [], 'village_name' => [], 'paged' => 1 ] ),
+        'all'    => true,
+    ];
+
     foreach ( $villages as $v ) {
         $active = in_array( (string) $v->slug, $sel_sections, true );
         $section_chips[] = [
@@ -94,7 +118,8 @@ if ( ! $owner_active ) {
             'active' => $active,
             'url'    => $active
                 ? $build_url( [ 'village_section' => [], 'paged' => 1 ] )
-                : $build_url( [ 'village_section' => [ $v->slug ], 'village' => [], 'paged' => 1 ] ),
+                : $build_url( [ 'village_section' => [ $v->slug ], 'village' => [], 'village_name' => [], 'paged' => 1 ] ),
+            'all'    => false,
         ];
     }
 }
@@ -105,18 +130,31 @@ if ( ! $owner_active ) {
     <?php if ( ! empty( $section_chips ) ) : ?>
         <style>
             .ovr-ss-village.is-active{position:relative}
-            .ovr-ss-village.is-active .ovr-ss-village-img{outline:3px solid var(--ovr-primary,#000961);outline-offset:2px;border-radius:9999px}
-            .ovr-ss-village.is-active .ovr-ss-village-name{color:var(--ovr-primary,#000961);font-weight:700}
+            .ovr-ss-village.is-active .ovr-ss-village-img{outline:3px solid var(--ovr-gold,#DEAF0C);outline-offset:2px;border-radius:8px}
+            .ovr-ss-village.is-active .ovr-ss-village-name{color:var(--ovr-gold,#DEAF0C);font-weight:700}
         </style>
         <section class="ovr-ss-villages" aria-label="<?php esc_attr_e( 'Filter by village section', 'ovr-core' ); ?>">
             <div class="ovr-ss-villages-inner">
                 <?php foreach ( $section_chips as $chip ) : ?>
-                    <a class="ovr-ss-village<?php echo $chip['active'] ? ' is-active' : ''; ?>" href="<?php echo esc_url( $chip['url'] ); ?>"<?php echo $chip['active'] ? ' aria-current="true"' : ''; ?>>
-                        <span class="ovr-ss-village-img">
-                            <img src="<?php echo esc_url( $chip['image'] ); ?>" alt="<?php echo esc_attr( $chip['name'] ); ?>" loading="lazy">
-                        </span>
-                        <span class="ovr-ss-village-name"><?php echo esc_html( $chip['name'] ); ?></span>
-                    </a>
+                    <?php if ( ! empty( $chip['all'] ) ) : ?>
+                        <a class="ovr-ss-village ovr-ss-village--all<?php echo $chip['active'] ? ' is-active' : ''; ?>" href="<?php echo esc_url( $chip['url'] ); ?>"<?php echo $chip['active'] ? ' aria-current="true"' : ''; ?>>
+                            <span class="ovr-ss-village-img ovr-ss-village-img--all">
+                                <?php if ( ! empty( $chip['image'] ) ) : ?>
+                                    <img src="<?php echo esc_url( $chip['image'] ); ?>" alt="<?php echo esc_attr( $chip['name'] ); ?>" loading="lazy">
+                                <?php else : ?>
+                                    <span class="material-symbols-outlined" aria-hidden="true">grid_view</span>
+                                <?php endif; ?>
+                            </span>
+                            <span class="ovr-ss-village-name"><?php echo esc_html( $chip['name'] ); ?></span>
+                        </a>
+                    <?php else : ?>
+                        <a class="ovr-ss-village<?php echo $chip['active'] ? ' is-active' : ''; ?>" href="<?php echo esc_url( $chip['url'] ); ?>"<?php echo $chip['active'] ? ' aria-current="true"' : ''; ?>>
+                            <span class="ovr-ss-village-img">
+                                <img src="<?php echo esc_url( $chip['image'] ); ?>" alt="<?php echo esc_attr( $chip['name'] ); ?>" loading="lazy">
+                            </span>
+                            <span class="ovr-ss-village-name"><?php echo esc_html( $chip['name'] ); ?></span>
+                        </a>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </div>
         </section>
@@ -145,7 +183,9 @@ if ( ! $owner_active ) {
                     <div>
                         <h2 class="ovr-results-title">
                             <?php
-                            if ( $owner_active && '' !== $owner_name ) {
+                            if ( ! empty( $filters['deals_only'] ) ) {
+                                esc_html_e( 'Deals & Cancellations', 'ovr-core' );
+                            } elseif ( $owner_active && '' !== $owner_name ) {
                                 /* translators: %s: landlord / owner display name. */
                                 printf( esc_html__( 'Listings by %s', 'ovr-core' ), esc_html( $owner_name ) );
                             } else {

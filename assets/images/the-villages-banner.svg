@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" role="img" aria-label="The Villages">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dff0e6"/>
+      <stop offset="1" stop-color="#bfe0cf"/>
+    </linearGradient>
+    <pattern id="stone" width="80" height="44" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+      <rect width="80" height="44" fill="#9aa0a6"/>
+      <rect x="0" y="0" width="78" height="20" rx="3" fill="#aeb4ba"/>
+      <rect x="0" y="24" width="36" height="18" rx="3" fill="#b9bfc4"/>
+      <rect x="40" y="24" width="36" height="18" rx="3" fill="#9fa5ab"/>
+      <rect x="-20" y="24" width="36" height="18" rx="3" fill="#b9bfc4"/>
+      <rect x="20" y="-2" width="36" height="18" rx="3" fill="#a7adb3"/>
+      <rect x="60" y="-2" width="36" height="18" rx="3" fill="#b9bfc4"/>
+    </pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#sky)"/>
+  <rect y="150" width="400" height="150" fill="url(#stone)"/>
+  <rect y="150" width="400" height="150" fill="#3a4a3f" opacity="0.12"/>
+  <rect y="138" width="400" height="14" fill="#7c8a4f" opacity="0.85"/>
+  <g>
+    <rect x="150" y="40" width="100" height="70" rx="6" fill="#e9e4d8" stroke="#8a8378" stroke-width="3"/>
+    <rect x="166" y="58" width="26" height="26" fill="#9fd0c0"/>
+    <rect x="208" y="58" width="26" height="26" fill="#9fd0c0"/>
+    <rect x="166" y="92" width="68" height="10" fill="#b9603f"/>
+  </g>
+  <text x="200" y="200" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="34" font-weight="700" fill="#ffffff" stroke="#1f3d2b" stroke-width="1" paint-order="stroke" letter-spacing="1">The Villages</text>
+</svg>

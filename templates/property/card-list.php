@@ -120,7 +120,16 @@ $thumb_h  = (int) ( $thumb_h ?? 0 ) ?: 900;
         <!-- Footer: Price + CTA -->
         <div style="display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid var(--ovr-outline-variant);padding-top:16px">
             <div>
-                <?php if ( $base_price > 0 ) : ?>
+                <?php
+                $price_range = ! empty( $price_range ) ? $price_range : null;
+                if ( $price_range && $price_range['max'] > $price_range['min'] ) : ?>
+                    <span class="ovr-price-display" style="font-size:24px;color:var(--ovr-on-surface)">
+                        <?php echo esc_html( $symbol . number_format( $price_range['min'], 0 ) . ' – ' . $symbol . number_format( $price_range['max'], 0 ) ); ?>
+                    </span>
+                    <?php if ( '' !== $price_range['per'] ) : ?>
+                        <span style="color:var(--ovr-on-surface-variant);font-size:14px">/ <?php echo esc_html( $price_range['per'] ); ?></span>
+                    <?php endif; ?>
+                <?php elseif ( $base_price > 0 ) : ?>
                     <span class="ovr-price-display" style="font-size:24px;color:var(--ovr-on-surface)">
                         <?php echo esc_html( $symbol . number_format( $base_price, 0 ) ); ?>
                     </span>
