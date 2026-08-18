@@ -16,6 +16,7 @@ $slider_cards = $slider_cards ?? [];
 
 $search_url    = Pages::get_page_url( 'ovr_page_search' );
 $register_url  = Pages::get_page_url( 'ovr_page_register' );
+$pricing_url   = Pages::get_page_url( 'ovr_page_pricing' );
 $featured_url  = Pages::get_page_url( 'ovr_page_featured' );
 
 $hero_image = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNBGqlk9yFUDZZCmqhdgUmDQ8MM2PjBSYgtB2niQK5_3kPGTdyf-daWGpU2a_F57FJVx9B4yIi0ZuWZabo_6ZeN9F0dzCmLvfI-97LMX6YfP3h6bZYgjUuhlyEstHWzBLtGDl7jJ3vqOUMfS3OjAZjxT9bULgywWWO1GKT4uQXy-mqyl3xN9kpnylhFyaBF4smSQZ1yzWcmq6S0o--_wXcub5jBBd5Eu6BpaDgZmgiUjFXkb82IF83Qc62pDQtTIiXDGv5Wx0MTDo';
@@ -77,20 +78,21 @@ $featured_cards = [
         <section class="relative w-full h-[600px] flex items-center justify-center overflow-hidden bg-primary-container">
             <img alt="<?php esc_attr_e( 'A sunny, vibrant daytime view of a bustling town square in a lively senior community.', 'ovr-core' ); ?>" class="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay" src="<?php echo esc_url( $hero_image ); ?>">
             <div class="relative z-10 max-w-container-max-width px-margin-desktop text-center">
+                <img class="mx-auto mb-6" alt="<?php esc_attr_e( 'Our Villages Rental', 'ovr-core' ); ?>" style="height:84px;width:auto;max-width:360px" src="<?php echo esc_url( OVR_PLUGIN_URL . 'assets/images/ovr-logo.svg' ); ?>">
                 <h1 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg-mobile md:font-headline-lg text-white mb-6 drop-shadow-md"><?php esc_html_e( 'Rental Homes in The Villages, Florida', 'ovr-core' ); ?></h1>
                 <p class="text-body-lg font-body-lg text-white max-w-2xl mx-auto mb-10 drop-shadow-md"><?php esc_html_e( 'Owner-direct rentals, seasonal stays, and monthly homes. Connect directly with landlords in our community.', 'ovr-core' ); ?></p>
                 <div class="flex flex-col sm:flex-row gap-6 justify-center max-w-3xl mx-auto">
                     <div class="bg-surface rounded-lg p-6 shadow-lg flex-1 border border-border-gray flex flex-col items-center text-center transform transition-transform hover:-translate-y-1">
                         <span class="material-symbols-outlined text-4xl text-secondary mb-4" style="font-variation-settings: 'FILL' 1;">search</span>
-                        <h2 class="text-card-title font-card-title text-on-surface mb-2"><?php esc_html_e( 'Find a Rental', 'ovr-core' ); ?></h2>
+                        <h2 class="text-card-title font-card-title text-on-surface mb-2"><?php esc_html_e( 'Search All Listings', 'ovr-core' ); ?></h2>
                         <p class="text-body-md font-body-md text-muted-text mb-6"><?php esc_html_e( 'Browse our extensive directory of seasonal and long-term homes.', 'ovr-core' ); ?></p>
-                        <a class="mt-auto w-full bg-primary-container text-white text-label-md font-label-md py-3 rounded h-tap-target-min hover:opacity-90 transition-opacity" href="<?php echo esc_url( $search_url ); ?>"><?php esc_html_e( 'Search Now', 'ovr-core' ); ?></a>
+                        <a class="mt-auto w-full bg-primary-container text-white text-label-md font-label-md py-3 rounded h-tap-target-min hover:opacity-90 transition-opacity" href="<?php echo esc_url( $search_url ); ?>"><?php esc_html_e( 'Search All Listings', 'ovr-core' ); ?></a>
                     </div>
                     <div class="bg-surface rounded-lg p-6 shadow-lg flex-1 border border-border-gray flex flex-col items-center text-center transform transition-transform hover:-translate-y-1">
                         <span class="material-symbols-outlined text-4xl text-featured-gold mb-4" style="font-variation-settings: 'FILL' 1;">home</span>
-                        <h2 class="text-card-title font-card-title text-on-surface mb-2"><?php esc_html_e( 'List My Property', 'ovr-core' ); ?></h2>
+                        <h2 class="text-card-title font-card-title text-on-surface mb-2"><?php esc_html_e( 'Advertise With Us', 'ovr-core' ); ?></h2>
                         <p class="text-body-md font-body-md text-muted-text mb-6"><?php esc_html_e( 'Reach thousands of renters looking for homes in our community.', 'ovr-core' ); ?></p>
-                        <a class="mt-auto w-full bg-surface text-primary-container border border-primary-container text-label-md font-label-md py-3 rounded h-tap-target-min hover:bg-surface-container-low transition-colors" href="<?php echo esc_url( $register_url ); ?>"><?php esc_html_e( 'Start Listing', 'ovr-core' ); ?></a>
+                        <a class="mt-auto w-full bg-surface text-primary-container border border-primary-container text-label-md font-label-md py-3 rounded h-tap-target-min hover:bg-surface-container-low transition-colors" href="<?php echo esc_url( $pricing_url ); ?>"><?php esc_html_e( 'Advertise With Us', 'ovr-core' ); ?></a>
                     </div>
                 </div>
             </div>
@@ -105,13 +107,13 @@ $featured_cards = [
 
         <section class="py-12 max-w-container-max-width mx-auto px-margin-desktop overflow-hidden">
             <h2 class="text-headline-md-mobile md:text-headline-md font-headline-md-mobile md:font-headline-md text-on-surface mb-8"><?php esc_html_e( 'Explore The Villages', 'ovr-core' ); ?></h2>
-            <div class="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory hide-scrollbar">
+            <div class="flex overflow-x-auto pb-6 gap-5 snap-x snap-mandatory hide-scrollbar">
                 <?php foreach ( $village_cards as $card ) : ?>
-                    <div class="min-w-[250px] flex-shrink-0 snap-start group cursor-pointer">
-                        <div class="h-40 rounded-lg overflow-hidden mb-3 relative shadow-sm border border-border-gray">
+                    <div class="min-w-[180px] flex-shrink-0 snap-start group cursor-pointer">
+                        <div class="h-28 rounded-lg overflow-hidden mb-2 relative shadow-sm border border-border-gray">
                             <img alt="<?php echo esc_attr( $card['name'] ); ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" src="<?php echo esc_url( $card['image'] ); ?>">
                         </div>
-                        <h3 class="text-label-md font-label-md text-on-surface text-center"><?php echo esc_html( $card['name'] ); ?></h3>
+                        <h3 class="text-label-sm font-label-sm text-on-surface text-center"><?php echo esc_html( $card['name'] ); ?></h3>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -141,12 +143,12 @@ $featured_cards = [
                             <div class="h-48 relative overflow-hidden">
                                 <img alt="<?php echo esc_attr( $card['title'] ?? __( 'Property Image', 'ovr-core' ) ); ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="<?php echo esc_url( $card['image'] ); ?>">
                             </div>
-                            <div class="p-5 flex-grow flex flex-col">
-                                <div class="flex justify-between items-start mb-2">
+                            <div class="p-6 flex-grow flex flex-col">
+                                <div class="flex justify-between items-start mb-3">
                                     <h3 class="text-card-title font-card-title text-on-surface"><?php echo esc_html( $card['title'] ); ?></h3>
                                     <span class="text-metadata font-metadata text-muted-text"><?php echo esc_html( 'ID: ' . $card['id'] ); ?></span>
                                 </div>
-                                <p class="text-body-md font-body-md text-on-surface-variant mb-4"><?php echo esc_html( $card['details'] ); ?></p>
+                                <p class="text-body-md font-body-md text-on-surface-variant mb-2"><?php echo esc_html( $card['details'] ); ?></p>
                                 <div class="mt-auto bg-surface-container-low p-3 rounded border border-border-gray">
                                     <p class="text-metadata font-metadata text-secondary font-semibold"><?php echo esc_html( $card['availability'] ); ?></p>
                                     <p class="text-body-md font-body-md text-on-surface mt-1"><?php echo esc_html( $card['price'] ); ?></p>

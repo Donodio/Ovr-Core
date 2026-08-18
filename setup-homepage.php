@@ -125,6 +125,7 @@ $icon_box = static function ( string $icon, string $title, string $desc, string 
 /* ── Dynamic links + hero image ────────────────────────────────────────── */
 $search_url   = \OVR\Core\Pages::get_page_url( 'ovr_page_search' );
 $register_url = \OVR\Core\Pages::get_page_url( 'ovr_page_register' );
+$pricing_url  = \OVR\Core\Pages::get_page_url( 'ovr_page_pricing' );
 $featured_url = \OVR\Core\Pages::get_page_url( 'ovr_page_featured' );
 $hero_bg      = OVR_PLUGIN_URL . 'assets/images/ovr-placeholder.jpg';
 
@@ -136,14 +137,14 @@ $hero = $section(
             'heading'        => 'Rental Homes in The Villages, Florida',
             'subtitle'       => 'Owner-direct rentals, seasonal stays, and monthly homes. Connect directly with landlords in our community.',
             'bg_image'       => [ 'url' => $hero_bg, 'id' => '' ],
-            'card1_title'    => 'Find a Rental',
+            'card1_title'    => 'Search All Listings',
             'card1_desc'     => 'Browse our extensive directory of seasonal and long-term homes.',
-            'card1_btn_text' => 'Search Now',
+            'card1_btn_text' => 'Search All Listings',
             'card1_btn_link' => [ 'url' => $search_url, 'is_external' => '', 'nofollow' => '' ],
-            'card2_title'    => 'List My Property',
+            'card2_title'    => 'Advertise With Us',
             'card2_desc'     => 'Reach thousands of renters looking for homes in our community.',
-            'card2_btn_text' => 'Start Listing',
-            'card2_btn_link' => [ 'url' => $register_url, 'is_external' => '', 'nofollow' => '' ],
+            'card2_btn_text' => 'Advertise With Us',
+            'card2_btn_link' => [ 'url' => $pricing_url, 'is_external' => '', 'nofollow' => '' ],
         ] ),
     ] ) ],
     [

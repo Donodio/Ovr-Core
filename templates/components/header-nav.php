@@ -22,7 +22,7 @@ $admin_home_url = $admin_home_url ?? admin_url();
 $current_user = wp_get_current_user();
 $is_logged_in = is_user_logged_in();
 $logo_html    = $logo_html ?? '';
-$site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Village Rentals', 'ovr-core' ) );
+$site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rental', 'ovr-core' ) );
 ?>
 <header class="ovr-topnav" role="banner">
     <div class="ovr-topnav-inner">
@@ -40,10 +40,28 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Village Renta
         <!-- Primary Navigation -->
         <nav class="ovr-nav-links" aria-label="<?php esc_attr_e( 'Primary navigation', 'ovr-core' ); ?>">
             <?php foreach ( $nav_items as $slug => $item ) : ?>
-                <a href="<?php echo esc_url( $item['url'] ); ?>"
-                   class="<?php echo $active === $slug ? 'active' : ''; ?>"<?php echo ! empty( $item['target'] ) ? ' target="_blank" rel="noopener"' : ''; ?>>
-                    <?php echo esc_html( $item['label'] ); ?>
-                </a>
+                <?php if ( ! empty( $item['children'] ) ) : ?>
+                    <div class="ovr-nav-item ovr-has-menu">
+                        <button type="button" class="ovr-nav-link ovr-nav-toggle" aria-haspopup="true" aria-expanded="false" data-ovr-nav-toggle>
+                            <?php echo esc_html( $item['label'] ); ?>
+                            <span class="material-symbols-outlined ovr-nav-caret" aria-hidden="true">expand_more</span>
+                        </button>
+                        <div class="ovr-nav-dropdown" role="menu">
+                            <?php foreach ( $item['children'] as $child ) : ?>
+                                <?php if ( ! empty( $child['divider'] ) ) : ?>
+                                    <div class="ovr-nav-dropdown-divider" role="separator"></div>
+                                <?php else : ?>
+                                    <a class="ovr-nav-dropdown-link" role="menuitem" href="<?php echo esc_url( $child['url'] ); ?>"><?php echo esc_html( $child['label'] ); ?></a>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php else : ?>
+                    <a href="<?php echo esc_url( $item['url'] ); ?>"
+                       class="ovr-nav-link <?php echo $active === $slug ? 'active' : ''; ?>"<?php echo ! empty( $item['target'] ) ? ' target="_blank" rel="noopener"' : ''; ?>>
+                        <?php echo esc_html( $item['label'] ); ?>
+                    </a>
+                <?php endif; ?>
             <?php endforeach; ?>
         </nav>
 
@@ -89,15 +107,28 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Village Renta
         </div>
     </div>
 
-    <!-- Mobile Menu Drawer -->
-    <div class="ovr-mobile-drawer" aria-hidden="true" data-ovr-mobile-drawer>
-        <nav class="ovr-mobile-drawer-inner" aria-label="<?php esc_attr_e( 'Mobile navigation', 'ovr-core' ); ?>">
-            <?php foreach ( $nav_items as $slug => $item ) : ?>
-                <a href="<?php echo esc_url( $item['url'] ); ?>"
-                   class="ovr-mobile-link <?php echo $active === $slug ? 'active' : ''; ?>">
-                    <?php echo esc_html( $item['label'] ); ?>
-                </a>
-            <?php endforeach; ?>
+        <!-- Mobile Menu Drawer -->
+        <div class="ovr-mobile-drawer" aria-hidden="true" data-ovr-mobile-drawer>
+            <nav class="ovr-mobile-drawer-inner" aria-label="<?php esc_attr_e( 'Mobile navigation', 'ovr-core' ); ?>">
+                <?php foreach ( $nav_items as $slug => $item ) : ?>
+                    <?php if ( ! empty( $item['children'] ) ) : ?>
+                        <div class="ovr-mobile-group">
+                            <div class="ovr-mobile-group-title"><?php echo esc_html( $item['label'] ); ?></div>
+                            <?php foreach ( $item['children'] as $child ) : ?>
+                                <?php if ( ! empty( $child['divider'] ) ) : ?>
+                                    <div class="ovr-mobile-divider"></div>
+                                <?php else : ?>
+                                    <a href="<?php echo esc_url( $child['url'] ); ?>" class="ovr-mobile-link"><?php echo esc_html( $child['label'] ); ?></a>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else : ?>
+                        <a href="<?php echo esc_url( $item['url'] ); ?>"
+                           class="ovr-mobile-link <?php echo $active === $slug ? 'active' : ''; ?>">
+                            <?php echo esc_html( $item['label'] ); ?>
+                        </a>
+                    <?php endif; ?>
+                <?php endforeach; ?>
             <div class="ovr-mobile-divider"></div>
             <?php if ( $is_logged_in ) : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_dashboard' ) ); ?>" class="ovr-mobile-link">
@@ -116,4 +147,35 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Village Renta
             <?php endif; ?>
         </nav>
     </div>
+
+    <script>
+    (function () {
+        var toggles = document.querySelectorAll('[data-ovr-nav-toggle]');
+        toggles.forEach(function (btn) {
+            var menu = btn.parentElement ? btn.parentElement.querySelector('.ovr-nav-dropdown') : null;
+            if (!menu) { return; }
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+                btn.parentElement.classList.toggle('is-open', !open);
+            });
+            menu.addEventListener('click', function (e) { e.stopPropagation(); });
+        });
+        document.addEventListener('click', function () {
+            toggles.forEach(function (btn) {
+                btn.setAttribute('aria-expanded', 'false');
+                if (btn.parentElement) { btn.parentElement.classList.remove('is-open'); }
+            });
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                toggles.forEach(function (btn) {
+                    btn.setAttribute('aria-expanded', 'false');
+                    if (btn.parentElement) { btn.parentElement.classList.remove('is-open'); }
+                });
+            }
+        });
+    })();
+    </script>
 </header>

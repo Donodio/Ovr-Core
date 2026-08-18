@@ -63,9 +63,13 @@ class Assets {
             [],
             OVR_VERSION
         );
+        // Material Symbols is SELF-HOSTED (assets/css/ovr-icons.css + the
+        // bundled woff2) so every icon renders on any environment — no Google
+        // Fonts CDN dependency, so CDN blocks / cache plugins that strip
+        // third-party stylesheets can never blank out the icons.
         wp_register_style(
             'ovr-material-symbols',
-            'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap',
+            OVR_PLUGIN_URL . 'assets/css/ovr-icons.css',
             [],
             OVR_VERSION
         );
@@ -91,7 +95,9 @@ class Assets {
             );
         }
 
-        // Leaflet map styles — on the search "Map" view and the /map/ page.
+        // Leaflet map styles — on the search "Map" view, the /map/ page, and
+        // single property pages that carry coordinates (client: the embedded
+        // OSM iframe had a broken zoom-out control; the Leaflet map fixes it).
         if ( $this->needs_map() ) {
             wp_enqueue_style(
                 'ovr-leaflet',
@@ -112,6 +118,17 @@ class Assets {
                 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
                 [ 'ovr-leaflet-cluster' ],
                 '1.5.3'
+            );
+        }
+
+        // Single-property map (Leaflet, no clustering) — loaded when the listing
+        // has coordinates. Marker is a thumb-tack, not the exact home.
+        if ( $this->needs_single_map() ) {
+            wp_enqueue_style(
+                'ovr-leaflet',
+                'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+                [],
+                '1.9.4'
             );
         }
     }
@@ -204,10 +221,25 @@ class Assets {
 
         // Property page scripts (conditional).
         if ( $this->is_property_page() ) {
+            $property_deps = [ 'ovr-public' ];
+
+            // Single-property map: Leaflet (no cluster) so the zoom controls
+            // work — the old OSM iframe embed could not zoom out.
+            if ( $this->needs_single_map() ) {
+                wp_enqueue_script(
+                    'ovr-leaflet',
+                    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+                    [],
+                    '1.9.4',
+                    true
+                );
+                $property_deps[] = 'ovr-leaflet';
+            }
+
             wp_enqueue_script(
                 'ovr-property',
                 OVR_PLUGIN_URL . 'assets/js/ovr-property.js',
-                [ 'ovr-public' ],
+                $property_deps,
                 OVR_VERSION,
                 true
             );
@@ -291,6 +323,39 @@ class Assets {
      */
     private function needs_map(): bool {
         return ( $this->is_search_page() && $this->is_map_view() ) || $this->is_map_page();
+    }
+
+    /**
+     * Whether a single property page carries coordinates and should load the
+     * Leaflet single-property map instead of the placeholder iframe.
+     *
+     * @return bool
+     */
+    private function needs_single_map(): bool {
+        if ( ! $this->is_property_page() ) {
+            return false;
+        }
+        $id = (int) get_the_ID();
+        if ( ! $id ) {
+            return false;
+        }
+        $lat = (float) get_post_meta( $id, '_ovr_latitude', true );
+        $lng = (float) get_post_meta( $id, '_ovr_longitude', true );
+        if ( 0.0 !== $lat && 0.0 !== $lng
+            && $lat >= -90.0 && $lat <= 90.0
+            && $lng >= -180.0 && $lng <= 180.0 ) {
+            return true;
+        }
+        // Fall back to the village name so listings without precise
+        // coordinates still load the map (approximate location). The single
+        // property template geocodes the village name *or* the first ovr_village
+        // taxonomy term, so both must be honoured here or the map container
+        // renders without Leaflet being enqueued (blank map).
+        if ( '' !== trim( (string) get_post_meta( $id, '_ovr_village_name', true ) ) ) {
+            return true;
+        }
+        $village_terms = get_the_terms( $id, 'ovr_village' );
+        return ! empty( $village_terms ) && ! is_wp_error( $village_terms );
     }
 
     /**

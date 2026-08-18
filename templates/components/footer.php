@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 use OVR\Core\Pages;
 
 $year      = (int) current_time( 'Y' );
-$site_name = get_bloginfo( 'name' ) ?: __( 'Our Village Rentals', 'ovr-core' );
+$site_name = get_bloginfo( 'name' ) ?: __( 'Our Villages Rental', 'ovr-core' );
 
 $footer_links = [
     [ 'label' => __( 'About Us', 'ovr-core' ),         'url' => home_url( '/about/' ) ],

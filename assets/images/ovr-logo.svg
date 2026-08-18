@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 56" role="img" aria-label="Our Villages Rental">
+    <g fill="none" stroke="#010B62" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M14 28 L30 12 L46 28"/>
+        <path d="M18 25 V42 H42 V25"/>
+        <rect x="25" y="31" width="9" height="11"/>
+    </g>
+    <text x="58" y="25" font-family="Atkinson Hyperlegible Next, Arial, sans-serif" font-size="18" font-weight="700" fill="#010B62">Our Villages</text>
+    <text x="58" y="46" font-family="Atkinson Hyperlegible Next, Arial, sans-serif" font-size="18" font-weight="700" fill="#C9A227">Rental</text>
+</svg>

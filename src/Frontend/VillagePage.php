@@ -19,9 +19,12 @@ class VillagePage {
             return '<p>' . esc_html__( 'Village not found.', 'ovr-core' ) . '</p>';
         }
 
+        // Query by the ovr_village TAXONOMY term (the archive's own definition)
+        // so every property assigned to this Village Section appears — not the
+        // free-text _ovr_village_name meta, which some listings leave blank.
         $query = PropertyQuery::query( [
-            'village'  => [ $village_slug ],
-            'per_page' => 12,
+            'village_section' => [ $village_slug ],
+            'per_page'        => 12,
         ] );
 
         return TemplateLoader::get_rendered( 'pages/village-landing.php', [

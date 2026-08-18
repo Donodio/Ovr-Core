@@ -104,6 +104,9 @@ class VillageSectionsWidget extends Widget_Base {
                     <img src="<?php echo esc_url( $img ); ?>" alt="<?php echo esc_attr( $term->name ); ?>" loading="lazy">
                 </div>
                 <h3><?php echo esc_html( $term->name ); ?></h3>
+                <?php if ( ! empty( $term->description ) ) : ?>
+                    <span class="ovr-village-card-location"><?php echo esc_html( $term->description ); ?></span>
+                <?php endif; ?>
                 <?php if ( $show_count ) : ?>
                     <span class="ovr-village-card-count">
                         <?php

@@ -93,7 +93,7 @@ class Pages {
      * Default editable content for the auto-created About page.
      */
     private static function default_about_content(): string {
-        return "<!-- wp:paragraph --><p>Our Village Rentals connects guests directly with local property owners across The Villages. "
+        return "<!-- wp:paragraph --><p>Our Villages Rental connects guests directly with local property owners across The Villages. "
             . "We make it simple to discover, compare and book vacation and long-term rentals — owner-direct, with no middleman.</p><!-- /wp:paragraph -->\n\n"
             . "<!-- wp:paragraph --><p>This page is editable from the WordPress admin. Replace this text with your own story, mission and team.</p><!-- /wp:paragraph -->";
     }

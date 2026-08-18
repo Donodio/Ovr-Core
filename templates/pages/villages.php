@@ -73,8 +73,12 @@ foreach ( $groups as $g_villages ) {
                     <div class="ovr-villages-grid">
                         <?php foreach ( $villages as $village ) : ?>
                             <a href="<?php echo esc_url( get_term_link( $village ) ); ?>" class="ovr-village-card">
-                                <span class="ovr-village-card-top">
-                                    <span class="ovr-village-card-icon material-symbols-outlined">holiday_village</span>
+                                <span class="ovr-village-card-photo">
+                                    <?php if ( ! empty( $village->image_url ) ) : ?>
+                                        <img class="ovr-village-card-img" src="<?php echo esc_url( $village->image_url ); ?>" alt="<?php echo esc_attr( $village->name ); ?>" loading="lazy">
+                                    <?php else : ?>
+                                        <span class="ovr-village-card-photo-fallback material-symbols-outlined">holiday_village</span>
+                                    <?php endif; ?>
                                     <span class="ovr-village-card-badge">
                                         <?php
                                         printf(
@@ -86,6 +90,9 @@ foreach ( $groups as $g_villages ) {
                                 </span>
                                 <span class="ovr-village-card-body">
                                     <span class="ovr-village-card-name"><?php echo esc_html( $village->name ); ?></span>
+                                    <?php if ( ! empty( $village->description ) ) : ?>
+                                        <span class="ovr-village-card-location"><?php echo esc_html( $village->description ); ?></span>
+                                    <?php endif; ?>
                                     <span class="ovr-village-card-cta">
                                         <?php esc_html_e( 'View homes', 'ovr-core' ); ?>
                                         <span class="ovr-village-card-arrow material-symbols-outlined">arrow_forward</span>

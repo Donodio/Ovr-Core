@@ -1,12 +1,12 @@
 <?php
 /**
- * Plugin Name:       OVR Core — Our Village Rentals
+ * Plugin Name:       OVR Core — Our Villages Rental
  * Plugin URI:        https://ourvillagesrentals.com
  * Description:       Premium vacation & long-term rental listing platform. Complete SaaS-ready solution with property management, subscription plans, advanced search, and landlord dashboards.
  * Version:           1.1.1
  * Requires at least: 6.4
  * Requires PHP:      8.2
- * Author:            Our Village Rentals
+ * Author:            Our Villages Rental
  * Author URI:        https://ourvillagesrentals.com
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
