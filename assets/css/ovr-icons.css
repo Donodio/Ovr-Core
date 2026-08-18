@@ -1,0 +1,15 @@
+/**
+ * Local Material Symbols icon font (no CDN dependency).
+ *
+ * Bundled so the `material-symbols-outlined` icons used across the site render
+ * on any environment — offline servers, CDN-blocked networks, or aggressive
+ * cache plugins that strip Google-Fonts stylesheets. Served from this plugin's
+ * own assets directory via a relative path.
+ */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('../fonts/material-symbols-outlined.woff2') format('woff2');
+}

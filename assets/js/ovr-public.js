@@ -244,6 +244,10 @@
         var total  = slides.length;
         if (total <= 1) return; // nothing to slide
 
+        // Respect reduced motion: show the first slide, no autoplay.
+        var reduceMotion = window.matchMedia &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
         var prev = root.querySelector('.ovr-hps-prev');
         var next = root.querySelector('.ovr-hps-next');
         var dots = root.querySelectorAll('.ovr-hps-dot');
@@ -268,9 +272,10 @@
             else if (e.key === 'ArrowLeft') { show(index - 1); reset(); }
         });
 
-        // Autoplay (pauses on hover / focus / touch).
+        // Autoplay (pauses on hover / focus / touch). Disabled for reduced
+        // motion; the slide content is still fully reachable via arrows/dots.
         var timer = null;
-        var autoplay = root.dataset.autoplay === '1';
+        var autoplay = !reduceMotion && root.dataset.autoplay === '1';
         var interval = parseInt(root.dataset.interval, 10) || 6000;
         function start() { if (autoplay && !timer) { timer = setInterval(function () { show(index + 1); }, interval); } }
         function stop() { if (timer) { clearInterval(timer); timer = null; } }

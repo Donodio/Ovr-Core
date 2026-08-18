@@ -92,66 +92,6 @@ class InquiryEndpoint {
                 'status' => [ 'required' => true, 'sanitize_callback' => 'sanitize_key' ],
             ],
         ] );
-
-        register_rest_route( self::NAMESPACE, '/inquiries/(?P<id>[\d]+)/reply', [
-            'methods'             => \WP_REST_Server::CREATABLE,
-            'callback'            => [ $this, 'reply' ],
-            'permission_callback' => [ $this, 'auth_required' ],
-            'args'                => [
-                'id'      => [ 'sanitize_callback' => 'absint' ],
-                'message' => [ 'required' => true, 'sanitize_callback' => 'sanitize_textarea_field' ],
-            ],
-        ] );
-    }
-
-    /**
-     * Append a reply to an inquiry's response history and mark it replied.
-     */
-    public function reply( \WP_REST_Request $request ): \WP_REST_Response {
-        global $wpdb;
-        $id      = (int) $request->get_param( 'id' );
-        $message = trim( (string) $request->get_param( 'message' ) );
-        $table   = $wpdb->prefix . 'ovr_inquiries';
-
-        if ( '' === $message ) {
-            return new \WP_REST_Response( [ 'message' => __( 'Reply cannot be empty.', 'ovr-core' ) ], 400 );
-        }
-
-        $row = $wpdb->get_row( $wpdb->prepare( "SELECT landlord_id, responses FROM {$table} WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $row ) {
-            return new \WP_REST_Response( [ 'message' => __( 'Inquiry not found.', 'ovr-core' ) ], 404 );
-        }
-        if ( (int) $row['landlord_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) {
-            return new \WP_REST_Response( [ 'message' => __( 'Forbidden.', 'ovr-core' ) ], 403 );
-        }
-
-        $history   = $row['responses'] ? (array) json_decode( (string) $row['responses'], true ) : [];
-        $entry     = [
-            'at'      => current_time( 'mysql' ),
-            'by'      => get_current_user_id(),
-            'by_name' => wp_get_current_user()->display_name,
-            'message' => $message,
-        ];
-        $history[] = $entry;
-
-        $wpdb->update(
-            $table,
-            [ 'responses' => wp_json_encode( $history ), 'status' => 'replied', 'replied_at' => current_time( 'mysql' ) ],
-            [ 'id' => $id ],
-            [ '%s', '%s', '%s' ],
-            [ '%d' ]
-        );
-
-        do_action( 'ovr_inquiry_replied', $id, $message );
-
-        return new \WP_REST_Response( [ 'id' => $id, 'reply' => $entry, 'status' => 'replied' ], 201 );
-    }
-
-    public function auth_required() {
-        if ( ! is_user_logged_in() ) {
-            return new \WP_Error( 'rest_forbidden', __( 'Authentication required.', 'ovr-core' ), [ 'status' => 401 ] );
-        }
-        return true;
     }
 
     /**

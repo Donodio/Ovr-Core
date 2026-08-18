@@ -150,24 +150,37 @@ class PropertyEndpoint {
     }
 
     /**
-     * Delete (trash) a property.
+     * Delete (archive) a property.
      */
     public function delete_property( \WP_REST_Request $request ): \WP_REST_Response {
         $id    = (int) $request->get_param( 'id' );
         $force = (bool) $request->get_param( 'force' );
 
-        $result = wp_delete_post( $id, $force );
+        // Forced delete is a hard delete; non-forced is a soft-delete (archive).
+        if ( $force ) {
+            $result = wp_delete_post( $id, true );
+        } else {
+            $result = wp_update_post( [
+                'ID'          => $id,
+                'post_status' => \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED,
+            ] );
+        }
+
         if ( ! $result ) {
             return new \WP_REST_Response( [ 'message' => __( 'Failed to delete property.', 'ovr-core' ) ], 500 );
         }
 
-        // Non-forced delete = soft delete. Tag the reason so the admin Trash and
-        // Deleted Listings screens know this came from the API/landlord.
+        // Non-forced delete = soft delete (archive). Tag the reason so the admin
+        // and owner archive screens know this came from the API/landlord.
         if ( ! $force ) {
             update_post_meta( $id, '_ovr_deleted_by', 'owner' );
             update_post_meta( $id, '_ovr_deleted_at', current_time( 'mysql' ) );
             if ( class_exists( '\OVR\Core\AuditLog' ) ) {
                 \OVR\Core\AuditLog::record( 'listing.deleted', 'listing', $id, [ 'deleted_by' => 'owner', 'via' => 'rest' ], get_current_user_id() );
+            }
+        } else {
+            if ( class_exists( '\OVR\Core\AuditLog' ) ) {
+                \OVR\Core\AuditLog::record( 'listing.permanent_delete', 'listing', $id, [ 'via' => 'rest' ], get_current_user_id() );
             }
         }
 

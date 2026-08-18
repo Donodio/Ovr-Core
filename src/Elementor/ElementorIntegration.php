@@ -44,7 +44,7 @@ class ElementorIntegration {
      */
     public function register_category( $elements_manager ): void {
         $elements_manager->add_category( 'ovr-widgets', [
-            'title' => esc_html__( 'OVR — Our Village Rentals', 'ovr-core' ),
+            'title' => esc_html__( 'OVR — Our Villages Rental', 'ovr-core' ),
             'icon'  => 'eicon-home',
         ] );
     }

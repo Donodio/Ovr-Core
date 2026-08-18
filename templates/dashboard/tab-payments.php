@@ -21,7 +21,7 @@ $settings     = (array) get_option( 'ovr_settings', [] );
 $sym          = $settings['currency_symbol'] ?? '$';
 
 $gateways = [
-    'stripe'        => [ 'credit_card', __( 'Card (Stripe)', 'ovr-core' ) ],
+    'stripe'        => [ 'credit_card', __( 'Card', 'ovr-core' ) ],
     'authorize_net' => [ 'credit_card', __( 'Card', 'ovr-core' ) ],
     'paypal'        => [ 'account_balance', 'PayPal' ],
     'wallet'        => [ 'account_balance_wallet', __( 'Wallet', 'ovr-core' ) ],

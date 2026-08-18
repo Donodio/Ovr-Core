@@ -24,9 +24,20 @@ class Settings {
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'register_page' ] );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
+        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_media' ] );
         add_action( 'admin_head', [ $this, 'admin_styles' ] );
         add_action( 'admin_post_ovr_save_roles', [ $this, 'handle_save_roles' ] );
         add_action( 'admin_post_ovr_b2_test', [ $this, 'handle_b2_test' ] );
+    }
+
+    /**
+     * Load the media library on the settings screen so the logo/watermark URL
+     * fields get a "Select / Upload" button (logo changes are fully codeless).
+     */
+    public function enqueue_media( string $hook ): void {
+        if ( isset( $_GET['page'] ) && self::PAGE_SLUG === $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only screen check.
+            wp_enqueue_media();
+        }
     }
 
     public function register_page(): void {
@@ -61,6 +72,11 @@ class Settings {
         if ( isset( $input['currency_symbol'] ) )     $clean['currency_symbol']     = substr( sanitize_text_field( $input['currency_symbol'] ), 0, 4 );
         if ( isset( $input['default_country'] ) )     $clean['default_country']     = strtoupper( substr( sanitize_text_field( $input['default_country'] ), 0, 2 ) );
         if ( isset( $input['listings_per_page'] ) )   $clean['listings_per_page']   = max( 1, (int) $input['listings_per_page'] );
+        if ( isset( $input['color_scheme'] ) ) {
+            $schemes = \OVR\Core\ThemeSchemes::palettes();
+            $scheme  = sanitize_key( (string) $input['color_scheme'] );
+            $clean['color_scheme'] = array_key_exists( $scheme, $schemes ) ? $scheme : 'navy';
+        }
 
         // Email.
         if ( isset( $input['from_email'] ) )          $clean['from_email']          = sanitize_email( $input['from_email'] );
@@ -217,6 +233,25 @@ class Settings {
         }
         $clean['wp_sync_enabled'] = ! empty( $input['wp_sync_enabled'] );
 
+        // Header & Menu — logo size + configurable mega-menu items.
+        if ( isset( $input['logo_height'] ) ) {
+            $clean['logo_height'] = max( 12, min( 200, (int) $input['logo_height'] ) );
+        }
+        if ( isset( $input['mega_menu'] ) && is_array( $input['mega_menu'] ) ) {
+            $clean['mega_menu'] = [];
+            foreach ( self::header_menu_fields() as $key => $field ) {
+                if ( 'heading' === $field['type'] ) {
+                    $clean['mega_menu'][ $key ] = sanitize_text_field( $input['mega_menu'][ $key ] ?? '' );
+                    continue;
+                }
+                $item = $input['mega_menu'][ $key ] ?? [];
+                $clean['mega_menu'][ $key ] = [
+                    'label' => sanitize_text_field( $item['label'] ?? '' ),
+                    'url'   => esc_url_raw( trim( (string) ( $item['url'] ?? '' ) ) ),
+                ];
+            }
+        }
+
         // Re-sync the WordPress import cron whenever the schedule/toggle change.
         if ( class_exists( '\OVR\Sync\WordPressSync' ) ) {
             self::reschedule_wp_sync( $clean['wp_sync_enabled'], $clean['wp_sync_schedule'] ?? 'manual' );
@@ -262,6 +297,7 @@ class Settings {
             'storage'       => __( 'Storage',         'ovr-core' ),
             'reputation'    => __( 'Reputation',      'ovr-core' ),
             'roles'         => __( 'User Roles',      'ovr-core' ),
+            'header'        => __( 'Header & Menu',   'ovr-core' ),
             'fleet'         => __( 'Fleet Management', 'ovr-core' ),
             'integration'   => __( 'WordPress Sync',  'ovr-core' ),
         ];
@@ -304,6 +340,7 @@ class Settings {
                     'storage'       => 'cloud',
                     'reputation'    => 'star',
                     'roles'         => 'admin_panel_settings',
+                    'header'        => 'web',
                     'fleet'         => 'dashboard',
                     'integration'   => 'sync',
                 ];
@@ -342,6 +379,7 @@ class Settings {
                                 case 'security':      $this->render_security( $settings );      break;
                                 case 'storage':       $this->render_storage( $settings );       break;
                                 case 'reputation':    $this->render_reputation( $settings );    break;
+                                case 'header':        $this->render_header( $settings );        break;
                                 case 'fleet':         $this->render_fleet( $settings );         break;
                                 case 'integration':   $this->render_integration( $settings );   break;
                             }
@@ -356,6 +394,55 @@ class Settings {
             </form>
             </div>
         </div>
+
+        <script>
+            (function () {
+                // Every logo field group is [ pickBtn, clearBtn, input, preview ].
+                var groups = [];
+                [
+                    ['ovr-logo-pick', 'ovr-logo-clear', 'ovr-logo', 'ovr-logo-preview'],
+                    ['ovr-logo-pick-header', 'ovr-logo-clear-header', 'ovr-logo-header', 'ovr-logo-preview-header']
+                ].forEach(function (ids) {
+                    groups.push({
+                        pick: document.getElementById(ids[0]),
+                        clear: document.getElementById(ids[1]),
+                        input: document.getElementById(ids[2]),
+                        prev: document.getElementById(ids[3])
+                    });
+                });
+                if (!groups.some(function (g) { return g.pick && g.input; })) { return; }
+
+                var frame;
+                groups.forEach(function (g) {
+                    if (!g.pick || !g.input || !g.clear || !g.prev) { return; }
+                    g.pick.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        if (frame) { frame.open(); return; }
+                        frame = wp.media({
+                            title: 'Select Logo',
+                            button: { text: 'Use this logo' },
+                            multiple: false,
+                            library: { type: 'image' }
+                        });
+                        frame.on('select', function () {
+                            var att = frame.state().get('selection').first().toJSON();
+                            var url = (att.sizes && (att.sizes.medium || att.sizes.full)) ? (att.sizes.medium || att.sizes.full).url : att.url;
+                            g.input.value = url || att.url;
+                            g.prev.src = url || att.url;
+                            g.prev.style.display = '';
+                            g.clear.style.display = '';
+                        });
+                        frame.open();
+                    });
+                    g.clear.addEventListener('click', function () {
+                        g.input.value = '';
+                        g.prev.removeAttribute('src');
+                        g.prev.style.display = 'none';
+                        g.clear.style.display = 'none';
+                    });
+                });
+            })();
+        </script>
         <?php
     }
 
@@ -466,8 +553,20 @@ class Settings {
         </tr>
         <tr>
             <th><label for="ovr-logo"><?php esc_html_e( 'Logo URL', 'ovr-core' ); ?></label></th>
-            <td><input id="ovr-logo" name="<?php echo $opt; ?>[logo_url]" type="url" class="regular-text" style="width:480px;max-width:100%"
-                       value="<?php echo esc_attr( $s['logo_url'] ?? '' ); ?>" placeholder="https://…/logo.png"></td>
+            <td>
+                <input id="ovr-logo" name="<?php echo $opt; ?>[logo_url]" type="url" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( $s['logo_url'] ?? '' ); ?>" placeholder="https://…/logo.png">
+                <p>
+                    <button type="button" class="button" id="ovr-logo-pick"><?php esc_html_e( 'Select / Upload Logo', 'ovr-core' ); ?></button>
+                    <button type="button" class="button" id="ovr-logo-clear"<?php echo empty( $s['logo_url'] ) ? ' style="display:none"' : ''; ?>><?php esc_html_e( 'Remove Logo', 'ovr-core' ); ?></button>
+                </p>
+                <?php if ( ! empty( $s['logo_url'] ) ) : ?>
+                    <p><img id="ovr-logo-preview" src="<?php echo esc_url( $s['logo_url'] ); ?>" alt="" style="max-height:60px;width:auto;border:1px solid var(--gray-border);border-radius:var(--r-sm);padding:6px;background:#fff"></p>
+                <?php else : ?>
+                    <p><img id="ovr-logo-preview" src="" alt="" style="max-height:60px;width:auto;border:1px solid var(--gray-border);border-radius:var(--r-sm);padding:6px;background:#fff;display:none"></p>
+                <?php endif; ?>
+                <p class="description"><?php esc_html_e( 'Used in the site header. Prefer the "Header & Menu" tab — it also sets the logo height. You can also change it anytime under Appearance → Customize → Site Identity.', 'ovr-core' ); ?></p>
+            </td>
         </tr>
         <tr>
             <th><label for="ovr-favicon"><?php esc_html_e( 'Favicon URL', 'ovr-core' ); ?></label></th>
@@ -521,6 +620,30 @@ class Settings {
             <td>
                 <input id="ovr-lpp" name="<?php echo esc_attr( self::OPTION ); ?>[listings_per_page]" type="number" min="1"
                        value="<?php echo esc_attr( (string) ( $s['listings_per_page'] ?? 12 ) ); ?>" class="small-text">
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-colorscheme"><?php esc_html_e( 'Color Scheme', 'ovr-core' ); ?></label></th>
+            <td>
+                <?php
+                $schemes = \OVR\Core\ThemeSchemes::palettes();
+                $active  = \OVR\Core\ThemeSchemes::active_key();
+                ?>
+                <select id="ovr-colorscheme" name="<?php echo esc_attr( self::OPTION ); ?>[color_scheme]">
+                    <?php foreach ( $schemes as $key => $scheme ) : ?>
+                        <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $active, $key ); ?>>
+                            <?php echo esc_html( $scheme['label'] ); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="description"><?php esc_html_e( 'Choose a predefined palette. It is applied site-wide via CSS custom properties (primary, secondary, accent/gold) — no page content changes.', 'ovr-core' ); ?></p>
+                <p style="display:flex;gap:6px;margin-top:8px">
+                    <?php foreach ( $schemes as $key => $scheme ) :
+                        $c = $scheme['colors']; ?>
+                        <span title="<?php echo esc_attr( $scheme['label'] ); ?>"
+                              style="width:22px;height:22px;border-radius:50%;border:2px solid <?php echo $key === $active ? esc_attr( $c['--ovr-gold'] ?? '#DEAF0C' ) : 'var(--gray-border)'; ?>;background:<?php echo esc_attr( $c['--ovr-primary'] ?? '#010b62' ); ?>;display:inline-block"></span>
+                    <?php endforeach; ?>
+                </p>
             </td>
         </tr>
         <?php
@@ -1241,6 +1364,170 @@ class Settings {
         <tr>
             <th><label for="ovr-fleet-notes"><?php esc_html_e( 'Planning Notes', 'ovr-core' ); ?></label></th>
             <td><textarea id="ovr-fleet-notes" name="<?php echo $opt; ?>[fleet_notes]" rows="5" style="width:100%;max-width:620px;font-family:inherit;border:1px solid var(--gray-border);border-radius:var(--radius-md);padding:12px 14px"><?php echo esc_textarea( (string) ( $s['fleet_notes'] ?? '' ) ); ?></textarea></td>
+        </tr>
+        <?php
+    }
+
+    /**
+     * Field map for the header mega-menu editor.
+     *
+     * Each entry describes one configurable slice of the header. `heading`
+     * entries render as a labelled text row (panel/column titles). Link entries
+     * render as a label + URL pair. Default label/URL values come from
+     * {@see \OVR\Frontend\Header::mega_menu_defaults()} so the form starts from
+     * the live values and only needs overrides.
+     *
+     * @return array<string,array{type:string,label:string,placeholder:string,help:string}>
+     */
+    public static function header_menu_fields(): array {
+        static $groups = null;
+        if ( null !== $groups ) {
+            return $groups;
+        }
+
+        $d = \OVR\Frontend\Header::mega_menu_defaults();
+        $link = static function ( string $key, string $label ) use ( $d ): array {
+            return [
+                'type'           => 'link',
+                'label'          => $label,
+                'placeholder'    => (string) ( $d[ $key ]['label'] ?? '' ),
+                'url_placeholder'=> 'https://…',
+                'help'           => '',
+            ];
+        };
+
+        $groups = [
+            // ── Panel 1: Search Rentals ──
+            'search_trigger'     => [ 'type' => 'heading', 'label' => __( '“Search Rentals” panel title', 'ovr-core' ), 'placeholder' => (string) ( $d['search_trigger']['label'] ?? '' ), 'help' => '' ],
+            'search_col_rentals' => [ 'type' => 'heading', 'label' => __( 'Column heading — Rentals', 'ovr-core' ), 'placeholder' => (string) ( $d['search_col_rentals']['label'] ?? '' ), 'help' => '' ],
+            'all_homes'          => $link( 'all_homes', __( 'All Homes', 'ovr-core' ) ),
+            'featured_homes'     => $link( 'featured_homes', __( 'Featured Homes', 'ovr-core' ) ),
+            'map_view'           => $link( 'map_view', __( 'Map View', 'ovr-core' ) ),
+            'villages'           => $link( 'villages', __( 'Villages', 'ovr-core' ) ),
+            'search_col_by_stay' => [ 'type' => 'heading', 'label' => __( 'Column heading — By Stay', 'ovr-core' ), 'placeholder' => (string) ( $d['search_col_by_stay']['label'] ?? '' ), 'help' => '' ],
+            'long_term'          => $link( 'long_term', __( 'Long-Term', 'ovr-core' ) ),
+            'short_term'         => $link( 'short_term', __( 'Short-Term', 'ovr-core' ) ),
+            'pricing'            => $link( 'pricing', __( 'Pricing', 'ovr-core' ) ),
+            // ── Panel 2: Villages Info ──
+            'villages_trigger'   => [ 'type' => 'heading', 'label' => __( '“Villages Info” panel title', 'ovr-core' ), 'placeholder' => (string) ( $d['villages_trigger']['label'] ?? '' ), 'help' => '' ],
+            'villages_col_info'  => [ 'type' => 'heading', 'label' => __( 'Column heading — Info', 'ovr-core' ), 'placeholder' => (string) ( $d['villages_col_info']['label'] ?? '' ), 'help' => '' ],
+            'villages_link'      => $link( 'villages_link', __( 'Villages', 'ovr-core' ) ),
+            'about'              => $link( 'about', __( 'About', 'ovr-core' ) ),
+            'contact'            => $link( 'contact', __( 'Contact', 'ovr-core' ) ),
+            'villages_col_links' => [ 'type' => 'heading', 'label' => __( 'Column heading — Community Links', 'ovr-core' ), 'placeholder' => (string) ( $d['villages_col_links']['label'] ?? '' ), 'help' => '' ],
+            'villages_net'       => $link( 'villages_net', __( 'Villages.net', 'ovr-core' ) ),
+            'thevillages_com'    => $link( 'thevillages_com', __( 'TheVillages.com', 'ovr-core' ) ),
+            'golf_the_villages'  => $link( 'golf_the_villages', __( 'Golf the Villages', 'ovr-core' ) ),
+            // ── Direct links ──
+            'featured_direct'    => $link( 'featured_direct', __( 'Featured (direct link)', 'ovr-core' ) ),
+            'pricing_direct'     => $link( 'pricing_direct', __( 'Pricing (direct link)', 'ovr-core' ) ),
+        ];
+
+        return $groups;
+    }
+
+    /**
+     * Header & Menu tab — logo size + megamenu item editor.
+     */
+    private function render_header( array $s ): void {
+        $opt        = esc_attr( self::OPTION );
+        $logo_h     = (int) ( $s['logo_height'] ?? 36 );
+        $saved      = (array) ( $s['mega_menu'] ?? [] );
+        $defaults   = \OVR\Frontend\Header::mega_menu_defaults();
+        $fields     = self::header_menu_fields();
+
+        // Merge each saved item over its default so empty fields fall back to
+        // the live site value (the theme reads merged config). Heading rows are
+        // persisted as plain strings; links as label/url pairs.
+        $merged = $defaults;
+        foreach ( $saved as $key => $val ) {
+            if ( ! isset( $merged[ $key ] ) ) {
+                continue;
+            }
+            if ( is_string( $val ) || is_numeric( $val ) ) {
+                $merged[ $key ]['label'] = (string) $val;
+            } elseif ( is_array( $val ) ) {
+                $merged[ $key ]['label'] = (string) ( $val['label'] ?? $merged[ $key ]['label'] );
+                $merged[ $key ]['url']   = (string) ( $val['url'] ?? $merged[ $key ]['url'] );
+            }
+        }
+        ?>
+        <style>
+            .ovr-mm-group{border-bottom:1px solid var(--gray-border);padding:14px 12px}
+            .ovr-mm-group:last-child{border-bottom:none}
+            .ovr-mm-group h3{margin:0 0 4px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+            .ovr-mm-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:4px 0}
+            .ovr-mm-row .mm-label{width:auto;min-width:120px;font-size:14px;color:var(--ink)}
+            .ovr-mm-row input[type=text]{height:38px;min-height:38px;max-width:340px}.ovr-mm-row input[type=text].mm-url{max-width:520px}
+            .ovr-mm-row input[type=text].mm-title{max-width:340px;border:0;box-shadow:none;background:var(--bg);color:var(--muted)}
+        </style>
+        <tr>
+            <th><label for="ovr-logo-height"><?php esc_html_e( 'Logo Height (px)', 'ovr-core' ); ?></label></th>
+            <td>
+                <input id="ovr-logo-height" name="<?php echo $opt; ?>[logo_height]" type="number" min="12" max="200"
+                       value="<?php echo esc_attr( (string) $logo_h ); ?>" class="small-text">
+                <p class="description"><?php esc_html_e( 'Height of the brand logo in the header. Applies to both the desktop bar and the mobile drawer. Default 36px.', 'ovr-core' ); ?></p>
+            </td>
+        </tr>
+        <tr>
+            <th style="vertical-align:top"><label for="ovr-logo-header"><?php esc_html_e( 'Header Logo', 'ovr-core' ); ?></label></th>
+            <td>
+                <input id="ovr-logo-header" name="<?php echo $opt; ?>[logo_url]" type="url" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( $s['logo_url'] ?? '' ); ?>" placeholder="https://…/logo.png">
+                <p>
+                    <button type="button" class="button" id="ovr-logo-pick-header"><?php esc_html_e( 'Select / Upload Logo', 'ovr-core' ); ?></button>
+                    <button type="button" class="button" id="ovr-logo-clear-header"<?php echo empty( $s['logo_url'] ) ? ' style="display:none"' : ''; ?>><?php esc_html_e( 'Remove Logo', 'ovr-core' ); ?></button>
+                </p>
+                <?php $logo_hdr_url = (string) ( $s['logo_url'] ?? '' ); ?>
+                <p><img id="ovr-logo-preview-header" src="<?php echo esc_url( $logo_hdr_url ); ?>" alt="" style="max-height:60px;width:auto;border:1px solid var(--gray-border);border-radius:var(--r-sm);padding:6px;background:#fff;<?php echo $logo_hdr_url ? '' : 'display:none;'; ?>"></p>
+                <p class="description"><?php esc_html_e( 'Leave blank to use the logo set under Appearance → Customize → Site Identity.', 'ovr-core' ); ?></p>
+            </td>
+        </tr>
+        <tr>
+            <th style="vertical-align:top"><?php esc_html_e( 'Mega Menu Items', 'ovr-core' ); ?></th>
+            <td style="padding:0;max-width:none">
+                <div style="border:1px solid var(--gray-border);border-radius:var(--radius-md);overflow:hidden;background:var(--surf)">
+                <?php
+                $group_open = false;
+                foreach ( $fields as $key => $field ) :
+                    if ( 'heading' === $field['type'] ) {
+                        if ( $group_open ) {
+                            echo '</div>';
+                        }
+                        $group_open = true;
+                        ?>
+                        <div class="ovr-mm-group">
+                            <h3><?php echo esc_html( $field['label'] ); ?></h3>
+                            <div class="ovr-mm-row">
+                                <span class="mm-label" style="color:var(--muted)"><?php esc_html_e( 'Title', 'ovr-core' ); ?></span>
+                                <input type="text" class="mm-title" name="<?php echo $opt; ?>[mega_menu][<?php echo esc_attr( $key ); ?>]"
+                                       value="<?php echo esc_attr( $merged[ $key ]['label'] ?? '' ); ?>">
+                            </div>
+                        <?php
+                        continue;
+                    }
+                    $val = $merged[ $key ] ?? [ 'label' => '', 'url' => '' ];
+                    ?>
+                    <div class="ovr-mm-row">
+                        <span class="mm-label"><?php echo esc_html( $field['label'] ); ?></span>
+                        <input type="text" name="<?php echo $opt; ?>[mega_menu][<?php echo esc_attr( $key ); ?>][label]"
+                               placeholder="<?php echo esc_attr( $field['placeholder'] ); ?>"
+                               value="<?php echo esc_attr( (string) ( $val['label'] ?? '' ) ); ?>" aria-label="<?php echo esc_attr( $field['label'] ); ?> (label)">
+                        <input type="text" class="mm-url" name="<?php echo $opt; ?>[mega_menu][<?php echo esc_attr( $key ); ?>][url]"
+                               placeholder="<?php echo esc_attr( $field['url_placeholder'] ?? 'https://…' ); ?>"
+                               value="<?php echo esc_attr( (string) ( $val['url'] ?? '' ) ); ?>" aria-label="<?php echo esc_attr( $field['label'] ); ?> (URL)">
+                    </div>
+                    <?php
+                endforeach;
+                if ( $group_open ) {
+                    echo '</div>';
+                }
+                ?>
+                </div>
+                <p class="description" style="padding:0 4px">
+                    <?php esc_html_e( 'Leave a label blank to keep the default text; leave a URL blank to keep the item’s default destination. Stored values override the built-in defaults everywhere the header renders.', 'ovr-core' ); ?>
+                </p>
+            </td>
         </tr>
         <?php
     }

@@ -260,8 +260,8 @@
             return;
         }
 
-        // 'delete' calls wp_trash_post() server-side, so it is reversible.
-        if (select.value === 'delete' && !confirm('Move selected listings to trash?')) {
+        // 'delete' archives the listing server-side (non-public status), so it is reversible.
+        if (select.value === 'delete' && !confirm('Move selected listings to the archive?')) {
             return;
         }
 

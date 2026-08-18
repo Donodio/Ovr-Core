@@ -185,6 +185,10 @@
         var symbol = el.getAttribute('data-symbol') || '$';
 
         var map = window.L.map(el, { scrollWheelZoom: true, zoomControl: true });
+        // Remember the instance so an AJAX region swap can remove it cleanly
+        // before the DOM it lives on is replaced (otherwise Leaflet leaks its
+        // tile/event bindings on the orphaned node).
+        el.__ovrMap = map;
 
         // Bright, playful basemap — standard OpenStreetMap raster tiles render
         // vivid greens for parks, blue water and colored roads (far livelier
@@ -406,6 +410,115 @@
         setupMobileDrawer();
         setupSearchShell();
         setupMap();
+        setupChipAjax();
+    }
+
+    /* ====================================================================
+       VILLAGE CHIPS (AJAX, no reload)
+       The "Village Section" strip at the top of the search page historically
+       navigated via full page loads — every click flashed a white reload.
+       Now a delegated click handler intercepts the chips and swaps in the
+       freshly rendered results column (matching the chip's URL) with
+       replaceState so the address bar stays shareable without reloading.
+       Only the chips strip and the results column are replaced — the filters
+       sidebar is left untouched so its live state and listeners survive.
+       Falls back to normal navigation when ovrData (the localized Ajax
+       config) is absent.
+       ==================================================================== */
+    function setupChipAjax() {
+        var strip = document.querySelector('.ovr-ss-villages');
+        if (!strip) return;
+        if (typeof window.ovrData === 'undefined' || !window.ovrData.ajaxUrl) return;
+        if (strip.getAttribute('data-ovr-chips-ready') === '1') return;
+        strip.setAttribute('data-ovr-chips-ready', '1');
+
+        var pending = null;
+
+        function applyRegion(data) {
+            // Parse the re-rendered region in a detached node so we can pull
+            // out exactly the two panels we want to swap.
+            var tmp = document.createElement('div');
+            tmp.innerHTML = data.html;
+
+            var freshStrip = tmp.querySelector('.ovr-ss-villages');
+            if (freshStrip && strip) {
+                strip.innerHTML = freshStrip.innerHTML;
+            }
+
+            var freshMain = tmp.querySelector('.ovr-search-main');
+            var liveMain  = document.querySelector('.ovr-search-main');
+            if (freshMain && liveMain) {
+                // Detach any live Leaflet map before its DOM is replaced.
+                var oldMapView = liveMain.querySelector('.ovr-map-view');
+                if (oldMapView && oldMapView.__ovrMap && typeof oldMapView.__ovrMap.remove === 'function') {
+                    oldMapView.__ovrMap.remove();
+                }
+                liveMain.innerHTML = freshMain.innerHTML;
+            }
+
+            if (data.url && 'function' === typeof window.history.replaceState) {
+                window.history.replaceState(null, '', data.url);
+            }
+
+            // Re-run the one-time interactions that may matter again
+            // (map, mobile drawer, shell measurement).
+            setupMap();
+            setupSearchShell();
+        }
+
+        function onChipClick(e) {
+            var chip = e.target.closest('a.ovr-ss-village');
+            if (!chip) return;
+
+            var href = chip.getAttribute('href') || '';
+            if (!href) return;
+            // Honour open-in-new-tab / browser-extended clicks.
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+            e.preventDefault();
+
+            // Visual "loading" feedback so the click feels instant.
+            if (pending) pending.style.opacity = '';
+            chip.classList.add('is-loading');
+            pending = chip;
+
+            var qs = href.indexOf('?') > -1 ? href.slice(href.indexOf('?') + 1) : '';
+            // Preserve the view currently active (grid / list / map) — the chip
+            // links omit it, and without it the AJAX render would jump back to
+            // grid while the rest of the page stays in place.
+            if (!/(^|&)view=/.test(qs)) {
+                var curView = (location.search || '').match(/(?:^|&)view=([^&]+)/);
+                if (curView) qs = qs.length ? qs + '&view=' + encodeURIComponent(curView[1]) : 'view=' + encodeURIComponent(curView[1]);
+            }
+            var body =
+                'action=ovr_search_chips' +
+                '&nonce=' + encodeURIComponent(window.ovrData.nonce || '') +
+                '&qs=' + encodeURIComponent(qs);
+
+            fetch(window.ovrData.ajaxUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (!data || !data.success || !data.data || !data.data.html) {
+                        throw new Error('bad response');
+                    }
+                    applyRegion(data.data);
+                })
+                .catch(function () {
+                    // On any failure, let the original navigation happen.
+                    window.location.href = href;
+                })
+                .then(function () {
+                    if (pending) pending.classList.remove('is-loading');
+                    pending = null;
+                });
+        }
+
+        strip.addEventListener('click', onChipClick);
     }
 
     if (document.readyState === 'loading') {

@@ -41,7 +41,13 @@ class TemplateLoader {
         }
 
         if ( is_tax( 'ovr_village' ) ) {
-            $custom = self::locate( 'pages/village-landing.php' );
+            // The village-landing.php partial expects $village/$query (passed
+            // by VillagePage::render). Return the full-page wrapper instead of
+            // the bare partial so the archive resolves the term + query.
+            // Theme overrides of village-landing.php are still honoured: the
+            // wrapper delegates to VillagePage::render(), which loads via the
+            // same locate() override chain.
+            $custom = self::locate( 'pages/village-landing-page.php' );
             if ( $custom ) {
                 return $custom;
             }

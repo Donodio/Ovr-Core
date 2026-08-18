@@ -39,6 +39,12 @@
         var interval = parseInt(root.getAttribute('data-interval'), 10) || 5000;
         var loop     = root.getAttribute('data-loop') === '1';
 
+        // Respect the user's motion preference: never auto-advance for people
+        // who have requested reduced motion. Manual navigation still works.
+        var reduceMotion = window.matchMedia &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduceMotion) autoplay = false;
+
         var index = 0;
         var perView = 1;
         var maxIndex = 0;

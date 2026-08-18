@@ -1,6 +1,12 @@
 <?php
 /**
- * Inquiries tab — inbox view with filter pills + per-row actions.
+ * Inquiries tab — tabular inquiry history with expandable message rows.
+ *
+ * The list is a table so profiles and messages can be scanned at a glance.
+ * Columns: Date · Listing (ID) · Address · From Name · From Email · View.
+ * Clicking "View" expands a detail row beneath it with the full message,
+ * dates/guests, and a confirmed delete control. Inquiries are a record, not
+ * a messaging inbox — there is intentionally no reply/composer UI.
  *
  * @package OVR
  * @var array  $inquiries
@@ -12,7 +18,6 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 $filters = [
     'all'      => __( 'All', 'ovr-core' ),
     'new'      => __( 'New', 'ovr-core' ),
-    'replied'  => __( 'Replied', 'ovr-core' ),
     'archived' => __( 'Archived', 'ovr-core' ),
 ];
 
@@ -30,21 +35,21 @@ if ( 'all' !== $filter_status ) {
             <?php esc_html_e( 'Inquiries', 'ovr-core' ); ?>
         </h2>
         <p style="margin:0;font-size:13px;color:var(--ovr-on-surface-variant)">
-            <?php esc_html_e( 'Messages from guests across all your listings.', 'ovr-core' ); ?>
+            <?php esc_html_e( 'Inquiry history from guests across all your listings. Contact them directly using the details below.', 'ovr-core' ); ?>
         </p>
     </header>
 
     <?php
-    $reply_state = isset( $_GET['ovr_reply'] ) ? sanitize_key( wp_unslash( $_GET['ovr_reply'] ) ) : '';
-    if ( 'sent' === $reply_state ) : ?>
+    $inq_state = isset( $_GET['ovr_inquiry'] ) ? sanitize_key( wp_unslash( $_GET['ovr_inquiry'] ) ) : '';
+    if ( 'deleted' === $inq_state ) : ?>
         <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:var(--ovr-radius-md);background:var(--ovr-primary-fixed);color:var(--ovr-on-surface);margin-bottom:16px;font-size:13px">
             <span class="material-symbols-outlined" style="font-size:18px">check_circle</span>
-            <?php esc_html_e( 'Your reply was saved to the inquiry thread.', 'ovr-core' ); ?>
+            <?php esc_html_e( 'Inquiry removed.', 'ovr-core' ); ?>
         </div>
-    <?php elseif ( 'error' === $reply_state ) : ?>
+    <?php elseif ( 'error' === $inq_state ) : ?>
         <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:var(--ovr-radius-md);background:#f9e4e2;color:#B3261E;margin-bottom:16px;font-size:13px">
             <span class="material-symbols-outlined" style="font-size:18px">error</span>
-            <?php esc_html_e( 'Reply could not be saved.', 'ovr-core' ); ?>
+            <?php esc_html_e( 'That inquiry could not be removed.', 'ovr-core' ); ?>
         </div>
     <?php endif; ?>
 
@@ -69,106 +74,147 @@ if ( 'all' !== $filter_status ) {
             </p>
         </div>
     <?php else : ?>
-        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px">
-            <?php foreach ( $inquiries as $inq ) :
-                $is_new   = ( $inq['status'] ?? '' ) === 'new';
-                $property = get_post( (int) $inq['property_id'] );
-            ?>
-                <li style="padding:16px;border:1px solid var(--ovr-outline-variant);border-radius:var(--ovr-radius-md);color:var(--ovr-on-surface);background:<?php echo $is_new ? 'var(--ovr-primary-fixed)' : 'var(--ovr-surface)'; ?>;border-left:3px solid <?php echo $is_new ? 'var(--ovr-primary)' : 'transparent'; ?>">
-
-                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px">
-                        <div>
-                            <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;margin-bottom:2px">
-                                <?php echo esc_html( $inq['guest_name'] ); ?>
-                                <?php if ( $is_new ) : ?>
-                                    <span style="background:var(--ovr-primary);color:var(--ovr-on-primary);padding:1px 8px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase">NEW</span>
-                                <?php endif; ?>
-                            </div>
-                            <div style="font-size:12px;color:var(--ovr-on-surface-variant)">
-                                <a href="mailto:<?php echo esc_attr( $inq['guest_email'] ); ?>" style="color:inherit">
-                                    <?php echo esc_html( $inq['guest_email'] ); ?>
+        <div class="ovr-inq-scroll" style="overflow-x:auto;border:1px solid var(--ovr-outline-variant);border-radius:12px">
+            <table class="ovr-inq-table" style="width:100%;border-collapse:separate;border-spacing:0;font-size:13px">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e( 'Date', 'ovr-core' ); ?></th>
+                        <th><?php esc_html_e( 'Listing (ID)', 'ovr-core' ); ?></th>
+                        <th><?php esc_html_e( 'Address', 'ovr-core' ); ?></th>
+                        <th><?php esc_html_e( 'From Name', 'ovr-core' ); ?></th>
+                        <th><?php esc_html_e( 'From Email', 'ovr-core' ); ?></th>
+                        <th style="text-align:right"><?php esc_html_e( 'View', 'ovr-core' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ( $inquiries as $inq ) :
+                    $is_new   = ( $inq['status'] ?? '' ) === 'new';
+                    $property = get_post( (int) $inq['property_id'] );
+                    $address  = $property ? trim( (string) get_post_meta( $property->ID, '_ovr_address', true ) ) : '';
+                    if ( '' === $address && $property ) {
+                        $address = trim( (string) get_post_meta( $property->ID, '_ovr_village_name', true ) );
+                    }
+                    $fname   = (string) ( $inq['guest_name'] ?? __( 'Guest', 'ovr-core' ) );
+                    $femail  = (string) ( $inq['guest_email'] ?? '' );
+                ?>
+                    <tr class="ovr-inq-row<?php echo $is_new ? ' is-new' : ''; ?>" data-ovr-inq-row>
+                        <td class="ovr-inq-dt" style="white-space:nowrap">
+                            <?php echo esc_html( mysql2date( get_option( 'date_format' ), $inq['created_at'] ) ); ?>
+                        </td>
+                        <td class="ovr-inq-listing">
+                            <?php if ( $property ) : ?>
+                                <a href="<?php echo esc_url( get_permalink( $property->ID ) ); ?>" target="_blank" rel="noopener" style="color:var(--ovr-primary);font-weight:500;text-decoration:none">
+                                    <?php echo esc_html( $property->post_title ?: __( '(untitled)', 'ovr-core' ) ); ?>
                                 </a>
-                                <?php if ( ! empty( $inq['guest_phone'] ) ) : ?>
-                                    · <a href="tel:<?php echo esc_attr( $inq['guest_phone'] ); ?>" style="color:inherit">
-                                        <?php echo esc_html( $inq['guest_phone'] ); ?>
-                                    </a>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <div style="font-size:12px;color:var(--ovr-outline);text-align:right">
-                            <?php echo esc_html( mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $inq['created_at'] ) ); ?>
-                        </div>
-                    </div>
-
-                    <?php if ( $property ) : ?>
-                        <div style="margin-bottom:8px;font-size:13px">
-                            <span style="color:var(--ovr-on-surface-variant)"><?php esc_html_e( 'For:', 'ovr-core' ); ?></span>
-                            <a href="<?php echo esc_url( get_permalink( $property->ID ) ); ?>" target="_blank" rel="noopener" style="color:var(--ovr-primary);font-weight:500;text-decoration:none">
-                                <?php echo esc_html( $property->post_title ); ?>
-                            </a>
-                        </div>
-                    <?php endif; ?>
-
-                    <?php if ( ! empty( $inq['checkin_date'] ) || ! empty( $inq['checkout_date'] ) ) : ?>
-                        <div style="margin-bottom:8px;font-size:13px;color:var(--ovr-on-surface-variant)">
-                            <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">calendar_month</span>
-                            <?php echo esc_html( ( $inq['checkin_date'] ?: '—' ) . ' → ' . ( $inq['checkout_date'] ?: '—' ) ); ?>
-                            <?php if ( ! empty( $inq['guests'] ) ) : ?>
-                                · <?php
-                                /* translators: %d: guest count */
-                                printf( esc_html( _n( '%d guest', '%d guests', (int) $inq['guests'], 'ovr-core' ) ), (int) $inq['guests'] );
+                                <span style="color:var(--ovr-on-surface-variant);font-weight:600">#<?php echo (int) $inq['property_id']; ?></span>
+                            <?php else : ?>
+                                <?php
+                                /* translators: %d: property ID */
+                                printf( esc_html__( 'Listing #%d', 'ovr-core' ), (int) $inq['property_id'] );
                                 ?>
                             <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
+                        </td>
+                        <td class="ovr-inq-addr" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                            <?php echo $address ? esc_html( $address ) : '—'; ?>
+                        </td>
+                        <td class="ovr-inq-name" style="white-space:nowrap">
+                            <?php echo esc_html( $fname ); ?>
+                            <?php if ( $is_new ) : ?>
+                                <span style="background:var(--ovr-primary);color:var(--ovr-on-primary);padding:1px 7px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-left:6px">NEW</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="ovr-inq-email">
+                            <?php if ( $femail ) : ?>
+                                <a href="mailto:<?php echo esc_attr( $femail ); ?>" style="color:var(--ovr-on-surface-variant);text-decoration:none"><?php echo esc_html( $femail ); ?></a>
+                            <?php else : ?>
+                                —
+                            <?php endif; ?>
+                        </td>
+                        <td style="text-align:right;white-space:nowrap">
+                            <button type="button" class="ovr-inq-view" data-ovr-inq-toggle aria-expanded="false">
+                                <span class="material-symbols-outlined">expand_more</span>
+                                <?php esc_html_e( 'View', 'ovr-core' ); ?>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr class="ovr-inq-detail" data-ovr-inq-detail hidden>
+                        <td colspan="6" style="padding:0;background:var(--ovr-surface-container-low)">
+                            <div style="padding:20px 22px">
 
-                    <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--ovr-on-surface);white-space:pre-wrap"><?php echo esc_html( $inq['message'] ); ?></p>
+                                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--ovr-on-surface-variant);margin-bottom:8px">
+                                    <span><span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px">call</span>
+                                        <?php echo esc_html( $inq['guest_phone'] ?? '—' ); ?></span>
+                                    <?php if ( ! empty( $inq['checkin_date'] ) || ! empty( $inq['checkout_date'] ) ) : ?>
+                                        <span><span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px">calendar_month</span>
+                                            <?php echo esc_html( ( $inq['checkin_date'] ?: '—' ) . ' → ' . ( $inq['checkout_date'] ?: '—' ) ); ?>
+                                            <?php if ( ! empty( $inq['guests'] ) ) : ?>
+                                                · <?php
+                                                /* translators: %d: guest count */
+                                                printf( esc_html( _n( '%d guest', '%d guests', (int) $inq['guests'], 'ovr-core' ) ), (int) $inq['guests'] );
+                                                ?>
+                                            <?php endif; ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
 
-                    <?php
-                    $history = ! empty( $inq['responses'] ) ? (array) json_decode( (string) $inq['responses'], true ) : [];
-                    if ( $history ) : ?>
-                        <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--ovr-outline-variant)">
-                            <div style="font-size:12px;font-weight:600;color:var(--ovr-on-surface-variant);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
-                                <?php esc_html_e( 'Response history', 'ovr-core' ); ?>
-                            </div>
-                            <?php foreach ( $history as $resp ) : ?>
-                                <div style="background:var(--ovr-surface-container-low);border-radius:var(--ovr-radius-sm);padding:10px 12px;margin-bottom:8px">
-                                    <div style="font-size:12px;color:var(--ovr-on-surface-variant);margin-bottom:3px">
-                                        <strong><?php echo esc_html( $resp['by_name'] ?? __( 'You', 'ovr-core' ) ); ?></strong>
-                                        · <?php echo esc_html( mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $resp['at'] ?? '' ) ); ?>
+                                <div style="background:#fff;border:1px solid var(--ovr-outline-variant);border-radius:var(--ovr-radius-sm);padding:14px 16px">
+                                    <div style="font-size:12px;font-weight:600;color:var(--ovr-on-surface-variant);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
+                                        <?php esc_html_e( 'Message', 'ovr-core' ); ?>
                                     </div>
-                                    <div style="font-size:14px;line-height:1.5;white-space:pre-wrap"><?php echo esc_html( $resp['message'] ?? '' ); ?></div>
+                                    <p style="margin:0;font-size:14px;line-height:1.55;color:var(--ovr-on-surface);white-space:pre-wrap"><?php echo esc_html( $inq['message'] ); ?></p>
                                 </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
 
-                    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                        <details style="flex:1 1 100%">
-                            <summary class="ovr-btn ovr-btn-primary" style="padding:6px 14px;font-size:13px;cursor:pointer;display:inline-flex;width:auto;list-style:none">
-                                <span class="material-symbols-outlined" style="font-size:16px">reply</span>
-                                <?php esc_html_e( 'Reply', 'ovr-core' ); ?>
-                            </summary>
-                            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:10px">
-                                <input type="hidden" name="action" value="ovr_inquiry_reply">
-                                <input type="hidden" name="inquiry_id" value="<?php echo esc_attr( (int) $inq['id'] ); ?>">
-                                <?php wp_nonce_field( 'ovr_inquiry_reply_' . (int) $inq['id'] ); ?>
-                                <textarea name="reply_message" required rows="3" placeholder="<?php esc_attr_e( 'Write your reply…', 'ovr-core' ); ?>" style="width:100%;border:1px solid var(--ovr-outline-variant);border-radius:var(--ovr-radius-sm);padding:10px;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-                                <div style="margin-top:8px;display:flex;gap:8px">
-                                    <button type="submit" class="ovr-btn ovr-btn-primary" style="padding:6px 14px;font-size:13px">
-                                        <span class="material-symbols-outlined" style="font-size:16px">send</span>
-                                        <?php esc_html_e( 'Send reply', 'ovr-core' ); ?>
-                                    </button>
-                                    <a href="mailto:<?php echo esc_attr( $inq['guest_email'] ); ?>?subject=Re:%20<?php echo $property ? rawurlencode( $property->post_title ) : ''; ?>" class="ovr-btn" style="padding:6px 14px;font-size:13px;border:1px solid var(--ovr-outline-variant)">
-                                        <span class="material-symbols-outlined" style="font-size:16px">mail</span>
-                                        <?php esc_html_e( 'Email instead', 'ovr-core' ); ?>
-                                    </a>
+                                <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                                    <p style="margin:0;font-size:12px;color:var(--ovr-on-surface-variant);flex:1 1 100%">
+                                        <?php esc_html_e( 'Contact the guest directly with the details above. Inquiries are a record, not a messaging inbox.', 'ovr-core' ); ?>
+                                    </p>
+                                    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+                                          onsubmit="return confirm('<?php echo esc_js( __( 'Delete this inquiry permanently? This cannot be undone.', 'ovr-core' ) ); ?>');">
+                                        <input type="hidden" name="action" value="ovr_inquiry_delete">
+                                        <input type="hidden" name="inquiry_id" value="<?php echo esc_attr( (int) $inq['id'] ); ?>">
+                                        <?php wp_nonce_field( 'ovr_inquiry_delete_' . (int) $inq['id'] ); ?>
+                                        <button type="submit" class="ovr-btn" style="padding:7px 16px;font-size:13px;border:1px solid var(--ovr-outline-variant);color:#B3261E">
+                                            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+                                            <?php esc_html_e( 'Delete', 'ovr-core' ); ?>
+                                        </button>
+                                    </form>
                                 </div>
-                            </form>
-                        </details>
-                    </div>
-                </li>
-            <?php endforeach; ?>
-        </ul>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     <?php endif; ?>
 </section>
+
+<style>
+    .ovr-inq-table thead th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ovr-on-surface-variant);background:var(--ovr-surface-container-low);border-bottom:1px solid var(--ovr-outline-variant);white-space:nowrap}
+    .ovr-inq-table td{padding:11px 12px;border-bottom:1px solid var(--ovr-outline-variant);vertical-align:middle}
+    .ovr-inq-table tbody tr.ovr-inq-row:hover td{background:var(--ovr-surface-container-low)}
+    .ovr-inq-table tbody tr.ovr-inq-row.is-new td{background:rgba(0,108,74,.05)}
+    .ovr-inq-table tbody tr.ovr-inq-row.is-new .ovr-inq-name{font-weight:600}
+    .ovr-inq-view{display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border:1px solid var(--ovr-outline-variant);border-radius:8px;background:#fff;color:var(--ovr-primary);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer}
+    .ovr-inq-view:hover{background:var(--ovr-surface-container)}
+    .ovr-inq-view .material-symbols-outlined{font-size:16px;transition:transform .2s}
+    .ovr-inq-row.is-open .ovr-inq-view .material-symbols-outlined{transform:rotate(180deg)}
+</style>
+<script>
+(function(){
+    var scope = document.querySelector('.ovr-inq-table');
+    if (!scope) { return; }
+    scope.querySelectorAll('[data-ovr-inq-toggle]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var row = btn.closest('tr');
+            var detail = row.nextElementSibling;
+            if (!detail || !detail.hasAttribute('data-ovr-inq-detail')) { return; }
+            var open = detail.hidden;
+            detail.hidden = !open;
+            row.classList.toggle('is-open', open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) { detail.scrollIntoView({ block:'nearest', behavior:'smooth' }); }
+        });
+    });
+})();
+</script>

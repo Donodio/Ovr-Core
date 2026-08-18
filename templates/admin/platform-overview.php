@@ -147,7 +147,7 @@ $tones = [
     <div class="ovr-dh">
         <div>
             <h1><?php esc_html_e( 'Platform Overview', 'ovr-core' ); ?></h1>
-            <p><?php esc_html_e( 'Here is the latest snapshot of every property, member, and transaction across Our Village Rentals.', 'ovr-core' ); ?></p>
+            <p><?php esc_html_e( 'Here is the latest snapshot of every property, member, and transaction across Our Villages Rental.', 'ovr-core' ); ?></p>
         </div>
         <div class="ovr-dh-actions">
             <form method="get" action="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>" class="ovr-dh-search">

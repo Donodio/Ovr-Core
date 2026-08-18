@@ -57,8 +57,11 @@ class Activator {
         \OVR\PostTypes\Taxonomies::seed_facets();
         update_option( 'ovr_facets_seeded', 1 );
 
-        // 5c. Seed the Paid Services catalogue (Feature 1) from legacy products.
+        // 5c. Seed the Paid Services catalogue (Feature 1) from legacy products,
+        //     and always ensure the Deals & Cancellations services exist (a
+        //     later addition, so upgraded installs get them too).
         \OVR\Subscription\PaidService::maybe_seed();
+        \OVR\Subscription\PaidService::ensure_deals_services();
 
         // 6. Flush rewrite rules to register new CPT permalinks.
         flush_rewrite_rules();
@@ -99,7 +102,7 @@ class Activator {
                 'enable_inquiries'     => true,
                 'inquiry_retention'    => 365,
                 'enable_watermark'     => false,
-                'watermark_text'       => 'Our Village Rentals',
+                'watermark_text'       => 'Our Villages Rental',
                 'bump_daily_limit'     => 12,
                 'listing_retention_days' => 180,
                 'grace_period_days'    => 7,

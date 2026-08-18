@@ -54,19 +54,21 @@ class Taxonomies {
     }
 
     /**
-     * Remove the Description and Slug columns from the Village Section list table.
+     * Remove only the Slug column from the Village Section list table. The
+     * Description column stays so admins can see each section's location.
      *
      * @param array<string,string> $columns
      * @return array<string,string>
      */
     public static function village_columns( array $columns ): array {
-        unset( $columns['description'], $columns['slug'] );
+        unset( $columns['slug'] );
         return $columns;
     }
 
     /**
-     * Hide Slug, Parent, and Description fields on the Village Section add/edit
-     * screens so the form collects only a Name (client request).
+     * Hide Slug and Parent fields on the Village Section add/edit screens. The
+     * Description field stays visible — it stores the location that renders
+     * after the section name (e.g. "Sumter Landing — North of CR466A").
      */
     public static function simplify_village_screen(): void {
         $tax = isset( $_GET['taxonomy'] ) ? sanitize_key( wp_unslash( $_GET['taxonomy'] ) ) : '';
@@ -77,8 +79,7 @@ class Taxonomies {
         <style>
             /* Add-new form (left column) + edit form (single term) */
             .term-slug-wrap,
-            .term-parent-wrap,
-            .term-description-wrap { display: none !important; }
+            .term-parent-wrap { display: none !important; }
         </style>
         <?php
     }
@@ -169,6 +170,12 @@ class Taxonomies {
             'public'            => true,
             'show_in_rest'      => true,
             'show_admin_column' => true,
+            // This taxonomy backs the "Village Sections" admin portal
+            // (VillageSectionsAdmin), which handles ordering + images. Suppress the
+            // duplicate default submenu the taxonomy would otherwise add under
+            // the OVR Properties menu; the curated page stays the single entry.
+            'show_ui'           => true,
+            'show_in_menu'      => false,
             'rewrite'           => [ 'slug' => 'village', 'with_front' => false ],
         ] );
     }

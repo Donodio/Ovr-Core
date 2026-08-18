@@ -106,7 +106,7 @@ class IcalSync {
         $lines   = [];
         $lines[] = 'BEGIN:VCALENDAR';
         $lines[] = 'VERSION:2.0';
-        $lines[] = 'PRODID:-//Our Village Rentals//OVR Core//EN';
+        $lines[] = 'PRODID:-//Our Villages Rental//OVR Core//EN';
         $lines[] = 'CALSCALE:GREGORIAN';
         $lines[] = 'X-WR-CALNAME:' . $this->escape_text( get_the_title( $post_id ) . ' — Availability' );
 

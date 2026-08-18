@@ -135,6 +135,68 @@ class PropertyCarouselWidget extends Widget_Base {
 
 		$this->end_controls_section();
 
+		/* CONTENT — Card elements (visibility toggles) */
+		$this->start_controls_section( 'section_card_elements', [
+			'label' => esc_html__( 'Card Elements', 'ovr-core' ),
+			'tab'   => Controls_Manager::TAB_CONTENT,
+		] );
+
+		$this->add_control( 'show_location', [
+			'label'   => esc_html__( 'Village / Location', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_id', [
+			'label'   => esc_html__( 'Listing ID', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_name', [
+			'label'   => esc_html__( 'Listing Name', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_type', [
+			'label'   => esc_html__( 'Property Type', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_bedrooms', [
+			'label'   => esc_html__( 'Bedrooms', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_bathrooms', [
+			'label'   => esc_html__( 'Bathrooms', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_size', [
+			'label'   => esc_html__( 'Square Footage', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_price', [
+			'label'   => esc_html__( 'Price', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->add_control( 'show_details', [
+			'label'   => esc_html__( 'Details Link', 'ovr-core' ),
+			'type'    => Controls_Manager::SWITCHER,
+			'default' => 'yes',
+		] );
+
+		$this->end_controls_section();
+
 		/* STYLE — Section Header */
 		$this->start_controls_section( 'style_header', [
 			'label'     => esc_html__( 'Section Header', 'ovr-core' ),
@@ -201,6 +263,52 @@ class PropertyCarouselWidget extends Widget_Base {
 		$this->add_group_control( Group_Control_Box_Shadow::get_type(), [
 			'name'     => 'card_shadow',
 			'selector' => '{{WRAPPER}} .ovr-pc-card',
+		] );
+
+		$this->end_controls_section();
+
+		/* STYLE — Card Content Area (the info panel below the image) */
+		$this->start_controls_section( 'style_card_body', [
+			'label' => esc_html__( 'Card Content Area', 'ovr-core' ),
+			'tab'   => Controls_Manager::TAB_STYLE,
+		] );
+
+		$this->add_control( 'card_body_bg', [
+			'label'     => esc_html__( 'Background', 'ovr-core' ),
+			'type'      => Controls_Manager::COLOR,
+			'default'   => '#f4f7f7',
+			'selectors' => [ '{{WRAPPER}} .ovr-pc-body' => 'background:{{VALUE}}' ],
+		] );
+
+		$this->add_control( 'card_body_gap', [
+			'label'      => esc_html__( 'Gap From Image', 'ovr-core' ),
+			'type'       => Controls_Manager::SLIDER,
+			'size_units' => [ 'px' ],
+			'range'      => [ 'px' => [ 'min' => 0, 'max' => 40 ] ],
+			'default'    => [ 'unit' => 'px', 'size' => 12 ],
+			'selectors'  => [ '{{WRAPPER}} .ovr-pc-body' => 'margin-top:{{SIZE}}{{UNIT}}' ],
+		] );
+
+		$this->add_responsive_control( 'card_body_padding', [
+			'label'      => esc_html__( 'Padding', 'ovr-core' ),
+			'type'       => Controls_Manager::DIMENSIONS,
+			'size_units' => [ 'px', 'em' ],
+			'default'    => [ 'top' => '14', 'right' => '14', 'bottom' => '14', 'left' => '14', 'unit' => 'px' ],
+			'selectors'  => [ '{{WRAPPER}} .ovr-pc-body' => 'padding:{{TOP}}{{UNIT}} {{RIGHT}}{{UNIT}} {{BOTTOM}}{{UNIT}} {{LEFT}}{{UNIT}}' ],
+		] );
+
+		$this->add_control( 'card_body_radius', [
+			'label'      => esc_html__( 'Border Radius', 'ovr-core' ),
+			'type'       => Controls_Manager::SLIDER,
+			'size_units' => [ 'px' ],
+			'range'      => [ 'px' => [ 'min' => 0, 'max' => 40 ] ],
+			'default'    => [ 'unit' => 'px', 'size' => 10 ],
+			'selectors'  => [ '{{WRAPPER}} .ovr-pc-body' => 'border-radius:{{SIZE}}{{UNIT}}' ],
+		] );
+
+		$this->add_group_control( Group_Control_Border::get_type(), [
+			'name'     => 'card_body_border',
+			'selector' => '{{WRAPPER}} .ovr-pc-body',
 		] );
 
 		$this->end_controls_section();
@@ -340,30 +448,94 @@ class PropertyCarouselWidget extends Widget_Base {
 
 				<div class="ovr-pc-viewport">
 					<div class="ovr-pc-track">
-						<?php foreach ( $rows as $data ) : ?>
-							<article class="ovr-pc-card">
-								<a class="ovr-pc-media" href="<?php echo esc_url( $data['permalink'] ); ?>">
-									<div class="ovr-pc-image">
-										<img src="<?php echo esc_url( $data['thumbnail'] ); ?>"
-										     alt="<?php echo esc_attr( $data['title'] ); ?>"
-										     loading="lazy">
+					<?php foreach ( $rows as $data ) : ?>
+						<?php
+						$bath_display = rtrim( rtrim( number_format( (float) $data['bathrooms'], 1 ), '0' ), '.' );
+						// Location-first label, matching the search/village cards:
+						// the Village Name when known, else the property type.
+						$loc = (string) ( $data['village'] ?? '' );
+
+						// Elementor SWITCHER stores 'yes' when ON and '' when OFF
+						// (never 'no'); unset means the control default applies.
+						$show_location  = 'yes' === ( $s['show_location']  ?? 'yes' );
+						$show_id        = 'yes' === ( $s['show_id']        ?? 'yes' );
+						$show_name      = 'yes' === ( $s['show_name']      ?? 'yes' );
+						$show_type      = 'yes' === ( $s['show_type']      ?? 'yes' );
+						$show_bedrooms  = 'yes' === ( $s['show_bedrooms']  ?? 'yes' );
+						$show_bathrooms = 'yes' === ( $s['show_bathrooms'] ?? 'yes' );
+						$show_size      = 'yes' === ( $s['show_size']      ?? 'yes' );
+						$show_price     = 'yes' === ( $s['show_price']     ?? 'yes' );
+						$show_details   = 'yes' === ( $s['show_details']   ?? 'yes' );
+
+						$has_specs = ( $show_bedrooms && (int) $data['bedrooms'] > 0 )
+							|| ( $show_bathrooms && (float) $data['bathrooms'] > 0 )
+							|| ( $show_size && (int) $data['sqft'] > 0 );
+						$has_meta  = $show_price || $show_details;
+						?>
+						<article class="ovr-pc-card">
+							<a class="ovr-pc-media" href="<?php echo esc_url( $data['permalink'] ); ?>">
+								<div class="ovr-pc-image">
+									<img src="<?php echo esc_url( $data['thumbnail'] ); ?>"
+									     alt="<?php echo esc_attr( $data['title'] ); ?>"
+									     loading="lazy">
+								</div>
+							</a>
+							<div class="ovr-pc-body">
+								<?php if ( $show_location || $show_id ) : ?>
+									<div class="ovr-pc-top">
+										<?php if ( $show_location && '' !== $loc ) : ?>
+											<span class="ovr-pc-loc"><?php echo esc_html( $loc ); ?></span>
+										<?php endif; ?>
+										<?php if ( $show_id ) : ?>
+											<span class="ovr-pc-id">#<?php echo esc_html( number_format_i18n( (int) $data['post_id'] ) ); ?></span>
+										<?php endif; ?>
 									</div>
-								</a>
-								<div class="ovr-pc-id">#<?php echo esc_html( number_format_i18n( (int) $data['post_id'] ) ); ?></div>
-								<h3 class="ovr-pc-name"><a href="<?php echo esc_url( $data['permalink'] ); ?>"><?php echo esc_html( $data['title'] ); ?></a></h3>
-								<?php if ( ! empty( $data['property_type'] ) ) : ?>
+								<?php endif; ?>
+								<?php if ( $show_name ) : ?>
+									<h3 class="ovr-pc-name"><a href="<?php echo esc_url( $data['permalink'] ); ?>"><?php echo esc_html( $data['title'] ); ?></a></h3>
+								<?php endif; ?>
+								<?php if ( $show_type && ! empty( $data['property_type'] ) && $data['property_type'] !== $loc ) : ?>
 									<div class="ovr-pc-type"><?php echo esc_html( $data['property_type'] ); ?></div>
 								<?php endif; ?>
-								<div class="ovr-pc-meta">
-									<?php if ( (float) $data['base_price'] > 0 ) : ?>
-										<span class="ovr-pc-price"><?php echo esc_html( $symbol . number_format_i18n( (float) $data['base_price'], 0 ) ); ?><em>/ <?php esc_html_e( 'night', 'ovr-core' ); ?></em></span>
-									<?php endif; ?>
-									<?php if ( (int) $data['sqft'] > 0 ) : ?>
-										<span class="ovr-pc-size"><?php echo esc_html( number_format_i18n( (int) $data['sqft'] ) ); ?> <?php esc_html_e( 'sq ft', 'ovr-core' ); ?></span>
-									<?php endif; ?>
-								</div>
-							</article>
-						<?php endforeach; ?>
+								<?php if ( $has_specs ) : ?>
+									<div class="ovr-pc-specs">
+										<?php if ( $show_bedrooms && (int) $data['bedrooms'] > 0 ) : ?>
+											<span class="ovr-pc-spec">
+												<span class="material-symbols-outlined" aria-hidden="true">bed</span>
+												<?php echo esc_html( (string) $data['bedrooms'] ); ?>
+											</span>
+										<?php endif; ?>
+										<?php if ( $show_bathrooms && (float) $data['bathrooms'] > 0 ) : ?>
+											<span class="ovr-pc-spec">
+												<span class="material-symbols-outlined" aria-hidden="true">bathtub</span>
+												<?php echo esc_html( $bath_display ); ?>
+											</span>
+										<?php endif; ?>
+										<?php if ( $show_size && (int) $data['sqft'] > 0 ) : ?>
+											<span class="ovr-pc-spec">
+												<span class="material-symbols-outlined" aria-hidden="true">straighten</span>
+												<?php echo esc_html( number_format_i18n( (int) $data['sqft'] ) ); ?>
+											</span>
+										<?php endif; ?>
+									</div>
+								<?php endif; ?>
+								<?php if ( $has_meta ) : ?>
+									<div class="ovr-pc-meta">
+										<?php if ( $show_price ) : ?>
+											<?php if ( (float) $data['base_price'] > 0 ) : ?>
+												<span class="ovr-pc-price"><?php echo esc_html( $symbol . number_format_i18n( (float) $data['base_price'], 0 ) ); ?><em>/ <?php esc_html_e( 'night', 'ovr-core' ); ?></em></span>
+											<?php else : ?>
+												<span class="ovr-pc-size"><?php esc_html_e( 'See description for pricing', 'ovr-core' ); ?></span>
+											<?php endif; ?>
+										<?php endif; ?>
+										<?php if ( $show_details ) : ?>
+											<a class="ovr-pc-details" href="<?php echo esc_url( $data['permalink'] ); ?>"><?php esc_html_e( 'Details', 'ovr-core' ); ?><span aria-hidden="true">&nbsp;&#8250;</span></a>
+										<?php endif; ?>
+									</div>
+								<?php endif; ?>
+							</div>
+						</article>
+					<?php endforeach; ?>
 					</div>
 				</div>
 
@@ -394,24 +566,41 @@ class PropertyCarouselWidget extends Widget_Base {
 			.ovr-pc-stage{display:flex;align-items:center;gap:8px}
 			.ovr-pc-viewport{overflow:hidden;flex:1 1 auto;width:100%}
 			.ovr-pc-track{display:flex;gap:24px;will-change:transform;transition:transform 420ms cubic-bezier(.22,.61,.36,1)}
-			.ovr-pc-card{flex:0 0 calc((100% - (var(--ovr-pc-per) - 1) * 24px) / var(--ovr-pc-per));box-sizing:border-box;background:#fff;border-radius:14px;padding:16px;cursor:grab}
+			@media (prefers-reduced-motion: reduce){.ovr-pc-track{transition:none}.ovr-pc-card:hover .ovr-pc-image img{transform:none}.ovr-pc-arrow:hover{transform:none}.ovr-pc-dot.is-active{transform:none}}
+			.ovr-pc-card{flex:0 0 calc((100% - (var(--ovr-pc-per) - 1) * 24px) / var(--ovr-pc-per));box-sizing:border-box;display:flex;flex-direction:column;background:#fff;border-radius:14px;padding:16px;cursor:grab;box-shadow:0 1px 2px rgba(16,24,40,.05),0 4px 16px rgba(16,24,40,.06);transition:box-shadow .22s ease,transform .22s ease}
+			.ovr-pc-card:hover{box-shadow:0 14px 34px rgba(10,20,40,.18);transform:translateY(-4px)}
 			.ovr-pc-track:active .ovr-pc-card{cursor:grabbing}
 			.ovr-pc-media{display:block;text-decoration:none}
-			.ovr-pc-image{aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:#e8ecec}
-			.ovr-pc-image img{width:100%;height:100%;object-fit:cover;display:block}
-			.ovr-pc-id{font-size:12px;font-weight:600;color:#6f7979;margin-top:12px;letter-spacing:.3px}
-			.ovr-pc-name{margin:4px 0 2px;font-size:16px;font-weight:700;line-height:1.3}
-			.ovr-pc-name a{color:inherit;text-decoration:none}
-			.ovr-pc-type{font-size:13px;color:#3f4944;margin-bottom:8px}
-			.ovr-pc-meta{display:flex;gap:12px;align-items:baseline;border-top:1px solid #eef1f1;padding-top:10px;flex-wrap:wrap}
-			.ovr-pc-price{font-weight:700;color:#1466a8;font-size:16px}
-			.ovr-pc-price em{font-style:normal;font-size:12px;font-weight:500;color:#6b7979}
+			.ovr-pc-image{aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:#e8ecec;flex:0 0 auto}
+			.ovr-pc-image img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+			.ovr-pc-card:hover .ovr-pc-image img{transform:scale(1.04)}
+			.ovr-pc-body{display:flex;flex-direction:column;flex:0 1 auto;min-width:0;margin-top:12px;background:#f4f7f7;padding:14px;border-radius:10px}
+			.ovr-pc-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+			.ovr-pc-loc{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ovr-secondary,#1466a8);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+			.ovr-pc-id{font-size:11px;font-weight:600;color:#6f7979;letter-spacing:.8px;text-transform:uppercase;line-height:1.3;flex-shrink:0}
+			.ovr-pc-name{margin:0 0 3px;font-size:17px;font-weight:700;line-height:1.28}
+			.ovr-pc-name a{color:inherit;text-decoration:none;transition:color .15s ease}
+			.ovr-pc-name a:hover{color:var(--ovr-secondary,#1466a8)}
+			.ovr-pc-name a:focus-visible{outline:3px solid var(--ovr-secondary,#00a2e8);outline-offset:2px}
+			.ovr-pc-type{font-size:13px;color:#3f4944;margin:2px 0 12px;line-height:1.4}
+			.ovr-pc-specs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+			.ovr-pc-spec{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;background:#f2f5f5;font-size:12px;font-weight:600;color:#3f4944;line-height:1.2}
+			.ovr-pc-spec .material-symbols-outlined{font-size:14px;color:#6b7979}
+			.ovr-pc-meta{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid rgba(128,128,128,.28);margin-top:12px;padding-top:12px;flex-wrap:wrap}
+			.ovr-pc-price{font-weight:700;color:#1466a8;font-size:17px;line-height:1.2}
+			.ovr-pc-price em{font-style:normal;font-size:12px;font-weight:500;color:inherit;opacity:.72}
 			.ovr-pc-size{font-size:13px;color:#6b7979}
+			.ovr-pc-details{display:inline-flex;align-items:center;font-size:13px;font-weight:700;color:var(--ovr-secondary,#1466a8);text-decoration:none;transition:color .15s ease}
+			.ovr-pc-details:hover{text-decoration:underline}
+			.ovr-pc-details:focus-visible{outline:3px solid var(--ovr-secondary,#00a2e8);outline-offset:2px}
 			.ovr-pc-arrow{flex:0 0 auto;width:44px;height:44px;border:none;border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12);font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s ease,opacity .15s ease}
 			.ovr-pc-arrow:hover{transform:scale(1.08)}
+			.ovr-pc-arrow:focus-visible{outline:3px solid var(--ovr-secondary,#00a2e8);outline-offset:2px}
 			.ovr-pc-arrow:disabled{opacity:.35;cursor:default}
 			.ovr-pc-dots{display:flex;justify-content:center;gap:8px;margin-top:22px}
 			.ovr-pc-dot{width:9px;height:9px;border:none;border-radius:50%;background:#bec9c8;padding:0;cursor:pointer;transition:transform .15s ease,background .15s ease}
+			.ovr-pc-dot:hover{background:#8fa3a3}
+			.ovr-pc-dot:focus-visible{outline:3px solid var(--ovr-secondary,#00a2e8);outline-offset:2px}
 			.ovr-pc-dot.is-active{background:#006676;transform:scale(1.25)}
 			@media (max-width:768px){.ovr-pc-arrow{display:none}}
 		</style>
