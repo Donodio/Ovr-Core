@@ -670,6 +670,8 @@
 }
 
 .ovr-mobile-link {
+    display: flex;
+    align-items: center;
     padding: 12px 8px;
     font-size: 16px;
     color: var(--ovr-on-surface);
@@ -774,7 +776,10 @@
 }
 .ovr-nav-item.is-open .ovr-nav-dropdown { display: block; }
 .ovr-nav-dropdown-link {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
     padding: 10px 12px;
     border-radius: var(--ovr-radius-md, 8px);
     color: var(--ovr-on-surface, #1b1b20);
@@ -783,6 +788,31 @@
 }
 .ovr-nav-dropdown-link:hover { background: var(--ovr-surface-container-low, #f3f4f6); color: var(--ovr-primary); }
 .ovr-nav-dropdown-divider { height: 1px; background: var(--ovr-outline-variant, #e0e0e0); margin: 6px 4px; }
+
+/* Popup menu icons, disabled future items, active trigger (spec 2026-08-25). */
+.ovr-nav-trigger-icon,
+.ovr-nav-child-icon {
+    font-size: 20px;
+    line-height: 1;
+    vertical-align: middle;
+    margin-inline-end: 8px;
+    color: var(--ovr-primary, #000961);
+    opacity: 0.85;
+    flex: 0 0 auto;
+}
+.ovr-nav-dropdown-link--disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    user-select: none;
+}
+.ovr-nav-item.active .ovr-nav-toggle {
+    color: var(--ovr-primary, #000961);
+    box-shadow: inset 0 -2px 0 var(--ovr-gold, #DEAF0C);
+}
+.ovr-mobile-link--disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
 
 .ovr-nav-actions {
     display: flex;
@@ -2995,19 +3025,21 @@
     color: #fff !important;
 }
 .ovr-detail-back {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50px;
+    border: 2px solid #fff;
     background: #000961;
     text-decoration: none;
     flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     transition: background var(--ovr-transition), transform var(--ovr-transition);
 }
 .ovr-detail-back:hover { background: #001a8c; transform: scale(1.05); }
+.ovr-detail-back svg { stroke: #fff !important; }
 .ovr-detail-back .material-symbols-outlined { font-size: 20px; font-variation-settings: 'FILL' 1; color: #fff !important; }
 .ovr-detail-titlewrap {
     display: flex;
@@ -3059,14 +3091,16 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    border: 2px solid #fff;
     background: #000961;
     color: #fff;
     cursor: pointer;
     text-decoration: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     transition: background var(--ovr-transition), transform var(--ovr-transition);
 }
 .ovr-detail-tool:hover { background: #001a8c; color: #fff; transform: scale(1.05); }
+.ovr-detail-tool svg { stroke: #fff !important; }
 .ovr-detail-tool .material-symbols-outlined { color: #fff; font-variation-settings: 'FILL' 1; }
 
 /* ── Body container ── */
@@ -3973,6 +4007,48 @@
     opacity: 0.6;
 }
 
+/* ── Privacy-safe approximate-location circles (Chunk 1 §27-§35) ──
+   Every public map plots a listing as a soft AREA circle instead of an exact
+   house pin: "the home is approximately within this area". Colours mirror the
+   old per-type pins so the visual language carries over. */
+.ovr-map-view path.ovr-map-circle {
+    fill: var(--ss-navy, #000961);
+    fill-opacity: 0.16;
+    stroke: var(--ss-navy, #000961);
+    stroke-opacity: 0.55;
+    stroke-width: 2;
+}
+.ovr-map-view path.ovr-map-circle--type-house,
+.ovr-map-view path.ovr-map-circle--type-cottage { fill: #2e7d32; stroke: #1b5e20; }
+.ovr-map-view path.ovr-map-circle--type-condo,
+.ovr-map-view path.ovr-map-circle--type-apartment { fill: #1565c0; stroke: #0d3d8a; }
+.ovr-map-view path.ovr-map-circle--type-villa { fill: #6a1b9a; stroke: #4a148c; }
+.ovr-map-view path.ovr-map-circle--type-townhouse { fill: #00838f; stroke: #005662; }
+.ovr-map-view path.ovr-map-circle--type-cabin { fill: #8d6e63; stroke: #5d4037; }
+.ovr-map-view path.ovr-map-circle:hover,
+.ovr-map-view path.ovr-map-circle.is-hover {
+    fill-opacity: 0.34;
+    stroke-width: 3;
+    stroke-opacity: 0.9;
+}
+.ovr-map-view path.ovr-map-circle.is-featured {
+    stroke: var(--ss-gold, #d4af37);
+    stroke-width: 3;
+}
+.ovr-map-view path.ovr-map-circle.is-booked {
+    filter: grayscale(0.7);
+    opacity: 0.6;
+}
+
+/* Single-property page: one calm privacy circle in place of the tack pin. */
+.ovr-detail-map-canvas path.ovr-privacy-circle {
+    fill: var(--ss-navy, #000961);
+    fill-opacity: 0.15;
+    stroke: var(--ss-navy, #000961);
+    stroke-opacity: 0.5;
+    stroke-width: 2;
+}
+
 /* Legend. */
 .ovr-map-legend {
     background: rgba(255, 255, 255, 0.95);
@@ -3996,6 +4072,14 @@
 }
 .ovr-map-legend-dot.is-featured { border-color: var(--ss-gold, #d4af37); box-shadow: 0 0 0 1.5px var(--ss-gold, #d4af37); }
 .ovr-map-legend-dot.is-booked { filter: grayscale(0.7); opacity: 0.6; }
+/* Ring-style dot for the "Approximate area" legend entry (privacy circles). */
+.ovr-map-legend-dot.is-area {
+    border-radius: 50%;
+    transform: none;
+    background: rgba(0, 9, 97, 0.16);
+    border: 2px solid rgba(0, 9, 97, 0.55);
+    box-shadow: none;
+}
 
 /* Quiet zoom + attribution controls. */
 .ovr-map-view .leaflet-control-zoom {
@@ -4260,6 +4344,11 @@
 /* Full-bleed the page and drop the featured-cities strip in map view. */
 .ovr-search-page--map { max-width: none; }
 .ovr-search-stitch:has(.ovr-search-page--map) .ovr-ss-villages { display: none; }
+
+/* Full-width map view: in map mode the results are plotted on a single large
+   map (no centre list column), so it should fill the available width. */
+.ovr-map-full { width: 100%; }
+.ovr-map-full .ovr-map-view { height: 78vh; min-height: 520px; }
 
 .ovr-map-split {
     display: grid;
