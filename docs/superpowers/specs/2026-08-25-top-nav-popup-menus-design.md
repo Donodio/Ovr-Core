@@ -18,7 +18,7 @@ Existing dropdown infrastructure (`templates/components/header-nav.php`, click/E
 
 | Question | Decision |
 |---|---|
-| Relationship to existing nav links | **Replace** current flat links (Home, Search Listings, Villages ▾, Deals, About, Contact) with the two always-on dropdowns (+ My Account when logged in). Log In / List Your Property action buttons stay. |
+| Relationship to existing nav links | **Replace** current flat links (Home, Search Listings, Villages ▾, Deals & Cancellations, Account, About, Contact) with the two always-on dropdowns (+ My Account when logged in). Logged-out action buttons (Log In / List Your Property) stay. When logged in, the actions area keeps the search icon, Favorites icon, and gold Dashboard button; the separate "Sign Out" pill button is removed — logout lives in My Account ▾, eliminating the duplication. |
 | Static page content | Create pages now with sensible placeholder copy, admin-editable in WP admin (same pattern as About page). |
 | Villages section grid | **New dedicated shortcut page**; existing Villages archive stays untouched. |
 | Villages ID Request | Web form → client-side filled PDF via bundled pdf-lib. |
@@ -66,7 +66,7 @@ Existing dropdown infrastructure (`templates/components/header-nav.php`, click/E
 | Villages Guest Passes | `confirmation_number` | https://gcs.thevillages.com/cgi-bin/gc100 (external ↗) |
 | Log Out | `logout` | `wp_logout_url( home_url( '/' ) )` |
 
-Admin users keep today's behavior: visitor menus plus "Site Admin" jump in the actions area.
+Admin users keep today's behavior: visitor menus plus "Site Admin" jump in the actions area. The current landlord nav's Reviews (`tab=reviews`) and Membership (`tab=subscription`) links are retired from the top nav — both remain reachable inside the dashboard sidebar, which is their primary home.
 
 ## 4. Implementation Units
 
@@ -110,15 +110,15 @@ Contact page sync: during `maybe_sync_pages()`, if `ovr_page_contact` exists and
 
 ### 4.5 Contact OVR form
 
-- New `[ovr_contact_form]` shortcode + AJAX handler (nonce-checked, honeypot, per-IP rate limit consistent with existing forms).
+- New `[ovr_contact_form]` shortcode + AJAX handler. Anti-spam is **new behavior** (no existing form has it): nonce check, hidden honeypot field, and a transient-based per-IP throttle (max 5 submissions/hour).
 - Fields: Name, Email, Phone (optional), Subject, Message.
-- Delivery: existing `Mailer` using the already-defined `contact_form` email template (`EmailTemplates.php` line ~170); recipient = `support_email` setting (falls back to site admin email).
+- Delivery: existing `Mailer` using the already-defined `contact_form` email template (`EmailTemplates.php` line ~170); recipient = `support_email` setting (falls back to site admin email). Phone and Subject are folded into the message body as labeled prefix lines (`Subject: …`, `Phone: …`) rather than extending the template's variable list.
 - Distinct JSON errors for nonce failure / validation / mail failure.
 
 ### 4.6 Newest Listings setting
 
 - New setting `newest_listings_count` (default `12`), sanitized as positive int, field placed beside *Listings per page* in Settings.
-- Menu URL: `/search?sort=newest&per_page={newest_listings_count}`.
+- Menu URL: `/search?sort=newest&per_page={newest_listings_count}`. Note: `sort=newest` is already `SearchHandler`'s default — the explicit param is belt-and-suspenders so the intent survives future default changes.
 
 ### 4.7 Online Villages ID Request
 
@@ -128,8 +128,9 @@ Contact page sync: during `maybe_sync_pages()`, if `ovr_page_contact` exists and
 - PDF generation **client-side** with pdf-lib bundled at `assets/js/vendor/pdf-lib.min.js`, enqueued only on this page. No PII stored server-side; resident downloads/prints the result.
 - Two modes:
   - **Fill mode:** admin uploads LifestyleIDForm2025.pdf via Settings media picker (new option `id_form_template`). AcroForm fields filled by schema mapping; unmatched fields degrade gracefully.
-  - **Built-in mode (default):** pdf-lib composes a clean letterhead-style printable sheet from entered data.
+  - **Built-in mode (default):** pdf-lib composes a clean letterhead-style printable sheet from entered data. Ships first — it has no dependency on the original PDF file.
 - Settings shows an admin notice if `id_form_template` points at a non-PDF file.
+- This unit is the least coupled in the spec and can be planned/implemented as its own follow-up chunk if the plan grows too large.
 
 ## 5. Error Handling
 
