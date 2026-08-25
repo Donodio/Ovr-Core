@@ -23,7 +23,6 @@ namespace OVR\Frontend;
 
 use OVR\Core\Pages;
 use OVR\Core\TemplateLoader;
-use OVR\Search\SearchFilters;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
@@ -200,6 +199,8 @@ class Header {
     /**
      * Logged-in account menu (landlord capability users; admins keep the
      * visitor menus plus their Site Admin jump).
+     *
+     * @return array{label:string, url:string, icon:string, children?:array<int,array<string,mixed>>}
      */
     public static function account_menu_group(): array {
         $dash = Pages::get_page_url( 'ovr_page_dashboard' );
@@ -378,6 +379,7 @@ class Header {
         return $vars;
     }
 
+    // Kept only for the custom-menu override path: its slugs match admin-assigned flat menus.
     /**
      * Determine which nav item should be highlighted based on the current
      * request. Returns an empty string if no match.

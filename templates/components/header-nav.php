@@ -27,22 +27,25 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
 <header class="ovr-topnav" role="banner">
     <div class="ovr-topnav-inner">
 
-        <!-- Brand -->
+        <!-- Brand — logo already communicates "Our Villages Rental"; visible
+             text span hidden to avoid visual duplication (§10), kept as
+             accessible name via img alt. -->
         <a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="ovr-brand">
             <?php
             if ( $logo_html ) {
                 echo $logo_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built by wp_get_attachment_image().
             }
             ?>
-            <span class="ovr-brand-name"><?php echo esc_html( $site_name ); ?></span>
+            <span class="ovr-brand-name" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"><?php echo esc_html( $site_name ); ?></span>
         </a>
 
         <!-- Primary Navigation -->
         <nav class="ovr-nav-links" aria-label="<?php esc_attr_e( 'Primary navigation', 'ovr-core' ); ?>">
             <?php foreach ( $nav_items as $slug => $item ) : ?>
                 <?php if ( ! empty( $item['children'] ) ) : ?>
-                    <div class="ovr-nav-item ovr-has-menu">
+                    <div class="ovr-nav-item ovr-has-menu<?php echo ( $active_group ?? '' ) === $slug ? ' active' : ''; ?>">
                         <button type="button" class="ovr-nav-link ovr-nav-toggle" aria-haspopup="true" aria-expanded="false" data-ovr-nav-toggle>
+                            <span class="material-symbols-outlined ovr-nav-trigger-icon" aria-hidden="true"><?php echo esc_html( $item['icon'] ?? '' ); ?></span>
                             <?php echo esc_html( $item['label'] ); ?>
                             <span class="material-symbols-outlined ovr-nav-caret" aria-hidden="true">expand_more</span>
                         </button>
@@ -50,8 +53,17 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
                             <?php foreach ( $item['children'] as $child ) : ?>
                                 <?php if ( ! empty( $child['divider'] ) ) : ?>
                                     <div class="ovr-nav-dropdown-divider" role="separator"></div>
+                                <?php elseif ( ! empty( $child['disabled'] ) ) : ?>
+                                    <span class="ovr-nav-dropdown-link ovr-nav-dropdown-link--disabled" role="menuitem" aria-disabled="true"
+                                          title="<?php esc_attr_e( 'Coming soon', 'ovr-core' ); ?>">
+                                        <span class="material-symbols-outlined ovr-nav-child-icon" aria-hidden="true"><?php echo esc_html( $child['icon'] ?? '' ); ?></span>
+                                        <?php echo esc_html( $child['label'] ); ?>
+                                    </span>
                                 <?php else : ?>
-                                    <a class="ovr-nav-dropdown-link" role="menuitem" href="<?php echo esc_url( $child['url'] ); ?>"><?php echo esc_html( $child['label'] ); ?></a>
+                                    <a class="ovr-nav-dropdown-link" role="menuitem" href="<?php echo esc_url( $child['url'] ); ?>"<?php echo ! empty( $child['target'] ) ? ' target="_blank" rel="noopener"' : ''; ?>>
+                                        <span class="material-symbols-outlined ovr-nav-child-icon" aria-hidden="true"><?php echo esc_html( $child['icon'] ?? '' ); ?></span>
+                                        <?php echo esc_html( $child['label'] ); ?>
+                                    </a>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
@@ -82,10 +94,12 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
                     <?php esc_html_e( 'Dashboard', 'ovr-core' ); ?>
                 </a>
 
-                <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>"
-                   class="ovr-btn ovr-btn-outline ovr-btn-pill" style="padding:10px 20px;font-size:14px">
-                    <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
-                </a>
+                <?php if ( $is_admin_user ) : ?>
+                    <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>"
+                       class="ovr-btn ovr-btn-outline ovr-btn-pill" style="padding:10px 20px;font-size:14px">
+                        <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
+                    </a>
+                <?php endif; ?>
             <?php else : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_login' ) ); ?>"
                    class="ovr-nav-link-cta">
@@ -117,8 +131,16 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
                             <?php foreach ( $item['children'] as $child ) : ?>
                                 <?php if ( ! empty( $child['divider'] ) ) : ?>
                                     <div class="ovr-mobile-divider"></div>
+                                <?php elseif ( ! empty( $child['disabled'] ) ) : ?>
+                                    <span class="ovr-mobile-link ovr-mobile-link--disabled" aria-disabled="true">
+                                        <span class="material-symbols-outlined ovr-nav-child-icon" aria-hidden="true"><?php echo esc_html( $child['icon'] ?? '' ); ?></span>
+                                        <?php echo esc_html( $child['label'] ); ?> — <?php esc_html_e( 'Coming soon', 'ovr-core' ); ?>
+                                    </span>
                                 <?php else : ?>
-                                    <a href="<?php echo esc_url( $child['url'] ); ?>" class="ovr-mobile-link"><?php echo esc_html( $child['label'] ); ?></a>
+                                    <a href="<?php echo esc_url( $child['url'] ); ?>" class="ovr-mobile-link"<?php echo ! empty( $child['target'] ) ? ' target="_blank" rel="noopener"' : ''; ?>>
+                                        <span class="material-symbols-outlined ovr-nav-child-icon" aria-hidden="true"><?php echo esc_html( $child['icon'] ?? '' ); ?></span>
+                                        <?php echo esc_html( $child['label'] ); ?>
+                                    </a>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
@@ -130,7 +152,7 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
                     <?php endif; ?>
                 <?php endforeach; ?>
             <div class="ovr-mobile-divider"></div>
-            <?php if ( $is_logged_in ) : ?>
+            <?php if ( $is_logged_in && $is_admin_user ) : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_dashboard' ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Dashboard', 'ovr-core' ); ?>
                 </a>
