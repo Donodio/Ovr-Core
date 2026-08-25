@@ -250,8 +250,9 @@ class Header {
 
     /**
      * Build top-nav items from the menu assigned to the OVR header location.
-     * Only top-level items are used (the header renders a flat bar); each item's
-     * label, URL and "open in new tab" target come straight from the menu editor.
+     * Top-level items become dropdown triggers; child items nest beneath
+     * their parent as dropdown rows; each item's label, URL and "open in
+     * new tab" target come straight from the menu editor.
      *
      * @return array<string, array{label:string,url:string,target?:string,icon?:string,children?:array<int,array<string,mixed>>}>
      */

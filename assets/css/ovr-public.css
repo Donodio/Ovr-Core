@@ -817,6 +817,7 @@
 .ovr-mobile-link--disabled {
     cursor: not-allowed;
     opacity: 0.45;
+    user-select: none;
 }
 
 .ovr-nav-actions {
