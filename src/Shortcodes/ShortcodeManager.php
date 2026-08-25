@@ -50,6 +50,7 @@ class ShortcodeManager {
         add_shortcode( 'ovr_featured_listings', [ $this, 'shortcode_featured' ] );
         add_shortcode( 'ovr_village_page', [ $this, 'shortcode_village' ] );
         add_shortcode( 'ovr_villages', [ $this, 'shortcode_villages_archive' ] );
+        add_shortcode( 'ovr_village_sections', [ $this, 'shortcode_village_sections' ] );
         add_shortcode( 'ovr_pricing_plans', [ $this, 'shortcode_pricing' ] );
         add_shortcode( 'ovr_checkout', [ $this, 'shortcode_checkout' ] );
         add_shortcode( 'ovr_payment_success', [ $this, 'shortcode_payment_success' ] );
@@ -111,6 +112,10 @@ class ShortcodeManager {
 
     public function shortcode_villages_archive(): string {
         return VillagesArchive::render();
+    }
+
+    public function shortcode_village_sections(): string {
+        return \OVR\Frontend\VillageSections::render();
     }
 
     public function shortcode_pricing( $atts = [] ): string {
