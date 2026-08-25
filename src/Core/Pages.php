@@ -18,7 +18,7 @@ class Pages {
      * Version of the page set. Bump when adding a new plugin page so the
      * one-time self-heal below creates it without requiring reactivation.
      */
-    private const PAGES_VERSION = '7';
+    private const PAGES_VERSION = '8';
 
     public function init(): void {
         add_action( 'init', [ $this, 'maybe_sync_pages' ] );
@@ -32,6 +32,7 @@ class Pages {
             return;
         }
         self::create_pages();
+        self::ensure_contact_shortcode();
         update_option( 'ovr_pages_version', self::PAGES_VERSION );
     }
 
@@ -55,6 +56,12 @@ class Pages {
             'ovr_page_dashboard'       => [ 'Dashboard', '[ovr_dashboard]', 'dashboard' ],
             'ovr_page_about'           => [ 'About Us', self::default_about_content(), 'about' ],
             'ovr_page_contact'         => [ 'Contact', self::default_contact_content(), 'contact' ],
+            'ovr_page_village_sections' => [ 'Browse by Village Section', '[ovr_village_sections]', 'village-sections' ],
+            'ovr_page_renting_overview' => [ 'Renting in The Villages – An Overview', self::default_placeholder_content( 'renting-overview' ), 'renting-in-the-villages' ],
+            'ovr_page_verified_owners'  => [ 'Verified Owners', self::default_placeholder_content( 'verified-owners' ), 'verified-owners' ],
+            'ovr_page_owner_information' => [ 'Rental Owner Information', self::default_placeholder_content( 'owner-information' ), 'rental-owner-information' ],
+            'ovr_page_user_agreement'   => [ 'OVR User Agreement', self::default_placeholder_content( 'user-agreement' ), 'user-agreement' ],
+            'ovr_page_id_request'       => [ 'Online Villages ID Request', '[ovr_id_request]', 'villages-id-request' ],
         ];
 
         foreach ( $pages as $option_key => $data ) {
@@ -107,6 +114,41 @@ class Pages {
             . "<!-- wp:paragraph --><p>Questions about a listing or your account? We're happy to help.</p><!-- /wp:paragraph -->\n\n"
             . '<!-- wp:paragraph --><p><strong>Email:</strong> <a href="mailto:' . esc_attr( $email ) . '">' . esc_html( $email ) . "</a></p><!-- /wp:paragraph -->\n\n"
             . "<!-- wp:paragraph --><p>This page is editable from the WordPress admin — add a contact form or phone number as needed.</p><!-- /wp:paragraph -->";
+    }
+
+    /**
+     * Editable placeholder copy for the four static info pages. Each is
+     * rewritten by the admin in WP admin → Pages without touching code.
+     */
+    private static function default_placeholder_content( string $key ): string {
+        $intros = [
+            'renting-overview'  => 'An overview of what renting in The Villages is like — neighborhoods, golf carts, town squares, and what to expect in an owner-direct rental.',
+            'verified-owners'   => 'What the Verified Owner badge means, how owners are verified, and why it matters for renters.',
+            'owner-information' => 'Everything rental owners need to know about advertising a home on Our Villages Rental.',
+            'user-agreement'    => 'The terms governing use of the Our Villages Rental website.',
+        ];
+        $text = $intros[ $key ] ?? '';
+        return '<!-- wp:paragraph --><p>' . esc_html( $text ) . '</p><!-- /wp:paragraph -->'
+            . "\n\n<!-- wp:paragraph --><p>Placeholder content — replace this page in WordPress admin → Pages.</p><!-- /wp:paragraph -->";
+    }
+
+    /**
+     * Append [ovr_contact_form] to the existing Contact page once, preserving
+     * any admin edits made before this version.
+     */
+    private static function ensure_contact_shortcode(): void {
+        $page_id = absint( get_option( 'ovr_page_contact' ) );
+        if ( ! $page_id || ! get_post_status( $page_id ) ) {
+            return;
+        }
+        $post = get_post( $page_id );
+        if ( ! $post || has_shortcode( (string) $post->post_content, 'ovr_contact_form' ) ) {
+            return;
+        }
+        wp_update_post( [
+            'ID'           => $page_id,
+            'post_content' => (string) $post->post_content . "\n\n[ovr_contact_form]",
+        ] );
     }
 
     /**
