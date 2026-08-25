@@ -41,18 +41,19 @@ class Header {
      */
     public static function mega_menu_defaults(): array {
         return [
-            // Panel 1 — Search Rentals.
+            // Panel 1 — Search Rentals (Icon + Label, no paragraphs per Chunk 4).
             'search_trigger'     => [ 'label' => __( 'Search Rentals', 'ovr-core' ),     'url' => '' ],
             'search_col_rentals' => [ 'label' => __( 'Rentals', 'ovr-core' ),            'url' => '' ],
             'all_homes'          => [ 'label' => __( 'All Homes', 'ovr-core' ),          'url' => '' ],
             'deals_homes'        => [ 'label' => __( 'Deals & Cancellations', 'ovr-core' ), 'url' => '' ],
             'featured_homes'     => [ 'label' => __( 'Featured Homes', 'ovr-core' ),     'url' => '' ],
             'map_view'           => [ 'label' => __( 'Map View', 'ovr-core' ),           'url' => '' ],
+            'new_listings'       => [ 'label' => __( 'New Listings', 'ovr-core' ),       'url' => '' ],
             'villages'           => [ 'label' => __( 'Villages', 'ovr-core' ),           'url' => '' ],
             'search_col_by_stay' => [ 'label' => __( 'By Stay', 'ovr-core' ),            'url' => '' ],
             'long_term'          => [ 'label' => __( 'Long-Term', 'ovr-core' ),          'url' => '' ],
             'short_term'         => [ 'label' => __( 'Short-Term', 'ovr-core' ),         'url' => '' ],
-            'pricing'            => [ 'label' => __( 'Pricing', 'ovr-core' ),            'url' => '' ],
+            // Pricing removed from public mega menu per Chunk 4 §70 — plans remain via List My Property flow.
             // Panel 2 — Villages Info.
             'villages_trigger'   => [ 'label' => __( 'Villages Info', 'ovr-core' ),      'url' => '' ],
             'villages_col_info'  => [ 'label' => __( 'Info', 'ovr-core' ),               'url' => '' ],
@@ -63,9 +64,8 @@ class Header {
             'villages_net'       => [ 'label' => __( 'Villages.net', 'ovr-core' ),       'url' => 'https://www.villages.net' ],
             'thevillages_com'    => [ 'label' => __( 'TheVillages.com', 'ovr-core' ),    'url' => 'https://www.thevillages.com' ],
             'golf_the_villages'  => [ 'label' => __( 'Golf the Villages', 'ovr-core' ),  'url' => 'https://www.golfthevillages.com' ],
-            // Direct links (no panel).
+            // Direct links (no panel) — Pricing removed.
             'featured_direct'    => [ 'label' => __( 'Featured', 'ovr-core' ),           'url' => '' ],
-            'pricing_direct'     => [ 'label' => __( 'Pricing', 'ovr-core' ),            'url' => '' ],
         ];
     }
 
@@ -86,13 +86,12 @@ class Header {
             'all_homes'       => 'ovr_page_search',
             'featured_homes'  => 'ovr_page_featured',
             'map_view'        => 'ovr_page_search',
+            'new_listings'    => 'ovr_page_search',
             'villages'        => 'ovr_page_villages',
             'villages_link'   => 'ovr_page_villages',
             'about'           => 'ovr_page_about',
             'contact'         => 'ovr_page_contact',
-            'pricing'         => 'ovr_page_pricing',
             'featured_direct' => 'ovr_page_featured',
-            'pricing_direct'  => 'ovr_page_pricing',
         ];
 
         $out = [];
@@ -113,6 +112,15 @@ class Header {
                     $url = add_query_arg( 'rental_type', 'short-term-rental', Pages::get_page_url( 'ovr_page_search' ) );
                 } elseif ( 'deals_homes' === $key ) {
                     $url = add_query_arg( 'deals_only', '1', Pages::get_page_url( 'ovr_page_search' ) );
+                } elseif ( 'featured_homes' === $key || 'featured_direct' === $key ) {
+                    // Featured now reuses the standard search results format
+                    // (filtered to active Featured boosts) instead of a separate
+                    // template, so every subset page shares one layout.
+                    $url = add_query_arg( 'featured_only', '1', Pages::get_page_url( 'ovr_page_search' ) );
+                } elseif ( 'map_view' === $key ) {
+                    $url = add_query_arg( 'view', 'map', Pages::get_page_url( 'ovr_page_search' ) );
+                } elseif ( 'new_listings' === $key ) {
+                    $url = add_query_arg( 'sort', 'newest', Pages::get_page_url( 'ovr_page_search' ) );
                 } elseif ( isset( $page_for[ $key ] ) ) {
                     $url = Pages::get_page_url( $page_for[ $key ] );
                 }
@@ -120,6 +128,95 @@ class Header {
             $out[ $key ] = [ 'label' => $label, 'url' => $url ];
         }
         return $out;
+    }
+
+    /**
+     * Build a search-results URL with optional query args.
+     *
+     * @param array<string, string> $params Query args appended to the bare search URL.
+     */
+    private static function search_url( array $params = [] ): string {
+        $url = Pages::get_page_url( 'ovr_page_search' );
+        return $params ? add_query_arg( $params, $url ) : $url;
+    }
+
+    /**
+     * "Newest Listings" result cap (Settings > General; defaults to 12).
+     */
+    private static function newest_limit(): int {
+        $s = (array) get_option( 'ovr_settings', [] );
+        return max( 1, (int) ( $s['newest_listings_count'] ?? 12 ) );
+    }
+
+    /**
+     * The two popup menus every visitor sees: Explore Rentals + Site Information.
+     *
+     * Shape mirrors the legacy dropdown contract (label/url/target/divider)
+     * with two additions: `icon` (Material Symbols name) and `disabled`.
+     *
+     * @return array<string, array{label:string, url:string, icon:string, children?:array<int,array<string,mixed>>}>
+     */
+    public static function public_menu_groups(): array {
+        return [
+            'explore'   => [
+                'label'    => __( 'Explore Rentals', 'ovr-core' ),
+                'url'      => self::search_url(),
+                'icon'     => 'travel_explore',
+                'children' => [
+                    [ 'label' => __( 'Search All Rentals', 'ovr-core' ), 'icon' => 'search',        'url' => self::search_url() ],
+                    [ 'label' => __( 'Featured Properties', 'ovr-core' ), 'icon' => 'star',         'url' => self::search_url( [ 'featured_only' => '1' ] ) ],
+                    [ 'label' => __( 'Deals & Cancellations', 'ovr-core' ), 'icon' => 'local_offer', 'url' => self::search_url( [ 'deals_only' => '1' ] ) ],
+                    [ 'label' => __( 'Long Term Rentals', 'ovr-core' ), 'icon' => 'event_repeat',  'url' => self::search_url( [ 'rental_type' => 'long-term-rental' ] ) ],
+                    [ 'label' => __( 'Newest Listings', 'ovr-core' ), 'icon' => 'fiber_new',        'url' => self::search_url( [ 'sort' => 'newest', 'per_page' => (string) self::newest_limit() ] ) ],
+                    [ 'label' => __( 'Search by Village Section', 'ovr-core' ), 'icon' => 'map',    'url' => Pages::get_page_url( 'ovr_page_village_sections' ) ],
+                    [ 'label' => __( 'Map Search', 'ovr-core' ), 'icon' => 'location_on',           'url' => self::search_url( [ 'view' => 'map' ] ) ],
+                    [ 'divider' => true ],
+                    [ 'label' => __( 'Renting in The Villages – An Overview', 'ovr-core' ), 'icon' => 'menu_book', 'url' => Pages::get_page_url( 'ovr_page_renting_overview' ) ],
+                    [ 'label' => __( 'Verified Owners', 'ovr-core' ), 'icon' => 'verified',         'url' => Pages::get_page_url( 'ovr_page_verified_owners' ) ],
+                ],
+            ],
+            'site_info' => [
+                'label'    => __( 'Site Information', 'ovr-core' ),
+                'url'      => '',
+                'icon'     => 'info',
+                'children' => [
+                    [ 'label' => __( 'Rental Owner Information', 'ovr-core' ), 'icon' => 'real_estate_agent', 'url' => Pages::get_page_url( 'ovr_page_owner_information' ) ],
+                    [ 'label' => __( 'The Villages Lifestyle', 'ovr-core' ), 'icon' => 'diversity_3', 'url' => 'https://www.thevillages.com/lifestyle/', 'target' => '_blank' ],
+                    [ 'label' => __( 'The Villages Town Squares', 'ovr-core' ), 'icon' => 'storefront', 'url' => 'https://www.thevillages.com/shopping-dining/', 'target' => '_blank' ],
+                    [ 'label' => __( 'Golf The Villages', 'ovr-core' ), 'icon' => 'golf_course', 'url' => 'https://www.golfthevillages.com', 'target' => '_blank' ],
+                    [ 'label' => __( 'OVR User Agreement', 'ovr-core' ), 'icon' => 'gavel', 'url' => Pages::get_page_url( 'ovr_page_user_agreement' ) ],
+                    [ 'divider' => true ],
+                    [ 'label' => __( 'Forgot My Password', 'ovr-core' ), 'icon' => 'lock_reset', 'url' => Pages::get_page_url( 'ovr_page_forgot_password' ) ],
+                    [ 'label' => __( 'Contact OVR', 'ovr-core' ), 'icon' => 'mail', 'url' => Pages::get_page_url( 'ovr_page_contact' ) ],
+                    [ 'label' => __( 'Sign up to Advertise', 'ovr-core' ), 'icon' => 'campaign', 'url' => Pages::get_page_url( 'ovr_page_register' ) ],
+                    [ 'divider' => true ],
+                    [ 'label' => __( 'Site Testimonials', 'ovr-core' ), 'icon' => 'reviews', 'disabled' => true ],
+                    [ 'label' => __( 'OVR Business Partners', 'ovr-core' ), 'icon' => 'handshake', 'disabled' => true ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Logged-in account menu (landlord capability users; admins keep the
+     * visitor menus plus their Site Admin jump).
+     */
+    public static function account_menu_group(): array {
+        $dash = Pages::get_page_url( 'ovr_page_dashboard' );
+        return [
+            'label'    => __( 'My Account', 'ovr-core' ),
+            'url'      => $dash,
+            'icon'     => 'account_circle',
+            'children' => [
+                [ 'label' => __( 'My Dashboard', 'ovr-core' ), 'icon' => 'dashboard',  'url' => $dash ],
+                [ 'label' => __( 'My Listings', 'ovr-core' ), 'icon' => 'home_work',   'url' => add_query_arg( 'tab', 'properties', $dash ) ],
+                [ 'label' => __( 'My Inquiries', 'ovr-core' ), 'icon' => 'forum',      'url' => add_query_arg( 'tab', 'inquiries', $dash ) ],
+                [ 'label' => __( 'Online Villages ID Request', 'ovr-core' ), 'icon' => 'badge', 'url' => Pages::get_page_url( 'ovr_page_id_request' ) ],
+                [ 'label' => __( 'Villages Guest Passes', 'ovr-core' ), 'icon' => 'confirmation_number', 'url' => 'https://gcs.thevillages.com/cgi-bin/gc100', 'target' => '_blank' ],
+                [ 'divider' => true ],
+                [ 'label' => __( 'Log Out', 'ovr-core' ), 'icon' => 'logout', 'url' => wp_logout_url( home_url( '/' ) ) ],
+            ],
+        ];
     }
 
     /**
@@ -184,67 +281,21 @@ class Header {
     }
 
     /**
-     * @return array<string, array{label:string,url:string}>
+     * Visitor top-nav: the two popup menus every visitor sees.
+     *
+     * @return array<string, array{label:string, url:string, icon:string, children?:array<int,array<string,mixed>>}>
      */
     public static function visitor_nav_items(): array {
-        $villages_url = Pages::get_page_url( 'ovr_page_villages' );
-        $search_url   = Pages::get_page_url( 'ovr_page_search' );
-
-        // Mega-menu "Villages" panel: every curated village section (linked to
-        // its landing page) plus a quick "By Property Type" group so visitors
-        // can drill straight into a filtered search.
-        $village_children = [ [ 'label' => __( 'All Villages', 'ovr-core' ), 'url' => $villages_url ] ];
-        foreach ( SearchFilters::get_villages() as $v ) {
-            $link = get_term_link( $v );
-            if ( ! is_wp_error( $link ) ) {
-                $village_children[] = [ 'label' => $v->name, 'url' => $link ];
-            }
-        }
-        $village_children[] = [ 'divider' => true ];
-        foreach ( SearchFilters::get_property_types() as $pt ) {
-            $village_children[] = [
-                'label' => $pt->name,
-                'url'   => add_query_arg( 'property_type[]', $pt->slug, $search_url ),
-            ];
-        }
-
-        $items = [
-            'home'            => [ 'label' => __( 'Home', 'ovr-core' ),                 'url' => home_url( '/' ) ],
-            'search_listings' => [ 'label' => __( 'Search Listings', 'ovr-core' ),       'url' => $search_url ],
-            'villages'        => [
-                'label'    => __( 'Villages', 'ovr-core' ),
-                'url'      => $villages_url,
-                'children' => $village_children,
-            ],
-            'advertise'       => [ 'label' => __( 'Advertise With Us', 'ovr-core' ),     'url' => Pages::get_page_url( 'ovr_page_pricing' ) ],
-            'deals'           => [ 'label' => __( 'Deals & Cancellations', 'ovr-core' ), 'url' => add_query_arg( 'deals_only', '1', $search_url ) ],
-            'account'         => [ 'label' => __( 'Account', 'ovr-core' ),               'url' => Pages::get_page_url( 'ovr_page_login' ) ],
-        ];
-        if ( get_option( 'ovr_page_about' ) ) {
-            $items['about'] = [ 'label' => __( 'About', 'ovr-core' ), 'url' => Pages::get_page_url( 'ovr_page_about' ) ];
-        }
-        if ( get_option( 'ovr_page_contact' ) ) {
-            $items['contact'] = [ 'label' => __( 'Contact', 'ovr-core' ), 'url' => Pages::get_page_url( 'ovr_page_contact' ) ];
-        }
-        return $items;
+        return self::public_menu_groups();
     }
 
     /**
-     * Landlord top-nav: deep links into the dashboard tabs that exist.
+     * Landlord top-nav: the public menus plus My Account deep links.
      *
-     * @return array<string, array{label:string,url:string}>
+     * @return array<string, array{label:string, url:string, icon:string, children?:array<int,array<string,mixed>>}>
      */
     public static function landlord_nav_items(): array {
-        $dash = Pages::get_page_url( 'ovr_page_dashboard' );
-        $tab  = static fn( string $t ): string => add_query_arg( 'tab', $t, $dash );
-        return [
-            'dashboard'    => [ 'label' => __( 'Dashboard', 'ovr-core' ),  'url' => $dash ],
-            'listings'     => [ 'label' => __( 'Listings', 'ovr-core' ),   'url' => $tab( 'properties' ) ],
-            'inquiries'    => [ 'label' => __( 'Inquiries', 'ovr-core' ),  'url' => $tab( 'inquiries' ) ],
-            'reviews'      => [ 'label' => __( 'Reviews', 'ovr-core' ),    'url' => $tab( 'reviews' ) ],
-            'membership'   => [ 'label' => __( 'Membership', 'ovr-core' ), 'url' => $tab( 'subscription' ) ],
-            'explore'      => [ 'label' => __( 'Explore', 'ovr-core' ),    'url' => Pages::get_page_url( 'ovr_page_search' ) ],
-        ];
+        return array_merge( self::public_menu_groups(), [ 'account' => self::account_menu_group() ] );
     }
 
     public function init(): void {
@@ -311,6 +362,7 @@ class Header {
             'nav_items'           => self::nav_items(),
             'mega_menu'           => self::mega_menu(),
             'active'              => $active,
+            'active_group'        => self::detect_active_group(),
             'home_url'            => home_url( '/' ),
             'search_url'          => Pages::get_page_url( 'ovr_page_search' ),
             'villages_url'        => Pages::get_page_url( 'ovr_page_villages' ),
@@ -338,6 +390,34 @@ class Header {
             return 'advertise';
         }
         if ( is_page( (int) get_option( 'ovr_page_login' ) ) || is_page( (int) get_option( 'ovr_page_register' ) ) ) {
+            return 'account';
+        }
+        return '';
+    }
+
+    /**
+     * Which popup-menu TRIGGER should read as active for the current request.
+     */
+    private static function detect_active_group(): string {
+        $in_explore = is_page( (int) get_option( 'ovr_page_search' ) )
+            || is_page( (int) get_option( 'ovr_page_village_sections' ) )
+            || is_tax( 'ovr_village' );
+        if ( $in_explore ) {
+            return 'explore';
+        }
+        $in_site_info = is_page( (int) get_option( 'ovr_page_owner_information' ) )
+            || is_page( (int) get_option( 'ovr_page_user_agreement' ) )
+            || is_page( (int) get_option( 'ovr_page_forgot_password' ) )
+            || is_page( (int) get_option( 'ovr_page_contact' ) )
+            || is_page( (int) get_option( 'ovr_page_register' ) )
+            || is_page( (int) get_option( 'ovr_page_renting_overview' ) )
+            || is_page( (int) get_option( 'ovr_page_verified_owners' ) );
+        if ( $in_site_info ) {
+            return 'site_info';
+        }
+        $in_account = is_page( (int) get_option( 'ovr_page_dashboard' ) )
+            || is_page( (int) get_option( 'ovr_page_id_request' ) );
+        if ( $in_account ) {
             return 'account';
         }
         return '';
