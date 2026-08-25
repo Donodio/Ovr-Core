@@ -159,7 +159,7 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
                 <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
                 </a>
-            <?php else : ?>
+            <?php elseif ( ! $is_logged_in ) : ?>
                 <a href="<?php echo esc_url( Pages::get_page_url( 'ovr_page_login' ) ); ?>" class="ovr-mobile-link">
                     <?php esc_html_e( 'Log In', 'ovr-core' ); ?>
                 </a>
