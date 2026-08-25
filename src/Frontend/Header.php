@@ -253,7 +253,7 @@ class Header {
      * Only top-level items are used (the header renders a flat bar); each item's
      * label, URL and "open in new tab" target come straight from the menu editor.
      *
-     * @return array<string, array{label:string,url:string,target?:string}>
+     * @return array<string, array{label:string,url:string,target?:string,icon?:string,children?:array<int,array<string,mixed>>}>
      */
     public static function menu_nav_items(): array {
         $locations = (array) get_nav_menu_locations();
@@ -268,15 +268,20 @@ class Header {
 
         $out = [];
         foreach ( $menu_items as $item ) {
-            // Flat top bar: skip child items (their parents already show).
-            if ( (int) $item->menu_item_parent !== 0 ) {
-                continue;
-            }
-            $out[ 'item-' . (int) $item->ID ] = [
+            $entry = [
                 'label'  => $item->title,
                 'url'    => $item->url,
                 'target' => '_blank' === $item->target ? '_blank' : '',
+                'icon'   => '', // Admin-assigned custom menus carry no icon metadata.
             ];
+            if ( (int) $item->menu_item_parent === 0 ) {
+                $out[ 'item-' . (int) $item->ID ] = $entry;
+            } else {
+                $parent_key = 'item-' . (int) $item->menu_item_parent;
+                if ( isset( $out[ $parent_key ] ) ) {
+                    $out[ $parent_key ]['children'][] = $entry; // target kept: code-defined children honor it too.
+                }
+            }
         }
         return $out;
     }

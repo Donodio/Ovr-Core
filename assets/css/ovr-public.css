@@ -805,6 +805,11 @@
     opacity: 0.45;
     user-select: none;
 }
+.ovr-nav-dropdown-link--disabled:hover,
+.ovr-mobile-link--disabled:hover {
+    background: transparent;
+    color: inherit;
+}
 .ovr-nav-item.active .ovr-nav-toggle {
     color: var(--ovr-primary, #000961);
     box-shadow: inset 0 -2px 0 var(--ovr-gold, #DEAF0C);
