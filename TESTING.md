@@ -230,3 +230,84 @@ The following was verified by reading source — runtime testing requires an act
 ---
 
 **Pass criterion for Phase 1 sign-off:** all sections 0–10 pass without console errors or PHP notices, and all of section 11 fails appropriately (security boundaries hold).
+
+---
+
+## Popup Navigation Menus (2026-08)
+
+Manual QA procedure for the popup header navigation feature: the Explore Rentals / Site Information dropdown triggers, the My Account menu, the mobile drawer, and the Online Villages ID Request flow. Run each subsection in its stated session state.
+
+### Logged-Out Header
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | View any front-end page while logged out | Header actions area shows exactly two dropdown triggers: **Explore Rentals** and **Site Information** — no third dropdown |
+| 2 | Inspect the actions area | **Log In** button and **List Your Property** primary button are both present |
+| 3 | Search the whole header | No **My Account** trigger anywhere while logged out |
+
+### Explore Rentals Dropdown
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Open the **Explore Rentals** dropdown | Menu lists all seven rows: Search All Rentals, Featured Properties, Deals & Cancellations, Long Term Rentals, Newest Listings, Search by Village Section, Map Search |
+| 2 | Click **Search All Rentals** | Lands on a clean `/search/` URL (no query args), unfiltered results |
+| 3 | Click **Featured Properties** | `/search/` results with `featured_only` filter active; only featured properties render |
+| 4 | Click **Deals & Cancellations** | `/search/` results with `deals_only` filter active |
+| 5 | Click **Long Term Rentals** | `/search/` results with the long-term `rental_type` filter active |
+| 6 | Click **Newest Listings** | Results count matches the value configured in **Settings → Newest Listings Count** |
+| 7 | Click **Search by Village Section** | Lands on the `/village-sections/` grid: two cards across on desktop, **All Areas** card first |
+| 8 | Click any village-section card from that grid | Lands on `/search/` pre-filtered to that village section |
+| 9 | Click **Map Search** | Full map view loads |
+
+### Site Information Dropdown
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Open the **Site Information** dropdown | Menu lists the four static pages, the three external links, Forgot Password, Contact OVR, plus the disabled Site Testimonials / OVR Business Partners entries |
+| 2 | Click each of the four static pages | Each page opens showing editable placeholder copy (content editable via the WordPress editor) |
+| 3 | Click each of the three external links | Each opens in a new browser tab (`target="_blank"`) |
+| 4 | Click **Forgot Password** | Password reset page opens |
+| 5 | Open **Contact OVR**, fill all fields, submit | Success message appears; email arrives at the **Settings → support_email** address with `Subject:` and `Phone:` prefixes included |
+| 6 | Submit the contact form leaving required fields empty | Inline validation error shows next to/below the missing fields; no email sent |
+| 7 | Inspect **Site Testimonials** and **OVR Business Partners** entries | Both render muted/disabled, unclickable, labelled "Coming soon" |
+
+### Landlord Session (My Account)
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Log in as a landlord | Logged-out buttons are replaced by a **My Account ▾** trigger; Log In is gone |
+| 2 | Open **My Account ▾** | Shows the Dashboard / Listings / Inquiries tab links, the ID Request item, the external Guest Passes link, and Log Out |
+| 3 | Click each of Dashboard, Listings, Inquiries | Each navigates to the corresponding landlord screen/tab |
+| 4 | Click **Guest Passes** | External destination opens in a new tab |
+| 5 | Click **Log Out** | User is logged out; header returns to the logged-out state |
+| 6 | Re-login as landlord, inspect the actions area | No separate **Sign Out** pill rendered next to My Account |
+| 7 | Open the mobile drawer while logged in as landlord | Drawer footer shows neither a **Log In** entry nor a duplicate **Dashboard** entry |
+
+### Admin Session
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Log in as an administrator | Visitor menus (**Explore Rentals** + **Site Information**) still render, the **Sign Out** pill is retained in the actions area, and a **Site Admin** jump link appears |
+| 2 | Click **Site Admin** | Jumps to the WordPress admin dashboard |
+
+### Online Villages ID Request
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | While logged out, open ID Request | Login prompt shown instead of the request form |
+| 2 | Log in, open ID Request | Form renders with its required fields |
+| 3 | Fill all required fields, click **Download PDF** | A readable `villages-id-request.pdf` downloads (built-in template mode) with the entered values visible |
+| 4 | Set **Settings → Villages ID Form Template** to an AcroForm PDF URL, repeat step 3 | Downloaded PDF has fields populated where the AcroForm field names match; unmatched fields left untouched |
+| 5 | Point the template setting at a non-PDF URL, save, reload | Warning text appears under the setting field; the download falls back to built-in mode |
+| 6 | With a filled form, click **Print** | The generated PDF opens in a new browser tab |
+| 7 | Repeat steps 2–6 in **Chrome AND Safari** | Identical behavior in both browsers |
+
+### Mobile Width
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Below the mobile breakpoint, open the navigation drawer | All drawer groups render their icons alongside labels |
+| 2 | Locate the disabled items in the drawer | They show muted styling with a "— Coming soon" suffix and are not clickable |
+| 3 | Navigate to an Explore Rentals target page, then reopen the drawer | The **Explore Rentals** trigger is underlined while on one of its pages; same behavior for **Site Information** on its pages |
+
+**Files exercised:** `src/Frontend/{Header,Navigation,IdRequest,VillageSections,ContactForm}.php`, `templates/components/header-nav.php`, `templates/pages/id-request.php`, `assets/js/{ovr-public.js,ovr-contact.js,ovr-id-request.js}`, `src/Admin/Settings.php`
