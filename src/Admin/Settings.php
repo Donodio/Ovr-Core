@@ -134,6 +134,7 @@ class Settings {
         if ( isset( $input['logo_url'] ) )       $clean['logo_url']       = esc_url_raw( $input['logo_url'] );
         if ( isset( $input['favicon_url'] ) )    $clean['favicon_url']    = esc_url_raw( $input['favicon_url'] );
         if ( isset( $input['verified_banner_url'] ) ) $clean['verified_banner_url'] = esc_url_raw( $input['verified_banner_url'] );
+        if ( isset( $input['id_form_template'] ) ) $clean['id_form_template'] = esc_url_raw( $input['id_form_template'] );
         if ( isset( $input['timezone_string'] ) ) $clean['timezone_string'] = sanitize_text_field( $input['timezone_string'] );
         if ( isset( $input['date_format'] ) )    $clean['date_format']    = sanitize_text_field( $input['date_format'] );
 
@@ -444,6 +445,34 @@ class Settings {
                         g.clear.style.display = 'none';
                     });
                 });
+
+                // Villages ID Form Template — PDF-only picker (no image preview).
+                var pickPdf = document.getElementById('ovr-idform-pick');
+                var clearPdf = document.getElementById('ovr-idform-clear');
+                if (pickPdf && clearPdf) {
+                    var pdfInput = document.getElementById('ovr-idform-template');
+                    var pdfFrame;
+                    pickPdf.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        if (pdfFrame) { pdfFrame.open(); return; }
+                        pdfFrame = wp.media({
+                            title: 'Select ID Form PDF',
+                            button: { text: 'Use this PDF' },
+                            multiple: false,
+                            library: { type: 'application/pdf' }
+                        });
+                        pdfFrame.on('select', function () {
+                            var att = pdfFrame.state().get('selection').first().toJSON();
+                            pdfInput.value = (att && att.url) || '';
+                            clearPdf.style.display = '';
+                        });
+                        pdfFrame.open();
+                    });
+                    clearPdf.addEventListener('click', function () {
+                        pdfInput.value = '';
+                        clearPdf.style.display = 'none';
+                    });
+                }
             })();
         </script>
         <?php
@@ -1168,6 +1197,26 @@ class Settings {
                 <p><img id="ovr-verified-banner-preview" src="<?php echo esc_url( $vb_url ); ?>" alt="" style="max-height:64px;width:auto;border:1px solid var(--gray-border);border-radius:var(--r-sm);padding:6px;background:#fff;<?php echo $vb_url ? '' : 'display:none;'; ?>"></p>
                 <p class="description">
                     <?php esc_html_e( 'Shown on a listing when its owner is OVR Verified (YES). Nothing is shown when the owner is not verified. Upload the official OVR Verified banner graphic here.', 'ovr-core' ); ?>
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-idform-template"><?php esc_html_e( 'Villages ID Form Template (PDF)', 'ovr-core' ); ?></label></th>
+            <td>
+                <?php $idf_url = trim( (string) ( $s['id_form_template'] ?? '' ) ); ?>
+                <input id="ovr-idform-template" name="<?php echo $opt; ?>[id_form_template]" type="url" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( $idf_url ); ?>" placeholder="https://…/LifestyleIDForm2025.pdf">
+                <p>
+                    <button type="button" class="button" id="ovr-idform-pick"><?php esc_html_e( 'Choose PDF', 'ovr-core' ); ?></button>
+                    <button type="button" class="button" id="ovr-idform-clear"<?php echo '' === $idf_url ? ' style="display:none"' : ''; ?>><?php esc_html_e( 'Remove PDF', 'ovr-core' ); ?></button>
+                </p>
+                <?php if ( '' !== $idf_url && ! preg_match( '/\.pdf(\?|$)/i', $idf_url ) ) : ?>
+                    <p class="description" style="color:var(--red,#B3261E);font-weight:600">
+                        <?php esc_html_e( 'Selected file is not a PDF — the ID form will use its built-in layout.', 'ovr-core' ); ?>
+                    </p>
+                <?php endif; ?>
+                <p class="description">
+                    <?php esc_html_e( 'Optional. Upload LifestyleIDForm2025.pdf and paste its URL here — the ID Request form will fill it. Leave blank to use the built-in layout.', 'ovr-core' ); ?>
                 </p>
             </td>
         </tr>

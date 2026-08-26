@@ -255,6 +255,12 @@ class Assets {
                 true
             );
         }
+
+		// Villages ID Request page (conditional) — pdf-lib + page script.
+		if ( is_page( (int) get_option( 'ovr_page_id_request' ) ) ) {
+			wp_enqueue_script( 'ovr-pdf-lib', OVR_PLUGIN_URL . 'assets/js/vendor/pdf-lib.min.js', [], '1.17.1', true );
+			wp_enqueue_script( 'ovr-id-request', OVR_PLUGIN_URL . 'assets/js/ovr-id-request.js', [ 'ovr-pdf-lib' ], OVR_VERSION, true );
+		}
     }
 
     /**

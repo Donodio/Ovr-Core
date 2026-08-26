@@ -55,6 +55,7 @@ class ShortcodeManager {
 		add_shortcode( 'ovr_checkout', [ $this, 'shortcode_checkout' ] );
 		add_shortcode( 'ovr_payment_success', [ $this, 'shortcode_payment_success' ] );
 		add_shortcode( 'ovr_contact_form', [ $this, 'shortcode_contact_form' ] );
+		add_shortcode( 'ovr_id_request', [ $this, 'shortcode_id_request' ] );
 
         // Component shortcodes.
         add_shortcode( 'ovr_property_card', [ $this, 'shortcode_property_card' ] );
@@ -153,6 +154,10 @@ class ShortcodeManager {
 
     public function shortcode_contact_form(): string {
         return \OVR\Frontend\ContactForm::render();
+    }
+
+    public function shortcode_id_request(): string {
+        return \OVR\Frontend\IdRequest::render();
     }
 
     public function shortcode_property_card( array $atts = [] ): string {
