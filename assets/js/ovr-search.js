@@ -164,9 +164,12 @@
 
     /* ====================================================================
        MAP VIEW (Leaflet / OpenStreetMap)
-       Reads listing coordinates from .ovr-map-view[data-ovr-map] and plots a
-       marker per listing, fitting the map to all of them. Leaflet is only on
-       the page when ?view=map is active (enqueued in Assets.php).
+       Reads listing data from .ovr-map-view[data-ovr-map] and plots each
+       listing as a PRIVACY-SAFE approximate-area circle (Chunk 1 §27-§35) —
+       never an exact house pin. The server has already replaced exact
+       coordinates with a deterministic circle center + radius; this file only
+       ever sees the approximation. Leaflet is only on the page when ?view=map
+       is active (enqueued in Assets.php).
        ==================================================================== */
     function setupMap() {
         var el = document.querySelector('.ovr-map-view');
@@ -199,43 +202,25 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Branded teardrop pin (CSS divIcon), styled per listing (M3 F10):
-        //  - a property-type class drives the pin colour
-        //  - .is-featured adds a gold ring
-        //  - .is-booked dims the pin for listings unavailable tonight
-        // Pins are cached by their class signature so identical listings reuse
-        // one icon instance.
-        var pinCache = {};
-        function pinFor(p) {
+        // Approximate-area circle per listing. Styling mirrors the old pin
+        // palette via per-property-type classes; .is-featured adds a gold ring,
+        // .is-booked dims listings unavailable tonight.
+        function circleFor(p) {
             var type = (p.type || 'default').toString().replace(/[^a-z0-9_-]/gi, '');
-            var classes = 'ovr-map-pin ovr-map-pin--type-' + type;
+            var classes = 'ovr-map-circle ovr-map-circle--type-' + type;
             if (p.featured) classes += ' is-featured';
             if (p.avail === 'booked') classes += ' is-booked';
-            if (pinCache[classes]) return pinCache[classes];
-            var icon = window.L.divIcon({
+            return window.L.circle([parseFloat(p.lat), parseFloat(p.lng)], {
+                radius: Math.max(50, parseInt(p.radius, 10) || 150),
                 className: classes,
-                html: '<span class="ovr-map-pin-pin"></span>',
-                iconSize: [30, 38],
-                iconAnchor: [15, 34],
-                popupAnchor: [0, -32]
+                bubblingMouseEvents: false
             });
-            pinCache[classes] = icon;
-            return icon;
         }
 
-        // Cluster when the markercluster plugin is available; otherwise plain.
-        var useCluster = typeof window.L.markerClusterGroup === 'function';
-        var layer = useCluster
-            ? window.L.markerClusterGroup({
-                showCoverageOnHover: false,
-                maxClusterRadius: 50,
-                spiderfyOnMaxZoom: true,
-                chunkedLoading: true
-            })
-            : window.L.layerGroup();
+        var layer = window.L.layerGroup();
 
-        var byId   = {};   // point id -> marker
-        var bounds = [];
+        var byId   = {};   // point id -> circle
+        var bounds = null; // running union of every circle's bounds
 
         var listcol = document.querySelector('.ovr-map-listcol');
 
@@ -253,46 +238,40 @@
             var lat = parseFloat(p.lat);
             var lng = parseFloat(p.lng);
             // Guard against missing or out-of-range coordinates. A single bad
-            // point (e.g. a longitude that lost its decimal) would otherwise
-            // stretch fitBounds across the whole globe and shrink the map.
+            // point would otherwise stretch fitBounds across the whole globe.
             if (isNaN(lat) || isNaN(lng)) return;
             if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
             var id = String(p.id);
-            var marker = window.L.marker([lat, lng], { icon: pinFor(p) });
-            marker.bindPopup(buildPopup(p, symbol));
-            marker.on('click', function () { highlightCard(id); trackMap('marker_click'); });
-            marker.on('popupopen', function () { trackMap('popup_view'); });
-            byId[id] = marker;
-            layer.addLayer(marker);
-            bounds.push([lat, lng]);
+            var area = circleFor(p);
+            area.bindPopup(buildPopup(p, symbol));
+            area.on('click', function () { highlightCard(id); trackMap('marker_click'); });
+            area.on('popupopen', function () { trackMap('popup_view'); });
+            byId[id] = area;
+            area.addTo(layer);
+            var b = area.getBounds();
+            bounds = bounds ? bounds.extend(b) : b;
         });
 
         map.addLayer(layer);
         trackMap('map_view');
         addLegend(map);
 
-        if (bounds.length === 1) {
-            map.setView(bounds[0], 14);
-        } else if (bounds.length > 1) {
+        if (bounds && bounds.isValid()) {
             map.fitBounds(bounds, { padding: [40, 40] });
         } else {
-            map.setView([0, 0], 2); // markers all had invalid coords (defensive)
+            map.setView([28.85, -81.95], 11); // nothing plottable (defensive): The Villages area
         }
 
         // Tiles can render at the wrong size if the container was measured
         // before layout settled; nudge Leaflet once things are stable.
         setTimeout(function () { map.invalidateSize(); }, 200);
 
-        // Card → pin: hover highlights the pin, click focuses & opens it.
-        function focusMarker(id) {
-            var marker = byId[id];
-            if (!marker) return;
-            if (useCluster && typeof layer.zoomToShowLayer === 'function') {
-                layer.zoomToShowLayer(marker, function () { marker.openPopup(); });
-            } else {
-                map.panTo(marker.getLatLng());
-                marker.openPopup();
-            }
+        // Card → circle: hover highlights the area, click focuses & opens it.
+        function focusArea(id) {
+            var area = byId[id];
+            if (!area) return;
+            map.fitBounds(area.getBounds().pad(4), { maxZoom: 17 });
+            setTimeout(function () { area.openPopup(); }, 220);
         }
 
         if (listcol) {
@@ -300,14 +279,16 @@
             Array.prototype.forEach.call(wraps, function (w) {
                 var id = w.getAttribute('data-ovr-card-id');
                 w.addEventListener('mouseenter', function () {
-                    var m = byId[id]; if (m && m._icon) m._icon.classList.add('is-hover');
+                    var m = byId[id];
+                    if (m && m._path) m._path.classList.add('is-hover');
                 });
                 w.addEventListener('mouseleave', function () {
-                    var m = byId[id]; if (m && m._icon) m._icon.classList.remove('is-hover');
+                    var m = byId[id];
+                    if (m && m._path) m._path.classList.remove('is-hover');
                 });
                 w.addEventListener('click', function (e) {
                     if (e.target.closest && e.target.closest('a')) return; // let card links work
-                    focusMarker(id);
+                    focusArea(id);
                 });
             });
         }
@@ -391,7 +372,7 @@
         } catch (e) { /* analytics must never break the map */ }
     }
 
-    /* A compact legend explaining the pin colours / states. */
+    /* A compact legend explaining the area colours / states. */
     function addLegend(map) {
         if (!window.L || !window.L.control) return;
         var legend = window.L.control({ position: 'bottomright' });
@@ -399,7 +380,7 @@
             var div = window.L.DomUtil.create('div', 'ovr-map-legend');
             div.innerHTML =
                 '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-featured"></i>Featured</span>' +
-                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot"></i>Available</span>' +
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-area"></i>Approximate area</span>' +
                 '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-booked"></i>Booked tonight</span>';
             return div;
         };
@@ -420,8 +401,9 @@
        Now a delegated click handler intercepts the chips and swaps in the
        freshly rendered results column (matching the chip's URL) with
        replaceState so the address bar stays shareable without reloading.
-       Only the chips strip and the results column are replaced — the filters
-       sidebar is left untouched so its live state and listeners survive.
+       The chips strip, the results column AND the filters sidebar are
+       replaced — the sidebar is swapped in place (innerHTML) so its
+       container-bound listeners survive.
        Falls back to normal navigation when ovrData (the localized Ajax
        config) is absent.
        ==================================================================== */
@@ -454,6 +436,20 @@
                     oldMapView.__ovrMap.remove();
                 }
                 liveMain.innerHTML = freshMain.innerHTML;
+            }
+
+            // Sync the filters sidebar to the clean URL's server-rendered
+            // state. Chip links intentionally drop every other filter, so the
+            // fresh response contains an all-clear sidebar (checkboxes
+            // unchecked, count badges zeroed, dropdown panels closed). Swap
+            // IN PLACE (innerHTML, not replaceWith): the original container
+            // node must survive because the mobile-drawer trigger/backdrop
+            // listeners are bound to it, and document-delegated listeners
+            // (golf-cart dropdown) don't care which nodes live inside.
+            var freshSidebar = tmp.querySelector('.ovr-filters-sidebar');
+            var liveSidebar  = document.querySelector('.ovr-filters-sidebar');
+            if (freshSidebar && liveSidebar) {
+                liveSidebar.innerHTML = freshSidebar.innerHTML;
             }
 
             if (data.url && 'function' === typeof window.history.replaceState) {
