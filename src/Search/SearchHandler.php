@@ -294,6 +294,10 @@ class SearchHandler {
             // Deals & Cancellations view: constrains results to properties with
             // an active (paid, unexpired) deals promotion.
             'deals_only'      => ! empty( $raw['deals_only'] ) || 'deals' === ( $raw['view'] ?? '' ),
+            // Featured view: constrains results to properties with an active
+            // (paid, unexpired) Featured boost — reuses the standard search
+            // results format instead of a separate template.
+            'featured_only'   => ! empty( $raw['featured_only'] ),
         ];
     }
 

@@ -94,7 +94,7 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
                     <?php esc_html_e( 'Dashboard', 'ovr-core' ); ?>
                 </a>
 
-                <?php if ( $is_admin_user ) : ?>
+				<?php if ( $is_logged_in && ( $is_admin_user || ! current_user_can( 'ovr_view_dashboard' ) ) ) : ?>
                     <a href="<?php echo esc_url( wp_logout_url( home_url() ) ); ?>"
                        class="ovr-btn ovr-btn-outline ovr-btn-pill" style="padding:10px 20px;font-size:14px">
                         <?php esc_html_e( 'Sign Out', 'ovr-core' ); ?>
