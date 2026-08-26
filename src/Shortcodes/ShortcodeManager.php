@@ -52,8 +52,9 @@ class ShortcodeManager {
         add_shortcode( 'ovr_villages', [ $this, 'shortcode_villages_archive' ] );
         add_shortcode( 'ovr_village_sections', [ $this, 'shortcode_village_sections' ] );
         add_shortcode( 'ovr_pricing_plans', [ $this, 'shortcode_pricing' ] );
-        add_shortcode( 'ovr_checkout', [ $this, 'shortcode_checkout' ] );
-        add_shortcode( 'ovr_payment_success', [ $this, 'shortcode_payment_success' ] );
+		add_shortcode( 'ovr_checkout', [ $this, 'shortcode_checkout' ] );
+		add_shortcode( 'ovr_payment_success', [ $this, 'shortcode_payment_success' ] );
+		add_shortcode( 'ovr_contact_form', [ $this, 'shortcode_contact_form' ] );
 
         // Component shortcodes.
         add_shortcode( 'ovr_property_card', [ $this, 'shortcode_property_card' ] );
@@ -148,6 +149,10 @@ class ShortcodeManager {
 
     public function shortcode_payment_success(): string {
         return PaymentSuccess::render();
+    }
+
+    public function shortcode_contact_form(): string {
+        return \OVR\Frontend\ContactForm::render();
     }
 
     public function shortcode_property_card( array $atts = [] ): string {

@@ -244,6 +244,17 @@ class Assets {
                 true
             );
         }
+
+        // Contact form page (conditional).
+        if ( is_page( (int) get_option( 'ovr_page_contact' ) ) ) {
+            wp_enqueue_script(
+                'ovr-contact',
+                OVR_PLUGIN_URL . 'assets/js/ovr-contact.js',
+                [ 'ovr-public' ],
+                OVR_VERSION,
+                true
+            );
+        }
     }
 
     /**

@@ -68,11 +68,15 @@ class AjaxHandler {
         // Frontend: auto-geocode address fields (landlord editor).
         add_action( 'wp_ajax_ovr_geocode_address', [ $this, 'geocode_address' ] );
 
-        // Frontend: village search autocomplete (Section 7). Returns lightweight
-        // suggestions as you type, never the full village list.
-        add_action( 'wp_ajax_ovr_suggest_villages', [ $this, 'suggest_villages' ] );
-        add_action( 'wp_ajax_nopriv_ovr_suggest_villages', [ $this, 'suggest_villages' ] );
-    }
+		// Frontend: village search autocomplete (Section 7). Returns lightweight
+		// suggestions as you type, never the full village list.
+		add_action( 'wp_ajax_ovr_suggest_villages', [ $this, 'suggest_villages' ] );
+		add_action( 'wp_ajax_nopriv_ovr_suggest_villages', [ $this, 'suggest_villages' ] );
+
+		// Contact OVR form ([ovr_contact_form] on the Contact page).
+		add_action( 'wp_ajax_ovr_contact', [ \OVR\Frontend\ContactForm::class, 'ajax_submit' ] );
+		add_action( 'wp_ajax_nopriv_ovr_contact', [ \OVR\Frontend\ContactForm::class, 'ajax_submit' ] );
+	}
 
     /**
      * Record a map interaction event (M3 F10). Increments a per-event counter
@@ -417,6 +421,13 @@ class AjaxHandler {
             update_user_meta( $user_id, 'ovr_phone', $phone );
         } else {
             delete_user_meta( $user_id, 'ovr_phone' );
+        }
+
+        $cc_email = sanitize_email( wp_unslash( $_POST['cc_email'] ?? '' ) );
+        if ( $cc_email && is_email( $cc_email ) ) {
+            update_user_meta( $user_id, 'ovr_cc_email', $cc_email );
+        } else {
+            delete_user_meta( $user_id, 'ovr_cc_email' );
         }
 
         if ( '' !== $address ) {
