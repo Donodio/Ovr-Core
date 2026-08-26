@@ -41,7 +41,6 @@ $sel_amenities = array_map( 'strval', (array) ( $filters['amenities']       ?? [
 $sel_views     = array_map( 'strval', (array) ( $filters['views']           ?? [] ) );
 $sel_features  = array_map( 'strval', (array) ( $filters['features']        ?? [] ) );
 $sel_bedrooms  = (int) ( $filters['bedrooms'] ?? 0 );
-$sel_pets      = ! empty( $filters['pets'] );
 $checkin       = isset( $_GET['checkin'] )  ? sanitize_text_field( wp_unslash( $_GET['checkin'] ) )  : '';
 $checkout      = isset( $_GET['checkout'] ) ? sanitize_text_field( wp_unslash( $_GET['checkout'] ) ) : '';
 
@@ -102,6 +101,12 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
         .ovr-filters-sidebar .ovr-mf-item input{flex-shrink:0;width:16px;height:16px;margin:0;accent-color:var(--ovr-primary,#000961)}
         .ovr-filters-sidebar .ovr-mf-group::-webkit-scrollbar{width:8px}
         .ovr-filters-sidebar .ovr-mf-group::-webkit-scrollbar-thumb{background:var(--ovr-outline-variant,#cfd6df);border-radius:8px}
+        .ovr-filters-sidebar .ovr-gc-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;cursor:pointer}
+        .ovr-filters-sidebar .ovr-gc-panel{margin-top:6px}
+        .ovr-filters-sidebar .ovr-gc-dd .ovr-mf-group{max-height:220px}
+        /* Author display:flex on .ovr-mf-group beats the UA [hidden] rule —
+           restate it so the dropdown panel actually collapses. */
+        .ovr-filters-sidebar .ovr-gc-panel[hidden]{display:none}
     </style>
 
     <h2 class="ovr-filters-title"><?php esc_html_e( 'Search Filters', 'ovr-core' ); ?></h2>
@@ -134,10 +139,8 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
         </div>
 
         <?php
-        // Village Section + Village facets were removed from the sidebar (client
-        // request). Village-section filtering now happens via the section chips
-        // at the top of the results page. Any active village_section/village
-        // filter is preserved through the hidden fields below.
+        // Preserve any active village_section / village filter as hidden fields so
+        // the chip-driven section filter survives a sidebar filter submission.
         foreach ( (array) $sel_sections as $ss ) : ?>
             <input type="hidden" name="village_section[]" value="<?php echo esc_attr( (string) $ss ); ?>">
         <?php endforeach;
@@ -145,14 +148,18 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
             <input type="hidden" name="village[]" value="<?php echo esc_attr( (string) $sv ); ?>">
         <?php endforeach;
 
-        // Village Name — the free-text filter (phase 21): type a specific
-        // village (e.g. "Mallory Square") rather than choosing from a checkbox
-        // list. Matched against the listing's _ovr_village_name meta.
         $village_name_filter = '';
         if ( isset( $_GET['village_name'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
             $village_name_filter = sanitize_text_field( wp_unslash( $_GET['village_name'] ) );
         }
         ?>
+
+        <!-- Villages Section (multi-select, browses by community area) -->
+        <?php
+        $render_group( 'village_section', __( 'Villages Section', 'ovr-core' ), $section_opts, $sel_sections );
+        ?>
+
+        <!-- Village Name (free-text) -->
         <div class="ovr-filter-field">
             <label for="ovr-filter-village-name"><?php esc_html_e( 'Village Name', 'ovr-core' ); ?></label>
             <input type="text"
@@ -190,18 +197,41 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
         </div>
 
         <?php
-        $render_group( 'amenities', __( 'Amenities', 'ovr-core' ), $amenity_opts, $sel_amenities );
-        $render_group( 'views', __( 'Views', 'ovr-core' ), $view_opts, $sel_views );
+        // Rental Term (Long-Term / Short-Term) — sits directly under Bedrooms.
+        $rental_terms = get_terms( [ 'taxonomy' => 'ovr_rental_type', 'hide_empty' => false ] );
+        $rental_opts  = [];
+        if ( ! is_wp_error( $rental_terms ) ) {
+            foreach ( $rental_terms as $rt ) { $rental_opts[ $rt->slug ] = $rt->name; }
+        }
+        $sel_rental = array_map( 'strval', (array) ( $filters['rental_type'] ?? [] ) );
+        $render_group( 'rental_type', __( 'Rental Term', 'ovr-core' ), $rental_opts, $sel_rental );
+        ?>
 
-        // Features → single "Golf Cart" checkbox (client request: a golf cart is
-        // the defining feature for Villages homes; keep the facet a single
-        // toggle instead of a long checkbox list). Any other feature selections
-        // from older bookmarks survive as hidden fields below.
-        $gc_terms = array_keys( $feature_opts );
-        $gc_key   = isset( $feature_opts['golf-cart-included'] ) ? 'golf-cart-included' : ( $gc_terms[0] ?? '' );
-        $gc_sel   = in_array( $gc_key, $sel_features, true );
+        <?php
+        // ── Golf Cart ──────────────────────────────────────────────────────
+        // A DROPDOWN whose panel holds CHECKBOXES — one per live configured
+        // golf-cart term in ovr_feature / ovr_amenity (names containing
+        // "golf cart"), shown verbatim as admin-configured. Multi-select with
+        // OR semantics; empty selection = Any.
+        //
+        // Legacy compatibility: URLs that still carry the old single
+        // `golf_cart=gas` bucket key are expanded by PropertyQuery at query
+        // time, and old `features[]=golf-cart-*` checkbox links pre-check the
+        // matching option below.
+        $golf_options = \OVR\Property\PropertyQuery::golf_cart_term_options();
+
+        $sel_golf = \OVR\Search\SearchHandler::clean_golf_cart( $filters['golf_cart'] ?? [] );
+        if ( ! $sel_golf ) {
+            // Legacy features[]=golf-cart-* selections directly pre-check the
+            // matching options (those slugs ARE golf-cart term slugs).
+            $sel_golf = array_values( array_intersect( $sel_features, \OVR\Property\PropertyQuery::GOLF_CART_SLUGS ) );
+        }
+
+        // Non-golf features remain a hidden-preserved facet (the old single
+        // "Golf Cart" checkbox used to live here); every currently-selected
+        // non-golf feature survives a sidebar submission untouched.
         foreach ( $feature_opts as $fslug => $fname ) {
-            if ( $fslug === $gc_key ) { continue; }
+            if ( preg_match( '/golf\s*cart/i', (string) $fname ) ) { continue; }
             if ( in_array( $fslug, $sel_features, true ) ) {
                 ?>
                 <input type="hidden" name="features[]" value="<?php echo esc_attr( $fslug ); ?>">
@@ -209,22 +239,101 @@ foreach ( $features as $f ) { $feature_opts[ $f->slug ] = $f->name; }
             }
         }
         ?>
-        <div class="ovr-filter-field">
-            <label class="ovr-mf-label"><?php esc_html_e( 'Features', 'ovr-core' ); ?></label>
-            <label class="ovr-mf-item">
-                <input type="checkbox" class="ovr-mf-check" name="features[]" value="<?php echo esc_attr( $gc_key ); ?>" <?php checked( $gc_sel ); ?>>
-                <span><?php esc_html_e( 'Golf Cart', 'ovr-core' ); ?></span>
-            </label>
+        <?php $golf_count = count( $sel_golf ); ?>
+        <div class="ovr-filter-field ovr-gc-dd" data-ovr-gc-dropdown>
+            <button type="button" class="ovr-form-select ovr-gc-trigger" aria-expanded="false" aria-controls="ovr-gc-panel">
+                <span><?php esc_html_e( 'Golf Cart', 'ovr-core' ); ?><?php echo $golf_count ? esc_html( ' · ' . (int) $golf_count ) : ''; ?></span>
+                <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+            </button>
+            <div class="ovr-mf-group ovr-gc-panel" id="ovr-gc-panel" hidden>
+                <?php foreach ( $golf_options as $gslug => $gname ) : ?>
+                    <label class="ovr-mf-item">
+                        <input type="checkbox" class="ovr-mf-check" name="golf_cart[]" value="<?php echo esc_attr( (string) $gslug ); ?>"
+                               <?php checked( in_array( (string) $gslug, $sel_golf, true ) ); ?>>
+                        <span><?php echo esc_html( $gname ); ?></span>
+                    </label>
+                <?php endforeach; ?>
+                <?php if ( empty( $golf_options ) ) : ?>
+                    <span class="ovr-filter-hint"><?php esc_html_e( 'No golf cart options configured.', 'ovr-core' ); ?></span>
+                <?php endif; ?>
+            </div>
         </div>
+        <script>
+        (function () {
+        	document.addEventListener('click', function (e) {
+        		var trigger = e.target.closest('[data-ovr-gc-dropdown] > .ovr-gc-trigger');
+        		if (!trigger) { return; }
+        		var dd = trigger.parentElement;
+        		var panel = dd.querySelector('.ovr-gc-panel');
+        		var open = !panel.hidden;
+        		panel.hidden = open;
+        		trigger.setAttribute('aria-expanded', open ? 'false' : 'true');
+        	});
+        	document.addEventListener('click', function (e) {
+        		document.querySelectorAll('[data-ovr-gc-dropdown]').forEach(function (dd) {
+        			if (!dd.contains(e.target)) {
+        				var p = dd.querySelector('.ovr-gc-panel');
+        				if (p && !p.hidden) { p.hidden = true; var t = dd.querySelector('.ovr-gc-trigger'); if (t) { t.setAttribute('aria-expanded', 'false'); } }
+        			}
+        		});
+        	});
+        	document.addEventListener('keydown', function (e) {
+        		if (e.key !== 'Escape') { return; }
+        		document.querySelectorAll('[data-ovr-gc-dropdown]').forEach(function (dd) {
+        			var p = dd.querySelector('.ovr-gc-panel');
+        			if (p && !p.hidden) { p.hidden = true; var t = dd.querySelector('.ovr-gc-trigger'); if (t) { t.setAttribute('aria-expanded', 'false'); } }
+        		});
+        	});
+        	document.addEventListener('change', function (e) {
+        		var cb = e.target.closest('[data-ovr-gc-dropdown] .ovr-mf-check');
+        		if (!cb) { return; }
+        		var dd = cb.closest('[data-ovr-gc-dropdown]');
+        		var trigger = dd.querySelector('.ovr-gc-trigger');
+        		var labelSpan = trigger ? trigger.querySelector('span') : null;
+        		if (!labelSpan) { return; }
+        		if (!labelSpan.getAttribute('data-ovr-gc-label')) {
+        			labelSpan.setAttribute('data-ovr-gc-label', labelSpan.textContent.split(' · ')[0]);
+        		}
+        		var n = dd.querySelectorAll('.ovr-mf-check:checked').length;
+        		labelSpan.textContent = n ? labelSpan.getAttribute('data-ovr-gc-label') + ' · ' + n : labelSpan.getAttribute('data-ovr-gc-label');
+        	});
+        })();
+        </script>
+
+        <!-- Pets — three-state policy (Chunk 1 §9-11): Yes / No / Considered.
+             Never reduced to a checkbox; "none" matters to allergy sufferers. -->
+        <?php $sel_pets = \OVR\Search\SearchHandler::clean_pets( $filters['pets'] ?? '' ); ?>
+        <div class="ovr-filter-field">
+            <label for="ovr-pets"><?php esc_html_e( 'Pets', 'ovr-core' ); ?></label>
+            <select id="ovr-pets" name="pets" class="ovr-form-select">
+                <option value="" <?php selected( $sel_pets, '' ); ?>><?php esc_html_e( 'Any', 'ovr-core' ); ?></option>
+                <option value="allowed" <?php selected( $sel_pets, 'allowed' ); ?>><?php esc_html_e( 'Pets Allowed', 'ovr-core' ); ?></option>
+                <option value="considered" <?php selected( $sel_pets, 'considered' ); ?>><?php esc_html_e( 'Pets Considered', 'ovr-core' ); ?></option>
+                <option value="none" <?php selected( $sel_pets, 'none' ); ?>><?php esc_html_e( 'No Pets', 'ovr-core' ); ?></option>
+            </select>
+        </div>
+
         <?php
+        $render_group( 'amenities', __( 'Amenities', 'ovr-core' ), $amenity_opts, $sel_amenities );
+        $render_group( 'views', __( 'Views', 'ovr-core' ), $view_opts, $sel_views );
         ?>
 
-        <!-- Pets -->
-        <label class="ovr-pets-row">
-            <input type="checkbox" name="pets" value="1" class="ovr-form-checkbox" <?php checked( $sel_pets ); ?>>
-            <span><?php esc_html_e( 'Allows Pets', 'ovr-core' ); ?></span>
-        </label>
+        <button type="submit" class="ovr-btn ovr-btn-primary ovr-btn-full"><?php esc_html_e( 'Search Homes', 'ovr-core' ); ?></button>
 
-        <button type="submit" class="ovr-btn ovr-btn-primary ovr-btn-full"><?php esc_html_e( 'Apply Filters', 'ovr-core' ); ?></button>
+        <?php
+        // Clear All Filters (Chunk 1 §13-15): a state-safe reset. The link
+        // points at the CLEAN search URL (no filter params survive — not in the
+        // form, not in hidden inputs, not in JS state), so both the controls and
+        // the underlying query are guaranteed to reset. Only the active results
+        // view (grid/list/map) is preserved, which is presentation, not a filter.
+        $clear_url = $form_action;
+        $cur_view  = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if ( in_array( $cur_view, [ 'grid', 'list', 'map' ], true ) ) {
+            $clear_url .= ( str_contains( $clear_url, '?' ) ? '&' : '?' ) . 'view=' . rawurlencode( $cur_view );
+        }
+        ?>
+        <a href="<?php echo esc_url( $clear_url ); ?>"
+           class="ovr-btn ovr-btn-outline ovr-btn-full ovr-clear-filters"
+           data-ovr-clear-filters><?php esc_html_e( 'Clear All Filters', 'ovr-core' ); ?></a>
     </form>
 </aside>

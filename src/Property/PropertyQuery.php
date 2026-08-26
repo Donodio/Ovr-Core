@@ -114,6 +114,199 @@ class PropertyQuery {
     }
 
     /**
+     * Golf-cart filter buckets accepted by the search facet (`golf_cart`).
+     * Each bucket maps to a set of term slugs resolved from the LIVE taxonomy
+     * data (see golf_cart_bucket_slugs) so the dropdown always reflects what
+     * listings actually store — canonical curated slugs first, plus any legacy
+     * free-text terms whose name classifies into the bucket.
+     */
+    public const GOLF_CART_BUCKETS = [ 'any', 'included', 'extra', 'gas', 'electric', 'none' ];
+
+    /**
+     * Resolve the term slugs (across BOTH ovr_feature and ovr_amenity) that a
+     * given golf-cart filter bucket matches. Canonical slugs are always part of
+     * their bucket; any other existing term whose NAME contains "golf cart" is
+     * classified by keyword so legacy imported values ("Gas Golf Cart", …)
+     * keep working without hard-coding slugs that may not exist.
+     *
+     * Cached per request — the term scan is cheap but not free.
+     *
+     * @return array<string> Taxonomy-qualified slugs are ambiguous across two
+     *                       taxonomies, so this returns plain slugs; callers
+     *                       must query both taxonomies.
+     */
+    public static function golf_cart_bucket_slugs( string $bucket ): array {
+        static $cache = null;
+        if ( null === $cache ) {
+            $cache = self::classify_golf_cart_terms();
+        }
+        return $cache[ $bucket ] ?? [];
+    }
+
+    /**
+     * Checkbox options for the Golf Cart facet: every ENABLED term in
+     * ovr_feature / ovr_amenity whose name mentions "golf cart", keyed by
+     * slug => display name (admin-configured names shown verbatim). Both
+     * taxonomies are OR'd at query time, so cross-taxonomy duplicates
+     * collapse into one entry.
+     *
+     * @return array<string,string>
+     */
+    public static function golf_cart_term_options(): array {
+        $out = [];
+        foreach ( [ 'ovr_feature', 'ovr_amenity' ] as $tax ) {
+            foreach ( \OVR\Admin\LookupTaxonomies::enabled_terms( $tax, [ 'hide_empty' => false ] ) as $term ) {
+                if ( preg_match( '/golf\s*cart/i', (string) $term->name ) ) {
+                    $out[ $term->slug ] = (string) $term->name;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Scan ovr_feature + ovr_amenity for every term whose name mentions
+     * "golf cart" and classify it into a filter bucket.
+     *
+     * @return array<string, string[]> bucket => slugs (both taxonomies merged).
+     */
+    private static function classify_golf_cart_terms(): array {
+        $buckets = [
+            'any'      => [],
+            'included' => [ 'golf-cart-included' ],
+            'extra'    => [ 'golf-cart-extra-charge' ],
+            'gas'      => [],
+            'electric' => [],
+            'none'     => [],
+        ];
+
+        foreach ( [ 'ovr_feature', 'ovr_amenity' ] as $tax ) {
+            $terms = get_terms( [ 'taxonomy' => $tax, 'hide_empty' => false ] );
+            if ( is_wp_error( $terms ) ) {
+                continue;
+            }
+            foreach ( $terms as $term ) {
+                if ( ! preg_match( '/golf\s*cart/i', (string) $term->name ) ) {
+                    continue;
+                }
+                $name = strtolower( (string) $term->name );
+
+                if ( preg_match( '/no\s*golf|without|not\s*included|unavailable/i', $name ) ) {
+                    $buckets['none'][] = $term->slug;
+                } elseif ( preg_match( '/\bgas\b|petrol/i', $name ) ) {
+                    $buckets['gas'][] = $term->slug;
+                } elseif ( preg_match( '/electric|battery|\bev\b/i', $name ) ) {
+                    $buckets['electric'][] = $term->slug;
+                } elseif ( preg_match( '/extra|charge|rental|rent\b|fee/i', $name ) ) {
+                    $buckets['extra'][] = $term->slug;
+                } elseif ( preg_match( '/included|incl\b/i', $name ) ) {
+                    // e.g. the default amenity list's "Golf Cart Included".
+                    if ( 'golf-cart-included' !== $term->slug ) {
+                        $buckets['included'][] = $term->slug;
+                    }
+                }
+                // Every real golf-cart term also counts toward "any".
+                if ( ! preg_match( '/no\s*golf|without/i', $name ) ) {
+                    $buckets['any'][] = $term->slug;
+                }
+            }
+        }
+
+        foreach ( $buckets as $b => $slugs ) {
+            $buckets[ $b ] = array_values( array_unique( $slugs ) );
+        }
+        return $buckets;
+    }
+
+    /**
+     * meta_query clause matching listings that carry ANY of the given
+     * golf-cart slugs in EITHER taxonomy (legacy imports stored them as
+     * amenities). Empty slug lists produce no clause.
+     *
+     * @return array|null
+     */
+    public static function golf_cart_clause( array $slugs ): ?array {
+        $slugs = array_values( array_filter( array_map( 'sanitize_key', $slugs ), 'strlen' ) );
+        if ( empty( $slugs ) ) {
+            return null;
+        }
+        return [
+            'relation' => 'OR',
+            [
+                'taxonomy' => 'ovr_feature',
+                'field'    => 'slug',
+                'terms'    => $slugs,
+            ],
+            [
+                'taxonomy' => 'ovr_amenity',
+                'field'    => 'slug',
+                'terms'    => $slugs,
+            ],
+        ];
+    }
+
+    /**
+     * meta_query clause for the three-state pet policy.
+     *
+     * PERFORMANCE NOTE: this is deliberately a FLAT equality clause. A
+     * "policy OR legacy-boolean-with-NOT-EXISTS" fallback was measured at
+     * ~29s per query on this dataset (correlated NOT EXISTS over a large
+     * postmeta table). Instead, PropertyMeta::maybe_backfill_pets_policy()
+     * guarantees every listing carries `_ovr_pets_policy` exactly once at
+     * cutover, and every save path keeps it in sync — so the hot search path
+     * stays a simple indexed lookup.
+     *
+     * @return array
+     */
+    public static function pets_clause( string $policy ): array {
+        return [
+            'key'   => '_ovr_pets_policy',
+            'value' => in_array( $policy, [ 'allowed', 'considered', 'none' ], true ) ? $policy : 'none',
+        ];
+    }
+
+    /**
+     * The specific golf-cart description to surface on the listing, rather than
+     * a generic included/not-included flag. Returns the first golf-cart term
+     * attached to the listing ("Gas Golf Cart", "Electric Golf Cart", "Cart
+     * Available extra", "No Golf Cart", …) or '' when none is selected.
+     *
+     * @return string
+     */
+    public static function golf_cart_label( int $post_id ): string {
+        $curated = [ 'golf-cart-included', 'golf-cart-extra-charge' ];
+
+        // Prefer the canonical feature/amenity terms, in a stable order so the
+        // "first checked box" reads predictably (included → extra charge).
+        foreach ( $curated as $slug ) {
+            foreach ( [ 'ovr_feature', 'ovr_amenity' ] as $tax ) {
+                if ( has_term( $slug, $tax, $post_id ) ) {
+                    $term = get_term_by( 'slug', $slug, $tax );
+                    if ( $term && ! is_wp_error( $term ) ) {
+                        return $term->name;
+                    }
+                }
+            }
+        }
+
+        // Fallback: legacy/imported listings store the condition under many free
+        // text term names ("Gas Golf Cart", "No Golf Cart", …). Return the first
+        // matching term name so the spec strip shows the real selection.
+        foreach ( [ 'ovr_feature', 'ovr_amenity' ] as $tax ) {
+            $terms = wp_get_post_terms( $post_id, $tax );
+            if ( ! is_wp_error( $terms ) ) {
+                foreach ( $terms as $t ) {
+                    if ( preg_match( '/golf\s*cart/i', (string) $t->name ) ) {
+                        return $t->name;
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * meta_query clauses that exclude listings hidden from the public site:
      * owner status in (inactive/pending_renewal), or admin status in
      * (hidden/suspended/pending_review). Each clause keeps listings whose meta
@@ -469,12 +662,43 @@ class PropertyQuery {
             ];
         }
 
-        // Pets allowed filter.
-        if ( ! empty( $filters['pets'] ) ) {
-            $args['meta_query'][] = [
-                'key'   => '_ovr_pets_allowed',
-                'value' => '1',
-            ];
+        // Pets filter — three-state policy (allowed / considered / none) with
+        // legacy boolean fallbacks. An empty value means "Any" (no clause).
+        $pets = '';
+        if ( isset( $filters['pets'] ) ) {
+            if ( true === $filters['pets'] || '1' === $filters['pets'] || 1 === $filters['pets'] ) {
+                $pets = 'allowed'; // Back-compat: old links carry pets=1.
+            } else {
+                $pets = sanitize_key( (string) $filters['pets'] );
+            }
+        }
+        if ( in_array( $pets, [ 'allowed', 'considered', 'none' ], true ) ) {
+            $args['meta_query'][] = self::pets_clause( $pets );
+        }
+
+        // Golf Cart filter — multi-select over live term slugs; legacy single
+        // bucket keys ('gas', 'any', …) expand via golf_cart_bucket_slugs().
+        // Empty selection = no preference (no clause); any selection constrains
+        // to listings carrying ANY checked value (OR across both taxonomies).
+        $golf_raw   = $filters['golf_cart'] ?? '';
+        $golf_slugs = [];
+        foreach ( (array) $golf_raw as $golf_value ) {
+            $golf_value = sanitize_key( (string) $golf_value );
+            if ( '' === $golf_value ) {
+                continue;
+            }
+            if ( in_array( $golf_value, self::GOLF_CART_BUCKETS, true ) ) {
+                $golf_slugs = array_merge( $golf_slugs, self::golf_cart_bucket_slugs( $golf_value ) );
+            } else {
+                $golf_slugs[] = $golf_value;
+            }
+        }
+        $golf_slugs = array_values( array_unique( array_filter( $golf_slugs ) ) );
+        if ( $golf_slugs ) {
+            $clause = self::golf_cart_clause( $golf_slugs );
+            if ( $clause ) {
+                $args['tax_query'][] = $clause;
+            }
         }
 
         // Owner filter (Phase 22): restrict to a single landlord's listings.
@@ -658,6 +882,16 @@ class PropertyQuery {
             $featured = '1' === (string) get_post_meta( $pid, '_ovr_is_featured', true )
                 && self::boost_unexpired( (string) get_post_meta( $pid, '_ovr_featured_expires', true ), $today );
 
+            // PRIVACY (Chunk 1 §27-§35): the public payload never contains the
+            // exact coordinates. Each point is replaced by its deterministic
+            // approximate-area circle (center + radius in metres) which the
+            // front-end renders as a Leaflet circle — no exact pin ever
+            // reaches the browser, HTML, or any public JS payload.
+            $area = LocationPrivacy::approx_area( $pid, $lat, $lng );
+            if ( 0.0 === $area['lat'] && 0.0 === $area['lng'] ) {
+                continue;
+            }
+
             $points[] = [
                 'id'       => $pid,
                 'title'    => get_the_title( $pid ),
@@ -666,8 +900,9 @@ class PropertyQuery {
                 'price'    => (float) get_post_meta( $pid, '_ovr_base_price', true ),
                 'beds'     => (int) get_post_meta( $pid, '_ovr_bedrooms', true ),
                 'baths'    => (float) get_post_meta( $pid, '_ovr_bathrooms', true ),
-                'lat'      => $lat,
-                'lng'      => $lng,
+                'lat'      => $area['lat'],
+                'lng'      => $area['lng'],
+                'radius'   => $area['radius'],
                 'type'     => $type_slug,
                 'type_label' => $type_label,
                 'featured' => $featured,

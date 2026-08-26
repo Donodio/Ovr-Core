@@ -37,10 +37,11 @@ $owner_id     = (int) ( $filters['owner_id'] ?? 0 );
 $owner_active = $owner_id > 0;
 $owner_name   = $owner_active ? get_the_author_meta( 'display_name', $owner_id ) : '';
 
-// Helper for view / pagination URL building (preserves active filters).
-$build_url = static function( array $overrides ) use ( $filters, $base_search_url ): string {
+// Helper for view / pagination URL building (preserves active filters + view).
+$build_url = static function( array $overrides ) use ( $filters, $base_search_url, $view ): string {
     $clean  = array_filter( $filters, static fn( $v ) => $v !== '' && $v !== 0 && $v !== [] && $v !== false );
-    $merged = array_merge( $clean, $overrides );
+    // Always carry the active results view so paging/filtering keeps grid/list/map.
+    $merged = array_merge( $clean, [ 'view' => $view ], $overrides );
     return $base_search_url . '?' . http_build_query( $merged );
 };
 
@@ -73,22 +74,43 @@ $has_active_filters = (
     (float) ( $filters['price_max'] ?? 0 ) > 0 ||
     (int) ( $filters['guests'] ?? 0 ) > 0 ||
     ! empty( $filters['pets'] ) ||
+    ! empty( array_filter( (array) ( $filters['golf_cart'] ?? [] ) ) ) ||
     ! empty( $filters['deals_only'] ) ||
+    ! empty( $filters['featured_only'] ) ||
     '' !== ( $filters['checkin'] ?? '' ) ||
     '' !== ( $filters['checkout'] ?? '' ) ||
     (int) ( $filters['owner_id'] ?? 0 ) > 0 ||
     'newest' !== ( $filters['sort'] ?? 'newest' )
 );
 
-// Village Section strip (client request): the row of chips at the top of the
-// results filters by Village Section. The first chip is always "All Villages"
-// (active when no section filter is set) — clicking it resets the section and
-// village filters back to "everything". Each village chip shows only its
-// listings; clicking the already-active one also clears the section filter.
+// Village Section strip (Chunk 1 §16-21): the top row of cards are DIRECT
+// SHORTCUTS, not a second copy of the detailed sidebar facet. Each chip link
+// is built CLEAN from the bare search URL — no other filter state is
+// inherited, so a stale "Eastport" village selection or an unrelated
+// property-type filter can never survive a shortcut click. Clicking a chip
+// executes the search immediately (AJAX region swap with fallback to normal
+// navigation); after landing, detailed filters can deliberately narrow it.
+//
+// Highlight rule (§20): at most ONE chip may be active. A chip is highlighted
+// only when EXACTLY one village_section is selected and it matches — so
+// multi-selecting sections in the detailed sidebar never lights up several
+// shortcuts simultaneously.
+//
+// The first chip is always "All Villages" — the neutral state that clears the
+// section restriction and restores every eligible listing without a reload.
 // Skipped on single-owner views ("Listings by [owner]"), where it has no place.
 $section_chips = [];
 if ( ! $owner_active ) {
-    $sel_sections = array_map( 'strval', (array) ( $filters['village_section'] ?? [] ) );
+    $sel_sections    = array_map( 'strval', (array) ( $filters['village_section'] ?? [] ) );
+    $single_section  = ( 1 === count( $sel_sections ) ) ? (string) $sel_sections[0] : '';
+
+    // Clean shortcut URL builder: bare search page + ONLY the given params
+    // (+ the active results view). Nothing else from the current query string
+    // survives — this is what makes the chips conflict-free by construction.
+    $clean_url = static function( array $params ) use ( $base_search_url, $view ): string {
+        $params['view'] = in_array( $view, [ 'grid', 'list', 'map' ], true ) ? $view : 'grid';
+        return $base_search_url . '?' . http_build_query( $params );
+    };
 
     // "All Villages" — the default/unfiltered state; first in the strip. Uses
     // the "The Villages" section's image (the community-wide artwork) when one
@@ -106,19 +128,19 @@ if ( ! $owner_active ) {
         'name'   => __( 'All Villages', 'ovr-core' ),
         'image'  => $all_img,
         'active' => empty( $sel_sections ),
-        'url'    => $build_url( [ 'village_section' => [], 'village' => [], 'village_name' => [], 'paged' => 1 ] ),
+        'url'    => $clean_url( [] ),
         'all'    => true,
     ];
 
     foreach ( $villages as $v ) {
-        $active = in_array( (string) $v->slug, $sel_sections, true );
+        $active = ( '' !== $single_section && $single_section === (string) $v->slug );
         $section_chips[] = [
             'name'   => $v->name,
             'image'  => SearchFilters::get_village_image( $v ),
             'active' => $active,
-            'url'    => $active
-                ? $build_url( [ 'village_section' => [], 'paged' => 1 ] )
-                : $build_url( [ 'village_section' => [ $v->slug ], 'village' => [], 'village_name' => [], 'paged' => 1 ] ),
+            // A clean one-section shortcut — every time, even when re-clicking
+            // the currently-active chip (idempotent reset of that section).
+            'url'    => $clean_url( [ 'village_section' => [ $v->slug ] ] ),
             'all'    => false,
         ];
     }
@@ -194,7 +216,7 @@ if ( ! $owner_active ) {
                             ?>
                         </h2>
                         <p class="ovr-results-count">
-                            <?php if ( $total > 0 ) : ?>
+                            <?php if ( $total > 0 && $has_active_filters ) : ?>
                                 <?php
                                 /* translators: 1: first result number, 2: last result number, 3: total results. */
                                 printf(
@@ -204,7 +226,7 @@ if ( ! $owner_active ) {
                                     esc_html( number_format( $total ) )
                                 );
                                 ?>
-                            <?php else : ?>
+                            <?php elseif ( 0 === $total ) : ?>
                                 <?php esc_html_e( 'No listings match your filters', 'ovr-core' ); ?>
                             <?php endif; ?>
                         </p>
@@ -269,54 +291,50 @@ if ( ! $owner_active ) {
 
                 <!-- Results -->
                 <?php if ( $query->have_posts() ) : ?>
+                    <?php
+                    // "Search In A Villages Section" heading when exactly one village
+                    // section is filtered (P8 §9): a clear section title above the
+                    // results with a little breathing room beneath the photos strip.
+                    $sel_sections = array_map( 'strval', (array) ( $filters['village_section'] ?? [] ) );
+                    if ( 1 === count( $sel_sections ) ) {
+                        $sec_term = get_term_by( 'slug', $sel_sections[0], 'ovr_village' );
+                        if ( $sec_term && ! is_wp_error( $sec_term ) ) :
+                        ?>
+                            <h3 class="ovr-section-results-heading" style="font-size:20px;font-weight:600;color:var(--ovr-on-surface,#1c2430);margin:8px 0 18px"><?php printf( esc_html__( 'Search In %s', 'ovr-core' ), esc_html( $sec_term->name ) ); ?></h3>
+                        <?php endif;
+                    } elseif ( ! empty( $filters['featured_only'] ) ) {
+                        // Featured subset view reuses the standard results format
+                        // (P8 §9): a clear heading above the results grid.
+                        ?>
+                            <h3 class="ovr-section-results-heading" style="font-size:20px;font-weight:600;color:var(--ovr-on-surface,#1c2430);margin:8px 0 18px"><?php esc_html_e( 'Featured Properties', 'ovr-core' ); ?></h3>
+                        <?php
+                    }
+                    ?>
 
                     <?php if ( 'map' === $view ) : ?>
                         <?php
-                        // Plot EVERY matching listing (clustered), independent of
-                        // pagination. The card column on the left shows just this
-                        // page of results and scrolls on its own.
+                        // Full-width map (P8 §10): in map mode the listings are
+                        // plotted on a single large map rather than a centre list
+                        // column, so there is no separate list to paginate. The map
+                        // shows EVERY matching listing for the active filters.
                         $map_points   = PropertyQuery::get_map_points( $filters );
                         $map_settings = get_option( 'ovr_settings', [] );
                         $map_symbol   = $map_settings['currency_symbol'] ?? '$';
                         ?>
-                        <div class="ovr-map-split" data-ovr-map-split>
+                        <div class="ovr-map-full">
 
-                            <!-- Left: scrollable result cards -->
-                            <div class="ovr-map-listcol">
-                                <?php echo $results_header; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-                                <div class="ovr-map-cards">
-                                    <?php while ( $query->have_posts() ) : $query->the_post(); $cid = (int) get_the_ID(); ?>
-                                        <div class="ovr-map-cardwrap" data-ovr-card-id="<?php echo esc_attr( (string) $cid ); ?>">
-                                            <?php echo PropertyCard::render_search( $cid, false, $results_ref ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-                                        </div>
-                                    <?php endwhile; wp_reset_postdata(); ?>
-                                </div>
-                            </div>
-
-                            <!-- Right: clustered map -->
-                            <div class="ovr-map-canvas">
-                                <div class="ovr-map-view"
-                                     data-ovr-map="<?php echo esc_attr( wp_json_encode( $map_points ) ); ?>"
-                                     data-symbol="<?php echo esc_attr( $map_symbol ); ?>"
-                                     role="application"
-                                     aria-label="<?php esc_attr_e( 'Map of search results', 'ovr-core' ); ?>">
-                                    <?php if ( empty( $map_points ) ) : ?>
-                                        <p class="ovr-map-empty">
-                                            <span class="material-symbols-outlined">location_off</span>
-                                            <?php esc_html_e( 'None of these listings have map coordinates yet. Add a latitude & longitude to your properties to plot them here.', 'ovr-core' ); ?>
-                                        </p>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-
-                            <!-- Floating Map / List switch (mobile) -->
-                            <div class="ovr-map-switch" role="group" aria-label="<?php esc_attr_e( 'Toggle map or list', 'ovr-core' ); ?>">
-                                <button type="button" class="ovr-map-switch-btn is-active" data-show="list">
-                                    <span class="material-symbols-outlined">view_list</span><?php esc_html_e( 'List', 'ovr-core' ); ?>
-                                </button>
-                                <button type="button" class="ovr-map-switch-btn" data-show="map">
-                                    <span class="material-symbols-outlined">map</span><?php esc_html_e( 'Map', 'ovr-core' ); ?>
-                                </button>
+                            <!-- Full-bleed map canvas -->
+                            <div class="ovr-map-view"
+                                 data-ovr-map="<?php echo esc_attr( wp_json_encode( $map_points ) ); ?>"
+                                 data-symbol="<?php echo esc_attr( $map_symbol ); ?>"
+                                 role="application"
+                                 aria-label="<?php esc_attr_e( 'Map of search results', 'ovr-core' ); ?>">
+                                <?php if ( empty( $map_points ) ) : ?>
+                                    <p class="ovr-map-empty">
+                                        <span class="material-symbols-outlined">location_off</span>
+                                        <?php esc_html_e( 'None of these listings have map coordinates yet. Add a latitude & longitude to your properties to plot them here.', 'ovr-core' ); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
                         </div>
 

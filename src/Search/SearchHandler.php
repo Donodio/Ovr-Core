@@ -281,7 +281,13 @@ class SearchHandler {
             'price_min'       => floatval( $raw['price_min'] ?? 0 ),
             'price_max'       => floatval( $raw['price_max'] ?? 0 ),
             'guests'          => absint( $raw['guests'] ?? 0 ),
-            'pets'            => ! empty( $raw['pets'] ),
+            // Pets: three-state policy — '' (Any), allowed, considered, none.
+            // Legacy links with pets=1 normalise to "allowed".
+            'pets'            => self::clean_pets( $raw['pets'] ?? '' ),
+            // Golf Cart: multi-select list of live term slugs and/or legacy
+            // PropertyQuery::GOLF_CART_BUCKETS keys (any / included / extra /
+            // gas / electric / none). Empty array = Any (no clause).
+            'golf_cart'       => self::clean_golf_cart( $raw['golf_cart'] ?? [] ),
             // Availability date range (Feature 2/8): excludes listings hard-
             // blocked over the stay. Only ISO YYYY-MM-DD values are honoured.
             'checkin'         => self::clean_date( $raw['checkin'] ?? '' ),
@@ -307,5 +313,42 @@ class SearchHandler {
     private static function clean_date( $raw ): string {
         $value = sanitize_text_field( wp_unslash( (string) $raw ) );
         return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ? $value : '';
+    }
+
+    /**
+     * Normalise the pets filter to one of: '', 'allowed', 'considered', 'none'.
+     * Accepts the checkbox-era value "1" as "allowed" so pre-existing shared
+     * links keep working.
+     */
+    public static function clean_pets( $raw ): string {
+        if ( is_bool( $raw ) || 1 === $raw || '1' === (string) $raw ) {
+            return 'allowed';
+        }
+        $value = sanitize_key( (string) $raw );
+        return in_array( $value, [ 'allowed', 'considered', 'none' ], true ) ? $value : '';
+    }
+
+    /**
+     * Normalise the golf-cart filter to a list of values. Accepts the legacy
+     * single bucket key ('gas', 'any', …), a slug, or arrays of either from
+     * golf_cart[]=… multi-select URLs. Values are validated loosely here;
+     * PropertyQuery expands legacy bucket keys to term slugs at query time.
+     *
+     * @return string[]
+     */
+    public static function clean_golf_cart( $raw ): array {
+        $values = is_array( $raw ) ? $raw : [ $raw ];
+        $out    = [];
+        foreach ( $values as $value ) {
+            $value = sanitize_key( (string) $value );
+            if ( '' === $value ) {
+                continue;
+            }
+            if ( in_array( $value, \OVR\Property\PropertyQuery::GOLF_CART_BUCKETS, true )
+                || preg_match( '/^[a-z0-9_-]+$/', $value ) ) {
+                $out[] = $value;
+            }
+        }
+        return array_values( array_unique( $out ) );
     }
 }
