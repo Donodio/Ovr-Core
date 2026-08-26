@@ -217,7 +217,16 @@
             });
         }
 
-        var layer = window.L.layerGroup();
+        // A circle's degree span for its radius in metres (approx; used for the
+        // fitBounds union instead of Leaflet's Circle.getBounds(), which is NOT
+        // safe to call while the layer is being added — it dereferences
+        // this._map.layerPointToLatLng and throws on the first point, which
+        // aborted the loop and rendered a blank map on /map/ and ?view=map).
+        function circleSpan(lat, radius) {
+            var latDeg = radius / 111320;
+            var lngDeg = radius / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+            return { lat: latDeg, lng: lngDeg };
+        }
 
         var byId   = {};   // point id -> circle
         var bounds = null; // running union of every circle's bounds
@@ -247,12 +256,17 @@
             area.on('click', function () { highlightCard(id); trackMap('marker_click'); });
             area.on('popupopen', function () { trackMap('popup_view'); });
             byId[id] = area;
-            area.addTo(layer);
-            var b = area.getBounds();
+            area.addTo(map);
+            // fitBounds union built from manual lat/lng spans — never call
+            // area.getBounds() (see circleSpan note above).
+            var span = circleSpan(lat, Math.max(50, parseInt(p.radius, 10) || 150));
+            var b = window.L.latLngBounds(
+                [lat - span.lat, lng - span.lng],
+                [lat + span.lat, lng + span.lng]
+            );
             bounds = bounds ? bounds.extend(b) : b;
         });
 
-        map.addLayer(layer);
         trackMap('map_view');
         addLegend(map);
 
