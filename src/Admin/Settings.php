@@ -72,6 +72,7 @@ class Settings {
         if ( isset( $input['currency_symbol'] ) )     $clean['currency_symbol']     = substr( sanitize_text_field( $input['currency_symbol'] ), 0, 4 );
         if ( isset( $input['default_country'] ) )     $clean['default_country']     = strtoupper( substr( sanitize_text_field( $input['default_country'] ), 0, 2 ) );
         if ( isset( $input['listings_per_page'] ) )   $clean['listings_per_page']   = max( 1, (int) $input['listings_per_page'] );
+        if ( isset( $input['newest_listings_count'] ) ) $clean['newest_listings_count'] = max( 1, (int) $input['newest_listings_count'] );
         if ( isset( $input['color_scheme'] ) ) {
             $schemes = \OVR\Core\ThemeSchemes::palettes();
             $scheme  = sanitize_key( (string) $input['color_scheme'] );
@@ -132,6 +133,7 @@ class Settings {
         if ( isset( $input['business_phone'] ) ) $clean['business_phone'] = sanitize_text_field( $input['business_phone'] );
         if ( isset( $input['logo_url'] ) )       $clean['logo_url']       = esc_url_raw( $input['logo_url'] );
         if ( isset( $input['favicon_url'] ) )    $clean['favicon_url']    = esc_url_raw( $input['favicon_url'] );
+        if ( isset( $input['verified_banner_url'] ) ) $clean['verified_banner_url'] = esc_url_raw( $input['verified_banner_url'] );
         if ( isset( $input['timezone_string'] ) ) $clean['timezone_string'] = sanitize_text_field( $input['timezone_string'] );
         if ( isset( $input['date_format'] ) )    $clean['date_format']    = sanitize_text_field( $input['date_format'] );
 
@@ -401,7 +403,8 @@ class Settings {
                 var groups = [];
                 [
                     ['ovr-logo-pick', 'ovr-logo-clear', 'ovr-logo', 'ovr-logo-preview'],
-                    ['ovr-logo-pick-header', 'ovr-logo-clear-header', 'ovr-logo-header', 'ovr-logo-preview-header']
+                    ['ovr-logo-pick-header', 'ovr-logo-clear-header', 'ovr-logo-header', 'ovr-logo-preview-header'],
+                    ['ovr-verified-banner-pick', 'ovr-verified-banner-clear', 'ovr-verified-banner', 'ovr-verified-banner-preview']
                 ].forEach(function (ids) {
                     groups.push({
                         pick: document.getElementById(ids[0]),
@@ -620,6 +623,14 @@ class Settings {
             <td>
                 <input id="ovr-lpp" name="<?php echo esc_attr( self::OPTION ); ?>[listings_per_page]" type="number" min="1"
                        value="<?php echo esc_attr( (string) ( $s['listings_per_page'] ?? 12 ) ); ?>" class="small-text">
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-newest-count"><?php esc_html_e( 'Newest Listings Count', 'ovr-core' ); ?></label></th>
+            <td>
+                <input id="ovr-newest-count" name="<?php echo esc_attr( self::OPTION ); ?>[newest_listings_count]" type="number" min="1"
+                       value="<?php echo esc_attr( (string) ( $s['newest_listings_count'] ?? 12 ) ); ?>" class="small-text">
+                <p class="description"><?php esc_html_e( 'How many homes the “Newest Listings” menu shortcut shows (defaults to 12).', 'ovr-core' ); ?></p>
             </td>
         </tr>
         <tr>
@@ -1143,6 +1154,20 @@ class Settings {
             <td>
                 <p class="description" style="max-width:620px">
                     <?php esc_html_e( 'Manual testimonials are added under the Testimonials menu. Guest reviews left on a property are gated by the existing review-approval setting (Subscriptions tab) and then by this rating threshold before they can surface as testimonials.', 'ovr-core' ); ?>
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="ovr-verified-banner"><?php esc_html_e( 'OVR Verified Banner', 'ovr-core' ); ?></label></th>
+            <td>
+                <input id="ovr-verified-banner" name="<?php echo $opt; ?>[verified_banner_url]" type="url" class="regular-text" style="width:480px;max-width:100%"
+                       value="<?php echo esc_attr( $s['verified_banner_url'] ?? '' ); ?>" placeholder="https://…/ovr-verified-banner.png">
+                <button type="button" class="button" id="ovr-verified-banner-pick"><?php esc_html_e( 'Select / Upload Image', 'ovr-core' ); ?></button>
+                <button type="button" class="button" id="ovr-verified-banner-clear"<?php echo empty( $s['verified_banner_url'] ) ? ' style="display:none"' : ''; ?>><?php esc_html_e( 'Remove Image', 'ovr-core' ); ?></button>
+                <?php $vb_url = (string) ( $s['verified_banner_url'] ?? '' ); ?>
+                <p><img id="ovr-verified-banner-preview" src="<?php echo esc_url( $vb_url ); ?>" alt="" style="max-height:64px;width:auto;border:1px solid var(--gray-border);border-radius:var(--r-sm);padding:6px;background:#fff;<?php echo $vb_url ? '' : 'display:none;'; ?>"></p>
+                <p class="description">
+                    <?php esc_html_e( 'Shown on a listing when its owner is OVR Verified (YES). Nothing is shown when the owner is not verified. Upload the official OVR Verified banner graphic here.', 'ovr-core' ); ?>
                 </p>
             </td>
         </tr>
