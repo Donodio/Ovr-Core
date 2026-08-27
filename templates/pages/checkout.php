@@ -71,7 +71,7 @@ $name      = $user->display_name ?: '';
         .ovr-co-trust p{font-size:12px;color:var(--sv);margin:0;line-height:1.5}
 
         /* Payment */
-        .ovr-co-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+        .ovr-co-methods{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:22px}
         .ovr-co-method{background:var(--surf);border:1px solid var(--ov);border-radius:12px;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:border-color .15s,background .15s;text-align:center}
         .ovr-co-method:hover{border-color:var(--outline)}
         .ovr-co-method.is-active{border:2px solid var(--p);background:rgba(0,76,76,.05)}
@@ -169,9 +169,8 @@ $name      = $user->display_name ?: '';
             // never disagree with what the backend would actually charge.
             $default_gateway = isset( $default_gateway ) ? (string) $default_gateway : 'paypal';
             $methods         = [
-                'stripe' => [ 'panel' => 'card',   'icon' => 'credit_card',             'label' => __( 'Credit Card', 'ovr-core' ) ],
-                'paypal' => [ 'panel' => 'paypal', 'icon' => 'account_balance',         'label' => __( 'PayPal', 'ovr-core' ) ],
-                'wallet' => [ 'panel' => 'wallet', 'icon' => 'account_balance_wallet',  'label' => __( 'On Account', 'ovr-core' ) ],
+                'stripe' => [ 'panel' => 'card',   'icon' => 'credit_card',     'label' => __( 'Credit Card', 'ovr-core' ) ],
+                'paypal' => [ 'panel' => 'paypal', 'icon' => 'account_balance', 'label' => __( 'PayPal', 'ovr-core' ) ],
             ];
             if ( ! isset( $methods[ $default_gateway ] ) ) {
                 $default_gateway = 'paypal';
@@ -212,17 +211,6 @@ $name      = $user->display_name ?: '';
                         <div class="ovr-co-note">
                             <span class="material-symbols-outlined">open_in_new</span>
                             <span><?php esc_html_e( "You'll be securely redirected to PayPal to authorize this payment after you place your order.", 'ovr-core' ); ?></span>
-                        </div>
-                    </div>
-
-                    <!-- Wallet panel -->
-                    <div data-co-panel="wallet"<?php echo 'wallet' === $active_panel ? '' : ' hidden'; ?>>
-                        <div class="ovr-co-note">
-                            <span class="material-symbols-outlined">account_balance_wallet</span>
-                            <span>
-                                <?php printf( esc_html__( 'Your account balance: %s.', 'ovr-core' ), '<strong>' . esc_html( $fmt( (float) $balance ) ) . '</strong>' ); ?>
-                                <?php echo (float) $balance < $price ? esc_html__( ' This is below the total — please choose another payment method.', 'ovr-core' ) : esc_html__( ' It will be charged to your account.', 'ovr-core' ); ?>
-                            </span>
                         </div>
                     </div>
 

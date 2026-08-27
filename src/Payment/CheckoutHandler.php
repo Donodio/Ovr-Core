@@ -35,10 +35,11 @@ class CheckoutHandler {
 
     public function init(): void {
         // Register all available gateways.
+        // Wallet / On Account removed per business decision — too much
+        // complexity for low usage. Historical wallet data remains readable.
         $this->gateways['stripe']        = new StripeGateway();
         $this->gateways['paypal']        = new PayPalGateway();
         $this->gateways['authorize_net'] = new AuthorizeNetGateway();
-        $this->gateways['wallet']        = new WalletGateway();
 
         add_action( 'admin_post_ovr_start_checkout',        [ $this, 'handle_start' ] );
         add_action( 'admin_post_nopriv_ovr_start_checkout', [ $this, 'handle_start_anon' ] );
@@ -302,7 +303,7 @@ class CheckoutHandler {
         }
 
         $amount       = ListingUpgrades::price_for( $product, $term );
-        $gateway_slug = sanitize_key( $_POST['gateway'] ?? 'wallet' );
+        $gateway_slug = sanitize_key( $_POST['gateway'] ?? 'paypal' );
         $meta         = [
             'upgrade'      => $id,
             'service_type' => $service_type,
@@ -355,9 +356,8 @@ class CheckoutHandler {
             $this->redirect_to_gateway( $result['redirect_url'] );
         }
 
-        // Gateway refused before any redirect (e.g. wallet balance too low) —
-        // return to the checkout page so they can pick another method.
-        $reason = ( 'wallet' === $gateway_slug ) ? 'low_balance' : 'error';
+        // Gateway refused before any redirect — return to checkout.
+        $reason = 'error';
         wp_safe_redirect( add_query_arg( [
             'upgrade'      => $id,
             'property'     => $property_id,
