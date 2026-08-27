@@ -44,6 +44,7 @@ class AjaxHandler {
         add_action( 'wp_ajax_nopriv_ovr_submit_review', [ $this, 'submit_review' ] );
 
         add_action( 'wp_ajax_ovr_apply_promo', [ $this, 'apply_promo' ] );
+        add_action( 'wp_ajax_nopriv_ovr_apply_promo', [ $this, 'apply_promo' ] );
 
         // Admin: manual iCal sync trigger.
         add_action( 'wp_ajax_ovr_ical_sync', [ $this, 'ical_sync' ] );
@@ -897,6 +898,30 @@ class AjaxHandler {
         $suggestions = array_column( array_slice( $ranked, 0, $limit ), 'name' );
 
         wp_send_json_success( [ 'suggestions' => $suggestions, 'query' => $q ] );
+    }
+
+    /**
+     * Validate a promo code for checkout (attached to subscription plans).
+     */
+    public function apply_promo(): void {
+        if ( ! check_ajax_referer( 'ovr_public_nonce', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+        $code = strtoupper( sanitize_text_field( wp_unslash( $_POST['code'] ?? '' ) ) );
+        $plan = sanitize_key( wp_unslash( $_POST['plan'] ?? '' ) );
+        if ( '' === $code ) {
+            wp_send_json_error( [ 'message' => __( 'Please enter a promo code.', 'ovr-core' ) ], 400 );
+        }
+        $result = \OVR\Payment\PromoCode::validate( $code, $plan );
+        if ( ! $result['valid'] ) {
+            wp_send_json_error( [ 'message' => $result['message'] ], 400 );
+        }
+        $row = $result['row'];
+        wp_send_json_success( [
+            'discount_type'  => $row['discount_type'],
+            'discount_value' => (float) $row['discount_value'],
+            'message'        => $result['message'],
+        ] );
     }
 
     /**

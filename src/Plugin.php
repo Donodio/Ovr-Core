@@ -256,6 +256,7 @@ class Plugin {
         $this->modules['admin_assets']     = new AdminAssets();
         $this->modules['admin_settings']   = new Settings();
         $this->modules['admin_plans']      = new PlansAdmin();
+        $this->modules['admin_promo_codes'] = new \OVR\Admin\PromoCodesAdmin();
         $this->modules['admin_featured_cities'] = new FeaturedCities();
         $this->modules['admin_property_carousel'] = new PropertyCarouselAdmin();
         $this->modules['admin_village_sections'] = new \OVR\Admin\VillageSectionsAdmin();
@@ -286,6 +287,7 @@ class Plugin {
         $this->modules['admin_assets']->init();
         $this->modules['admin_settings']->init();
         $this->modules['admin_plans']->init();
+        $this->modules['admin_promo_codes']->init();
         $this->modules['admin_featured_cities']->init();
         $this->modules['admin_property_carousel']->init();
         $this->modules['admin_village_sections']->init();

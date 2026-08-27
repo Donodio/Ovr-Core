@@ -136,6 +136,16 @@ class Geocoder {
         }
 
         $coords = self::geocode( $address, $city, $state, $zip );
+        // City-level fallback: street addresses in The Villages often fail at
+        // Nominatim (many are not yet in OSM). If the full street lookup fails,
+        // retry with just city/state/zip so the pin still lands in the right
+        // general area instead of staying on the old (now wrong) location.
+        if ( ! $coords && '' !== trim( $city ) ) {
+            $coords = self::geocode( '', $city, $state, $zip );
+        }
+        if ( ! $coords && '' !== trim( $city ) && '' !== trim( $state ) ) {
+            $coords = self::geocode( '', $city, $state, '' );
+        }
         if ( ! $coords ) {
             return false; // leave the signature unset so we retry next time.
         }

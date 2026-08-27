@@ -195,6 +195,7 @@ $name      = $user->display_name ?: '';
                     <input type="hidden" name="<?php echo esc_attr( $fk ); ?>" value="<?php echo esc_attr( $fv ); ?>">
                 <?php endforeach; ?>
                 <input type="hidden" name="gateway" id="ovr-co-gateway" value="<?php echo esc_attr( $default_gateway ); ?>">
+                <input type="hidden" name="promo_code" id="ovr-co-promo-code" value="">
                 <?php wp_nonce_field( 'ovr_checkout_action', 'ovr_checkout_nonce' ); ?>
 
                 <div class="ovr-co-card">
@@ -268,10 +269,12 @@ $name      = $user->display_name ?: '';
     });
 
     // Promo validation via existing AJAX endpoint (updates discount + total).
+    // Promo codes are attached to subscription plans via applicable_plans.
     var price   = <?php echo wp_json_encode( $price ); ?>;
     var symbol  = <?php echo wp_json_encode( $symbol ); ?>;
     var ajaxUrl = <?php echo wp_json_encode( $ajax_url ); ?>;
     var nonce   = <?php echo wp_json_encode( $promo_nonce ); ?>;
+    var planSlug = <?php echo wp_json_encode( $fields['plan'] ?? '' ); ?>;
     var fmt = function(n){ return symbol + Number(n).toFixed(2); };
 
     var applyBtn = root.querySelector('#ovr-co-promo-apply'),
@@ -285,7 +288,7 @@ $name      = $user->display_name ?: '';
             var code = (promoIn.value || '').trim();
             if (!code) { msg.textContent = '<?php echo esc_js( __( 'Please enter a promo code.', 'ovr-core' ) ); ?>'; msg.className = 'ovr-co-promo-msg err'; return; }
             applyBtn.disabled = true;
-            var body = new URLSearchParams({ action:'ovr_apply_promo', code:code, nonce:nonce });
+            var body = new URLSearchParams({ action:'ovr_apply_promo', code:code, plan:planSlug, nonce:nonce });
             fetch(ajaxUrl, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body.toString() })
                 .then(function(r){ return r.json(); })
                 .then(function(res){
@@ -297,9 +300,13 @@ $name      = $user->display_name ?: '';
                         totalEl.textContent = fmt(price - disc);
                         msg.textContent = d.message || '<?php echo esc_js( __( 'Promo code applied!', 'ovr-core' ) ); ?>';
                         msg.className = 'ovr-co-promo-msg ok';
+                        var promoHidden = document.getElementById('ovr-co-promo-code');
+                        if (promoHidden) promoHidden.value = code.toUpperCase();
                     } else {
                         msg.textContent = (res && res.data && res.data.message) ? res.data.message : '<?php echo esc_js( __( 'Invalid promo code.', 'ovr-core' ) ); ?>';
                         msg.className = 'ovr-co-promo-msg err';
+                        var promoHidden2 = document.getElementById('ovr-co-promo-code');
+                        if (promoHidden2) promoHidden2.value = '';
                     }
                 })
                 .catch(function(){ applyBtn.disabled = false; msg.textContent = '<?php echo esc_js( __( 'Could not apply code. Try again.', 'ovr-core' ) ); ?>'; msg.className = 'ovr-co-promo-msg err'; });

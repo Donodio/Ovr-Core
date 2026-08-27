@@ -24,6 +24,7 @@ use OVR\Subscription\Plans;
 use OVR\Subscription\ListingUpgrades;
 use OVR\Subscription\UserSubscription;
 use OVR\Subscription\SubscriptionManager;
+use OVR\Payment\PromoCode;
 use OVR\Core\Pages;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
@@ -53,6 +54,8 @@ class CheckoutHandler {
 
         // Admin: manually mark a pending payment paid + activate the subscription.
         add_action( 'admin_post_ovr_complete_payment', [ $this, 'handle_admin_complete_payment' ] );
+
+        add_action( 'ovr_payment_completed', [ $this, 'maybe_increment_promo_use' ], 10, 2 );
 
         add_action( 'admin_notices', [ $this, 'maybe_show_config_notice' ] );
 
@@ -142,6 +145,20 @@ class CheckoutHandler {
             exit;
         }
 
+        // Promo code attached to subscription (if supplied).
+        $promo_code = strtoupper( sanitize_text_field( wp_unslash( $_POST['promo_code'] ?? '' ) ) );
+        $promo_row  = null;
+        $discount   = 0.0;
+        if ( '' !== $promo_code ) {
+            $promo_check = PromoCode::validate( $promo_code, $plan_slug );
+            if ( ! $promo_check['valid'] ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'invalid_promo', $referer ) );
+                exit;
+            }
+            $promo_row = $promo_check['row'];
+            $discount  = PromoCode::discount_amount( $promo_row, (float) ( $plan['price'] ?? 0 ) );
+        }
+
         // Needed by both the free-plan branch below and the gateway branch.
         $user_id = get_current_user_id();
 
@@ -155,8 +172,9 @@ class CheckoutHandler {
         // successful purchase leaves them in, so it is the signal that the
         // earlier payment did its job. Someone expired or unsubscribed is
         // trying to *become* active and must never be turned away.
+        $price_for_dupe = max( 0.0, (float) ( $plan['price'] ?? 0 ) - $discount );
         if ( UserSubscription::is_active( $user_id ) ) {
-            $duplicate = $this->recent_duplicate_payment( $user_id, $plan_slug, (float) ( $plan['price'] ?? 0 ) );
+            $duplicate = $this->recent_duplicate_payment( $user_id, $plan_slug, $price_for_dupe );
             if ( $duplicate ) {
                 wp_safe_redirect( add_query_arg( 'ovr_checkout', 'completed', $this->success_url( $duplicate ) ) );
                 exit;
@@ -167,8 +185,12 @@ class CheckoutHandler {
         // and fire ovr_payment_completed so Lifecycle restores listings + sets
         // editing_enabled. Brief: "Secondary status controlling editing
         // permissions, activated upon successful subscription payment".
-        $price = (float) ( $plan['price'] ?? 0 );
+        $price = max( 0.0, (float) ( $plan['price'] ?? 0 ) - $discount );
         if ( 0.0 === $price ) {
+            $free_meta = [ 'plan_slug' => $plan_slug ];
+            if ( '' !== $promo_code ) {
+                $free_meta['promo_code'] = $promo_code;
+            }
             global $wpdb;
             $wpdb->insert( $wpdb->prefix . 'ovr_payments', [
                 'user_id'        => $user_id,
@@ -178,7 +200,7 @@ class CheckoutHandler {
                 'gateway'        => 'free',
                 'transaction_id' => 'free_' . wp_generate_uuid4(),
                 'status'         => 'completed',
-                'meta_data'      => wp_json_encode( [ 'plan_slug' => $plan_slug ] ),
+                'meta_data'      => wp_json_encode( $free_meta ),
             ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
 
             $payment_id = (int) $wpdb->insert_id;
@@ -204,6 +226,10 @@ class CheckoutHandler {
             update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
         }
 
+        $checkout_meta = [];
+        if ( '' !== $promo_code ) {
+            $checkout_meta['promo_code'] = $promo_code;
+        }
         $result = $this->gateway( $gateway_slug )->start_checkout( [
             'user_id'    => $user_id,
             'plan_slug'  => $plan_slug,
@@ -211,6 +237,7 @@ class CheckoutHandler {
             'currency'   => $plan['currency'] ?? 'USD',
             'return_url' => Pages::get_page_url( 'ovr_page_payment_success' ),
             'cancel_url' => Pages::get_page_url( 'ovr_page_pricing' ),
+            'meta'       => $checkout_meta,
         ] );
 
         if ( ! empty( $result['redirect_url'] ) ) {
@@ -638,6 +665,30 @@ class CheckoutHandler {
             wp_send_json_success( $result );
         }
         wp_send_json_error( $result, 400 );
+    }
+
+    /**
+     * Increment promo code usage when a payment completes.
+     */
+    public function maybe_increment_promo_use( int $user_id, array $data ): void {
+        $payment_id = (int) ( $data['payment_id'] ?? 0 );
+        if ( ! $payment_id ) {
+            return;
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_payments';
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT meta_data FROM {$table} WHERE id = %d", $payment_id ), ARRAY_A );
+        if ( ! $row ) {
+            return;
+        }
+        $meta = json_decode( (string) ( $row['meta_data'] ?? '' ), true );
+        $code = is_array( $meta ) ? (string) ( $meta['promo_code'] ?? '' ) : '';
+        if ( '' === $code ) {
+            $code = (string) ( $data['promo_code'] ?? '' );
+        }
+        if ( '' !== $code ) {
+            PromoCode::increment_use( $code );
+        }
     }
 
     /**
