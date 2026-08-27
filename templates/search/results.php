@@ -148,8 +148,8 @@ if ( ! $owner_active ) {
 ?>
 <div class="ovr-wrap ovr-search-stitch">
 
-    <!-- Village Section filter strip -->
-    <?php if ( ! empty( $section_chips ) ) : ?>
+    <!-- Village Section filter strip — hidden on full-page map (Option 2: map has no filters) -->
+    <?php if ( ! empty( $section_chips ) && 'map' !== $view ) : ?>
         <style>
             .ovr-ss-village.is-active{position:relative}
             .ovr-ss-village.is-active .ovr-ss-village-img{outline:3px solid var(--ovr-gold,#DEAF0C);outline-offset:2px;border-radius:8px}
@@ -183,6 +183,10 @@ if ( ! $owner_active ) {
     <?php endif; ?>
 
     <div class="ovr-container ovr-section ovr-search-page <?php echo 'map' === $view ? 'ovr-search-page--map' : ''; ?>">
+        <?php if ( 'map' === $view ) : ?>
+            <!-- Full-page map (Option 2): no left filters — header with view toggle + map canvas -->
+            <div class="ovr-search-main ovr-search-main--map-full">
+        <?php else : ?>
         <div class="ovr-search-layout">
 
             <!-- Filters sidebar -->
@@ -198,6 +202,7 @@ if ( ! $owner_active ) {
 
             <!-- Results column -->
             <div class="ovr-search-main">
+        <?php endif; ?>
 
                 <!-- Results header (captured once; reused across views) -->
                 <?php ob_start(); ?>
@@ -290,7 +295,7 @@ if ( ! $owner_active ) {
                 <?php $results_header = ob_get_clean(); ?>
 
                 <!-- Results -->
-                <?php if ( $query->have_posts() ) : ?>
+                <?php if ( $query->have_posts() || 'map' === $view ) : // map always renders (may be empty) ?>
                     <?php
                     // "Search In A Villages Section" heading when exactly one village
                     // section is filtered (P8 §9): a clear section title above the
@@ -312,11 +317,11 @@ if ( ! $owner_active ) {
                     ?>
 
                     <?php if ( 'map' === $view ) : ?>
+                        <?php echo $results_header; // header with Grid/List/Map toggle — filter UI lives on Grid/Table (Option 2) ?>
                         <?php
-                        // Full-width map (P8 §10): in map mode the listings are
-                        // plotted on a single large map rather than a centre list
-                        // column, so there is no separate list to paginate. The map
-                        // shows EVERY matching listing for the active filters.
+                        // Full-width map (Option 2): no left filters — full-bleed
+                        // canvas showing EVERY matching listing for active filters
+                        // (mega-menu Map Search has no filters → ALL HOMES).
                         $map_points   = PropertyQuery::get_map_points( $filters );
                         $map_settings = get_option( 'ovr_settings', [] );
                         $map_symbol   = $map_settings['currency_symbol'] ?? '$';
@@ -420,6 +425,8 @@ if ( ! $owner_active ) {
                     ?>
                 <?php endif; ?>
             </div>
+        <?php if ( 'map' !== $view ) : ?>
         </div>
+        <?php endif; ?>
     </div>
 </div>

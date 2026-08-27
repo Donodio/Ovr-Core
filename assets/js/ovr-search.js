@@ -165,11 +165,11 @@
     /* ====================================================================
        MAP VIEW (Leaflet / OpenStreetMap)
        Reads listing data from .ovr-map-view[data-ovr-map] and plots each
-       listing as a PRIVACY-SAFE approximate-area circle (Chunk 1 §27-§35) —
-       never an exact house pin. The server has already replaced exact
-       coordinates with a deterministic circle center + radius; this file only
-       ever sees the approximation. Leaflet is only on the page when ?view=map
-       is active (enqueued in Assets.php).
+       listing as a thumbpin at its privacy-safe approximate center (the server
+       already offset the exact coordinates). Pins are clustered via
+       Leaflet.markerCluster where they overlap; the single-listing map
+       (ovr-property.js) still uses an approximate-area circle. Leaflet is
+       only on the page when ?view=map is active (enqueued in Assets.php).
        ==================================================================== */
     function setupMap() {
         var el = document.querySelector('.ovr-map-view');
@@ -202,34 +202,58 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Approximate-area circle per listing. Styling mirrors the old pin
-        // palette via per-property-type classes; .is-featured adds a gold ring,
-        // .is-booked dims listings unavailable tonight.
-        function circleFor(p) {
-            var type = (p.type || 'default').toString().replace(/[^a-z0-9_-]/gi, '');
-            var classes = 'ovr-map-circle ovr-map-circle--type-' + type;
-            if (p.featured) classes += ' is-featured';
-            if (p.avail === 'booked') classes += ' is-booked';
-            return window.L.circle([parseFloat(p.lat), parseFloat(p.lng)], {
-                radius: Math.max(50, parseInt(p.radius, 10) || 150),
-                className: classes,
-                bubblingMouseEvents: false
+        // Thumbpin marker + cluster group: single-style pin for every
+        // listing (no per-type variation), clustered where pins overlap.
+        // Privacy: pin sits at the approx_area center (server already offset).
+        (function injectThumbpinStyles() {
+            if (document.getElementById('ovr-thumbpin-styles')) return;
+            var s = document.createElement('style');
+            s.id = 'ovr-thumbpin-styles';
+            s.textContent =
+                '.ovr-thumbpin{width:36px;height:44px;display:flex;align-items:center;justify-content:center;position:relative;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}' +
+                '.ovr-thumbpin-inner{width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#000961;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.25)}' +
+                '.ovr-thumbpin-inner .material-symbols-outlined{transform:rotate(45deg);color:#fff;font-size:18px}' +
+                '.ovr-thumbpin.is-featured .ovr-thumbpin-inner{background:#DEAF0C;border-color:#fff;box-shadow:0 0 0 2px rgba(222,175,12,.35),0 2px 8px rgba(0,0,0,.3)}' +
+                '.ovr-thumbpin.is-booked{opacity:.55}' +
+                '.ovr-thumbpin.is-hover{transform:scale(1.08)}' +
+                '.ovr-cluster{width:40px;height:40px;border-radius:50%;background:#000961;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)}' +
+                '.ovr-cluster.is-medium{width:44px;height:44px;font-size:14px}' +
+                '.ovr-cluster.is-large{width:50px;height:50px;font-size:15px}' +
+                '.ovr-cluster.is-large{background:#0a2a7a}';
+            document.head.appendChild(s);
+        })();
+
+        function thumbIcon(p) {
+            var cls = 'ovr-thumbpin';
+            if (p.featured) cls += ' is-featured';
+            if (p.avail === 'booked') cls += ' is-booked';
+            return window.L.divIcon({
+                className: '',
+                html: '<div class="' + cls + '"><div class="ovr-thumbpin-inner"><span class="material-symbols-outlined">home</span></div></div>',
+                iconSize: [36, 44],
+                iconAnchor: [18, 44],
+                popupAnchor: [0, -44]
             });
         }
 
-        // A circle's degree span for its radius in metres (approx; used for the
-        // fitBounds union instead of Leaflet's Circle.getBounds(), which is NOT
-        // safe to call while the layer is being added — it dereferences
-        // this._map.layerPointToLatLng and throws on the first point, which
-        // aborted the loop and rendered a blank map on /map/ and ?view=map).
-        function circleSpan(lat, radius) {
-            var latDeg = radius / 111320;
-            var lngDeg = radius / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
-            return { lat: latDeg, lng: lngDeg };
-        }
+        var clusterGroup = (window.L.markerClusterGroup)
+            ? window.L.markerClusterGroup({
+                showCoverageOnHover: false,
+                maxClusterRadius: 60,
+                iconCreateFunction: function (cluster) {
+                    var count = cluster.getChildCount();
+                    var size = count < 10 ? '' : count < 50 ? ' is-medium' : ' is-large';
+                    return window.L.divIcon({
+                        html: '<div class="ovr-cluster' + size + '"><span>' + count + '</span></div>',
+                        className: '',
+                        iconSize: [40, 40]
+                    });
+                }
+            })
+            : window.L.layerGroup();
 
-        var byId   = {};   // point id -> circle
-        var bounds = null; // running union of every circle's bounds
+        var byId   = {};   // point id -> marker
+        var bounds = null;
 
         var listcol = document.querySelector('.ovr-map-listcol');
 
@@ -246,46 +270,38 @@
         points.forEach(function (p) {
             var lat = parseFloat(p.lat);
             var lng = parseFloat(p.lng);
-            // Guard against missing or out-of-range coordinates. A single bad
-            // point would otherwise stretch fitBounds across the whole globe.
             if (isNaN(lat) || isNaN(lng)) return;
             if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
             var id = String(p.id);
-            var area = circleFor(p);
-            area.bindPopup(buildPopup(p, symbol));
-            area.on('click', function () { highlightCard(id); trackMap('marker_click'); });
-            area.on('popupopen', function () { trackMap('popup_view'); });
-            byId[id] = area;
-            area.addTo(map);
-            // fitBounds union built from manual lat/lng spans — never call
-            // area.getBounds() (see circleSpan note above).
-            var span = circleSpan(lat, Math.max(50, parseInt(p.radius, 10) || 150));
-            var b = window.L.latLngBounds(
-                [lat - span.lat, lng - span.lng],
-                [lat + span.lat, lng + span.lng]
-            );
+            var marker = window.L.marker([lat, lng], { icon: thumbIcon(p) });
+            marker.bindPopup(buildPopup(p, symbol));
+            marker.on('click', function () { highlightCard(id); trackMap('marker_click'); });
+            marker.on('popupopen', function () { trackMap('popup_view'); });
+            byId[id] = marker;
+            clusterGroup.addLayer(marker);
+            var b = window.L.latLngBounds([lat, lng], [lat, lng]);
             bounds = bounds ? bounds.extend(b) : b;
         });
 
+        map.addLayer(clusterGroup);
         trackMap('map_view');
         addLegend(map);
 
         if (bounds && bounds.isValid()) {
             map.fitBounds(bounds, { padding: [40, 40] });
         } else {
-            map.setView([28.85, -81.95], 11); // nothing plottable (defensive): The Villages area
+            map.setView([28.85, -81.95], 11);
         }
 
-        // Tiles can render at the wrong size if the container was measured
-        // before layout settled; nudge Leaflet once things are stable.
         setTimeout(function () { map.invalidateSize(); }, 200);
 
-        // Card → circle: hover highlights the area, click focuses & opens it.
+        // Card → pin: hover highlights the pin, click focuses & opens it.
         function focusArea(id) {
-            var area = byId[id];
-            if (!area) return;
-            map.fitBounds(area.getBounds().pad(4), { maxZoom: 17 });
-            setTimeout(function () { area.openPopup(); }, 220);
+            var m = byId[id];
+            if (!m) return;
+            var ll = m.getLatLng();
+            map.setView(ll, Math.max(map.getZoom(), 16));
+            setTimeout(function () { m.openPopup(); }, 220);
         }
 
         if (listcol) {
@@ -294,14 +310,14 @@
                 var id = w.getAttribute('data-ovr-card-id');
                 w.addEventListener('mouseenter', function () {
                     var m = byId[id];
-                    if (m && m._path) m._path.classList.add('is-hover');
+                    if (m && m._icon) m._icon.classList.add('is-hover');
                 });
                 w.addEventListener('mouseleave', function () {
                     var m = byId[id];
-                    if (m && m._path) m._path.classList.remove('is-hover');
+                    if (m && m._icon) m._icon.classList.remove('is-hover');
                 });
                 w.addEventListener('click', function (e) {
-                    if (e.target.closest && e.target.closest('a')) return; // let card links work
+                    if (e.target.closest && e.target.closest('a')) return;
                     focusArea(id);
                 });
             });
@@ -386,16 +402,17 @@
         } catch (e) { /* analytics must never break the map */ }
     }
 
-    /* A compact legend explaining the area colours / states. */
+    /* Legend for the clustered thumbpin map. */
     function addLegend(map) {
         if (!window.L || !window.L.control) return;
         var legend = window.L.control({ position: 'bottomright' });
         legend.onAdd = function () {
             var div = window.L.DomUtil.create('div', 'ovr-map-legend');
             div.innerHTML =
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot"></i>Available</span>' +
                 '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-featured"></i>Featured</span>' +
-                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-area"></i>Approximate area</span>' +
-                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-booked"></i>Booked tonight</span>';
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-booked"></i>Booked</span>' +
+                '<span class="ovr-map-legend-item"><i class="ovr-map-legend-dot is-cluster"></i>Cluster</span>';
             return div;
         };
         legend.addTo(map);
