@@ -188,7 +188,7 @@ $is_expired  = ( 'expired' === $sub_status );
                                 <a href="<?php echo esc_url( (string) $edit ); ?>" class="ld-card-act"><span class="material-symbols-outlined">edit</span><?php esc_html_e( 'Edit', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $bump ); ?>" class="ld-card-act" title="<?php esc_attr_e( 'Bump to top of results (free, daily limit)', 'ovr-core' ); ?>"><span class="material-symbols-outlined">trending_up</span><?php esc_html_e( 'Bump', 'ovr-core' ); ?></a>
                                 <a href="<?php echo esc_url( (string) $delete ); ?>" class="ld-card-act ld-card-act--danger" data-ovr-confirm="<?php echo esc_attr( sprintf( __( 'Move “%s” to Trash? It will be removed from search. An administrator can restore it within the retention window.', 'ovr-core' ), $p->post_title ?: __( 'this listing', 'ovr-core' ) ) ); ?>"><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Delete', 'ovr-core' ); ?></a>
-                                <a href="<?php echo esc_url( (string) $upgrade ); ?>" class="ld-card-act ld-card-act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>"><span class="material-symbols-outlined">rocket_launch</span><?php esc_html_e( 'Upgrade', 'ovr-core' ); ?></a>
+                                <a href="<?php echo esc_url( (string) $upgrade ); ?>" class="ld-card-act ld-card-act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>"><span class="material-symbols-outlined">trending_up</span><?php esc_html_e( 'Upgrade', 'ovr-core' ); ?></a>
                             </div>
                         </div>
                     </article>

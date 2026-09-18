@@ -33,9 +33,9 @@ class SettingsBehaviors {
         add_action( 'wp_login_failed', [ $this, 'register_failure' ], 10, 1 );
         add_action( 'wp_login', [ $this, 'clear_failures' ], 10, 2 );
 
-        // Security: optional admin email-OTP two-factor.
-        add_filter( 'wp_authenticate_user', [ $this, 'maybe_two_factor' ], 30, 1 );
-        add_action( 'login_form', [ $this, 'render_2fa_field' ] );
+        // Security: optional admin email-OTP two-factor — REMOVED per Section 4:
+        // Mark's login design is password-only. The 6-digit OTP path is disabled.
+        // The hooks are intentionally not registered.
 
         // General: favicon on the front end.
         add_action( 'wp_head', [ $this, 'output_favicon' ], 5 );
@@ -114,66 +114,18 @@ class SettingsBehaviors {
         delete_transient( $this->lockout_key() );
     }
 
-    // ── Two-factor (email OTP for privileged users) ───────────────────
+    // ── Two-factor (email OTP for privileged users) — REMOVED ──────────────
+    // Section 4: password-only login. This method is intentionally inert.
 
     /**
-     * After password verification, require an emailed code for users who can
-     * manage the platform. Fails open (returns the user) if a code can't be
-     * sent, and can be bypassed by defining OVR_DISABLE_2FA.
-     *
      * @param mixed $user
      * @return mixed
      */
     public function maybe_two_factor( $user ) {
-        if ( ! $user instanceof \WP_User ) {
-            return $user;
-        }
-        if ( empty( self::s()['enable_2fa'] ) || ( defined( 'OVR_DISABLE_2FA' ) && OVR_DISABLE_2FA ) ) {
-            return $user;
-        }
-        if ( ! user_can( $user, 'manage_options' ) ) {
-            return $user; // 2FA applies to privileged accounts only.
-        }
-
-        $key       = 'ovr_2fa_' . $user->ID;
-        $submitted = isset( $_POST['ovr_2fa_code'] ) ? preg_replace( '/\D/', '', (string) wp_unslash( $_POST['ovr_2fa_code'] ) ) : '';
-        $expected  = (string) get_transient( $key );
-
-        if ( '' !== $submitted && '' !== $expected && hash_equals( $expected, $submitted ) ) {
-            delete_transient( $key );
-            return $user; // verified.
-        }
-
-        // Generate + email a fresh code (valid 10 minutes).
-        $code = str_pad( (string) wp_rand( 0, 999999 ), 6, '0', STR_PAD_LEFT );
-        set_transient( $key, $code, 10 * MINUTE_IN_SECONDS );
-
-        $sent = wp_mail(
-            $user->user_email,
-            sprintf( /* translators: %s: site name */ __( 'Your %s login code', 'ovr-core' ), get_bloginfo( 'name' ) ),
-            sprintf( /* translators: %s: code */ __( "Your one-time login code is: %s\n\nIt expires in 10 minutes.", 'ovr-core' ), $code )
-        );
-
-        // Fail open: never lock an admin out because mail is misconfigured.
-        if ( ! $sent ) {
-            delete_transient( $key );
-            return $user;
-        }
-
-        return new \WP_Error(
-            'ovr_2fa_required',
-            __( 'A one-time login code has been emailed to you. Enter it below to finish signing in.', 'ovr-core' )
-        );
+        return $user;
     }
 
-    /** Render the optional one-time-code field on wp-login.php. */
-    public function render_2fa_field(): void {
-        if ( empty( self::s()['enable_2fa'] ) ) {
-            return;
-        }
-        echo '<p><label for="ovr_2fa_code">' . esc_html__( 'One-time code (if emailed)', 'ovr-core' )
-            . '<input type="text" name="ovr_2fa_code" id="ovr_2fa_code" class="input" inputmode="numeric" autocomplete="one-time-code" value="" size="20"></label></p>';
-    }
+    public function render_2fa_field(): void {}
 
     // ── Favicon ───────────────────────────────────────────────────────
 

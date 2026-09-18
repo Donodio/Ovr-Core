@@ -46,6 +46,7 @@ class ListingForm {
         add_action( 'wp_ajax_ovr_crop_listing_photo',      [ $this, 'handle_crop' ] );
         add_action( 'wp_ajax_ovr_watermark_listing_photo', [ $this, 'handle_watermark' ] );
         add_action( 'wp_ajax_ovr_upload_listing_media',     [ $this, 'handle_media_upload' ] );
+        add_action( 'wp_ajax_ovr_convert_video',            [ $this, 'handle_convert_video' ] );
         add_action( 'wp_ajax_ovr_auto_save_listing',       [ $this, 'handle_auto_save' ] );
 
         // Defense-in-depth: if a non-admin ever reaches the wp.media grid, only
@@ -121,11 +122,19 @@ class ListingForm {
         $dash  = Pages::get_page_url( 'ovr_page_dashboard' );
         $props = add_query_arg( 'tab', 'properties', $dash );
 
+        if ( ! is_user_logged_in() ) {
+            wp_safe_redirect( Pages::get_page_url( 'ovr_page_login' ) );
+            exit;
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! \OVR\Subscription\UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_safe_redirect( Pages::get_page_url( 'ovr_page_subscription_select' ) );
+            exit;
+        }
+
         $post_id = isset( $_REQUEST['post'] ) ? absint( $_REQUEST['post'] ) : 0;
         $nonce   = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
 
-        if ( ! is_user_logged_in()
-            || ! $post_id
+        if ( ! $post_id
             || ! wp_verify_nonce( $nonce, 'ovr_restore_listing_' . $post_id ) ) {
             wp_safe_redirect( $props );
             exit;
@@ -160,6 +169,10 @@ class ListingForm {
 
         if ( ! is_user_logged_in() ) {
             wp_safe_redirect( Pages::get_page_url( 'ovr_page_login' ) );
+            exit;
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! \OVR\Subscription\UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_safe_redirect( Pages::get_page_url( 'ovr_page_subscription_select' ) );
             exit;
         }
 
@@ -197,6 +210,10 @@ class ListingForm {
 
         if ( ! is_user_logged_in() ) {
             wp_safe_redirect( Pages::get_page_url( 'ovr_page_login' ) );
+            exit;
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! \OVR\Subscription\UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_safe_redirect( Pages::get_page_url( 'ovr_page_subscription_select' ) );
             exit;
         }
 
@@ -319,6 +336,32 @@ class ListingForm {
             update_post_meta( $post_id, '_ovr_owner_email', $owner->user_email );
         } else {
             delete_post_meta( $post_id, '_ovr_owner_email' );
+        }
+
+        // Sequential human-friendly listing number (Feature J). WordPress
+        // post IDs are global auto-increments (shared across every post type,
+        // revisions and attachments), so they naturally show gaps like
+        // 1147 → 1157 → 1170. This counter gives a gap-free sequence that only
+        // advances the first time a listing is persisted (edits never bump it).
+        // Existing listings without a number are backfilled from the current max
+        // so history stays consistent. Auto-saved drafts are not yet publishable;
+        // they still receive a number on their first real save so the sequence
+        // reflects publish order rather than draft-creation order.
+        $existing_no = get_post_meta( $post_id, '_ovr_listing_no', true );
+        if ( '' === (string) $existing_no ) {
+            $next = (int) get_option( 'ovr_next_listing_no', 0 );
+            if ( $next < 1 ) {
+                global $wpdb;
+                $max_no = (int) $wpdb->get_var( "SELECT MAX(CAST(meta_value AS UNSIGNED)) FROM {$wpdb->postmeta} WHERE meta_key = '_ovr_listing_no'" );
+                $max_id = (int) $wpdb->get_var( "SELECT MAX(ID) FROM {$wpdb->posts} WHERE post_type = 'ovr_property'" );
+                $seed   = max( $max_no, $max_id );
+                $next   = $seed > 0 ? $seed + 1 : 1;
+                if ( $next < 1147 && $max_id >= 1147 ) {
+                    $next = $max_id + 1;
+                }
+            }
+            update_post_meta( $post_id, '_ovr_listing_no', $next );
+            update_option( 'ovr_next_listing_no', $next + 1, false );
         }
 
         // Scalar meta.
@@ -693,6 +736,9 @@ class ListingForm {
         if ( (int) $post->post_author !== $user_id && ! $is_admin_user ) {
             wp_send_json_error( [ 'message' => __( 'You do not own this listing.', 'ovr-core' ) ], 403 );
         }
+        if ( ! $is_admin_user && ! \OVR\Subscription\UserSubscription::has_listing_access( $user_id ) ) {
+            wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
+        }
 
         switch ( $section ) {
             case 'info':
@@ -900,7 +946,7 @@ class ListingForm {
             wp_send_json_error( [ 'message' => __( 'No file received.', 'ovr-core' ) ], 400 );
         }
 
-        // Only images, capped at 10MB.
+        // Only images, capped at 3.5MB (see effective_upload_cap()).
         $allowed = [ 'image/jpeg', 'image/png', 'image/webp', 'image/gif' ];
         $mime    = function_exists( 'mime_content_type' )
             ? (string) mime_content_type( $_FILES['file']['tmp_name'] )
@@ -908,8 +954,9 @@ class ListingForm {
         if ( ! in_array( $mime, $allowed, true ) ) {
             wp_send_json_error( [ 'message' => __( 'Please upload a JPG, PNG, WEBP, or GIF image.', 'ovr-core' ) ], 400 );
         }
-        if ( (int) ( $_FILES['file']['size'] ?? 0 ) > 10 * 1024 * 1024 ) {
-            wp_send_json_error( [ 'message' => __( 'That image is larger than 10MB.', 'ovr-core' ) ], 400 );
+        $photo_cap = self::effective_upload_cap( 'photo' );
+        if ( $photo_cap > 0 && (int) ( $_FILES['file']['size'] ?? 0 ) > $photo_cap ) {
+            wp_send_json_error( [ 'message' => sprintf( __( 'That image is larger than %s. Please upload a smaller photo.', 'ovr-core' ), size_format( $photo_cap ) ) ], 400 );
         }
 
         require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -939,6 +986,55 @@ class ListingForm {
     /** Max documents per listing (Feature D). */
     public const MAX_DOCS = 3;
 
+    /** Upload caps (bytes): photos 3.5 MB, videos 25 MB, panoramas 30 MB, documents 25 MB. */
+    public const MAX_PHOTO_BYTES = 3670016; // 3.5 MB
+    public const MAX_VIDEO_BYTES = 26214400; // 25 MB
+    public const MAX_PANO_BYTES  = 31457280; // 30 MB
+    public const MAX_DOC_BYTES   = 26214400; // 25 MB
+
+    /**
+     * The effective upload cap in bytes for a given media `kind`
+     * (photo/video/pano/doc). Clamped to the server's own PHP upload limits so
+     * the number we advertise (and enforce) is never higher than what the host
+     * will actually accept — otherwise users hit a cryptic PHP error instead.
+     */
+    public static function effective_upload_cap( string $kind ): int {
+        $wanted = [
+            'photo' => self::MAX_PHOTO_BYTES,
+            'video' => self::MAX_VIDEO_BYTES,
+            'pano'  => self::MAX_PANO_BYTES,
+            'doc'   => self::MAX_DOC_BYTES,
+        ][ $kind ] ?? 0;
+        if ( $wanted <= 0 ) {
+            return 0;
+        }
+        $server = self::php_upload_limit_bytes();
+        return $server > 0 ? min( $wanted, $server ) : $wanted;
+    }
+
+    /**
+     * Smallest PHP limit (upload_max_filesize vs post_max_size) in bytes, or 0
+     * when neither is reported.
+     */
+    private static function php_upload_limit_bytes(): int {
+        $to_bytes = static function ( $raw ) {
+            if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
+                return 0;
+            }
+            $raw  = strtolower( trim( (string) $raw ) );
+            $unit = substr( $raw, -1 );
+            $num  = (float) $raw;
+            switch ( $unit ) {
+                case 'g': return (int) round( $num * 1024 * 1024 * 1024 );
+                case 'm': return (int) round( $num * 1024 * 1024 );
+                case 'k': return (int) round( $num * 1024 );
+                default:  return (int) round( $num );
+            }
+        };
+        $limits = array_values( array_filter( [ $to_bytes( ini_get( 'upload_max_filesize' ) ), $to_bytes( ini_get( 'post_max_size' ) ) ], static function ( $v ) { return $v > 0; } ) );
+        return $limits ? (int) min( $limits ) : 0;
+    }
+
     /**
      * AJAX: accept a single video / 360-panorama / document upload for the
      * current user (Features B, C, D). Validates MIME + size per `kind` and
@@ -962,16 +1058,23 @@ class ListingForm {
         }
 
         $kind = isset( $_POST['kind'] ) ? sanitize_key( wp_unslash( $_POST['kind'] ) ) : '';
+        $video_cap = self::effective_upload_cap( 'video' );
+        $pano_cap  = self::effective_upload_cap( 'pano' );
+        $doc_cap   = self::effective_upload_cap( 'doc' );
         $rules = [
             'video' => [
                 'mimes' => [ 'video/mp4', 'video/quicktime', 'video/webm' ],
-                'max'   => 256 * 1024 * 1024,
+                'max'   => $video_cap,
                 'error' => __( 'Please upload an MP4, MOV, or WebM video.', 'ovr-core' ),
+                // Translators: %s: formatted size, e.g. "25 MB".
+                'size_error' => $video_cap > 0 ? sprintf( __( 'Videos must be %s or smaller. For longer or larger clips, paste a YouTube or Vimeo link instead.', 'ovr-core' ), size_format( $video_cap ) ) : '',
             ],
             'pano'  => [
                 'mimes' => [ 'image/jpeg', 'image/png', 'image/webp' ],
-                'max'   => 30 * 1024 * 1024,
+                'max'   => $pano_cap,
                 'error' => __( 'Please upload a JPG, PNG, or WEBP panorama image.', 'ovr-core' ),
+                // Translators: %s: formatted size, e.g. "30 MB".
+                'size_error' => $pano_cap > 0 ? sprintf( __( 'That panorama image is larger than %s.', 'ovr-core' ), size_format( $pano_cap ) ) : '',
             ],
             'doc'   => [
                 'mimes' => [
@@ -981,8 +1084,10 @@ class ListingForm {
                     'application/vnd.ms-excel',
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 ],
-                'max'   => 25 * 1024 * 1024,
+                'max'   => $doc_cap,
                 'error' => __( 'Please upload a PDF, DOCX, or XLSX document.', 'ovr-core' ),
+                // Translators: %s: formatted size, e.g. "25 MB".
+                'size_error' => $doc_cap > 0 ? sprintf( __( 'That document is larger than %s.', 'ovr-core' ), size_format( $doc_cap ) ) : '',
             ],
         ];
         if ( ! isset( $rules[ $kind ] ) ) {
@@ -996,8 +1101,8 @@ class ListingForm {
         if ( ! in_array( $mime, $rule['mimes'], true ) ) {
             wp_send_json_error( [ 'message' => $rule['error'] ], 400 );
         }
-        if ( (int) ( $_FILES['file']['size'] ?? 0 ) > $rule['max'] ) {
-            wp_send_json_error( [ 'message' => __( 'That file is larger than the allowed size.', 'ovr-core' ) ], 400 );
+        if ( $rule['max'] > 0 && (int) ( $_FILES['file']['size'] ?? 0 ) > $rule['max'] ) {
+            wp_send_json_error( [ 'message' => $rule['size_error'] ?: __( 'That file is larger than the allowed size.', 'ovr-core' ) ], 400 );
         }
 
         require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -1009,10 +1114,181 @@ class ListingForm {
             wp_send_json_error( [ 'message' => $att_id->get_error_message() ], 400 );
         }
 
+        // Video codec guard (HEVC investigation): an .mp4 extension alone is NOT
+        // proof of browser compatibility — the container may hold HEVC/H.265,
+        // which Chrome/Safari/Firefox/mobile cannot play reliably. When we can
+        // probe the real codec we reject (or silently transcode) non web-safe
+        // streams instead of storing a video the front end can never play.
+        $video_warning = '';
+        if ( 'video' === $kind ) {
+            $video_file = get_attached_file( (int) $att_id );
+            $video_info = ( $video_file && file_exists( $video_file ) )
+                ? \OVR\Media\VideoProbe::probe( $video_file )
+                : null;
+
+            if ( $video_info ) {
+                // Persist codec facts so editors/admins can see + explain why a
+                // video is (or isn't) web-safe without re-probing every render.
+                update_post_meta( (int) $att_id, '_ovr_video_codec', (string) $video_info['codec'] );
+                update_post_meta( (int) $att_id, '_ovr_video_profile', (string) $video_info['profile'] );
+                update_post_meta( (int) $att_id, '_ovr_video_width', (int) $video_info['width'] );
+                update_post_meta( (int) $att_id, '_ovr_video_height', (int) $video_info['height'] );
+                update_post_meta( (int) $att_id, '_ovr_video_pix_fmt', (string) $video_info['pix_fmt'] );
+
+                if ( ! \OVR\Media\VideoProbe::is_web_safe( $video_info ) ) {
+                    // Smallest production-safe fix: if ffmpeg is present, convert
+                    // to H.264/AAC/faststart and store THAT as the listing video.
+                    $converted = \OVR\Media\VideoTranscoder::available()
+                        ? \OVR\Media\VideoTranscoder::transcode( $video_file )
+                        : null;
+
+                    if ( $converted ) {
+                        $src_name = (string) ( $_FILES['file']['name'] ?? 'video' );
+                        $base     = preg_replace( '/\.[a-z0-9]+$/i', '', $src_name );
+                        $base     = '' !== (string) $base ? $base : 'video';
+                        $file_arr = [
+                            'name'     => sanitize_file_name( $base . '-web.mp4' ),
+                            'tmp_name' => $converted,
+                            'type'     => 'video/mp4',
+                            'error'    => 0,
+                            'size'     => (int) filesize( $converted ),
+                        ];
+                        $web_id = media_handle_sideload( $file_arr, 0, null, [ 'test_form' => false ] );
+                        @unlink( $converted );
+
+                        if ( ! is_wp_error( $web_id ) && $web_id ) {
+                            // Replace: the transcoded file becomes the listing video.
+                            wp_delete_attachment( (int) $att_id, true );
+                            $att_id = $web_id;
+                            update_post_meta( (int) $att_id, '_ovr_video_codec', 'h264' );
+                            update_post_meta( (int) $att_id, '_ovr_video_web_compatible', 1 );
+                            $video_warning = __( 'This video used the HEVC/H.265 codec, which browsers cannot play. It was automatically converted to a web-friendly H.264 MP4.', 'ovr-core' );
+                        } else {
+                            wp_delete_attachment( (int) $att_id, true );
+                            wp_send_json_error( [ 'message' => __( 'Your video uses a codec browsers can’t play (HEVC/H.265), and automatic conversion failed. Please convert it to an H.264 MP4 and upload again.', 'ovr-core' ) ], 415 );
+                        }
+                    } else {
+                        // No transcoder on this server: reject with a clear,
+                        // landlord-friendly message rather than store a video
+                        // that can never play in a browser.
+                        wp_delete_attachment( (int) $att_id, true );
+                        wp_send_json_error( [ 'message' => __( 'This video uses HEVC/H.265 (also called “H.265” or “HEVC Video Extensions”). Most browsers and phones can’t play that format. Please convert it to H.264 MP4 (HandBrake or VLC can do this) and upload again.', 'ovr-core' ) ], 415 );
+                    }
+                } else {
+                    update_post_meta( (int) $att_id, '_ovr_video_web_compatible', 1 );
+                }
+            }
+            // When ffprobe is unavailable we cannot verify — accept as-is so a
+            // legitimate H.264 upload is never blocked by missing tooling.
+        }
+
         wp_send_json_success( [
             'id'       => (int) $att_id,
             'url'      => wp_get_attachment_url( (int) $att_id ),
+            'type'     => get_post_mime_type( (int) $att_id ) ?: $mime,
             'filename' => basename( (string) get_attached_file( (int) $att_id ) ),
+            'codec'    => get_post_meta( (int) $att_id, '_ovr_video_codec', true ),
+            'warning'  => $video_warning,
+        ] );
+    }
+
+    /**
+     * AJAX: convert an already-uploaded video attachment to the web-safe
+     * H.264/AAC/faststart MP4 in place (used to repair legacy HEVC/H.265
+     * uploads such as listing #367 and "1959Video"). The attachment is kept —
+     * its underlying file is swapped for the transcoded copy under a fresh name
+     * so browsers/CDN never serve the stale, unplayable bytes.
+     *
+     * Only the attachment owner, an admin, or the owner of the listing the
+     * video belongs to may trigger it (identical rule to photo edits).
+     */
+    public function handle_convert_video(): void {
+        if ( ! check_ajax_referer( 'ovr_listing_action', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! is_user_logged_in() || ! current_user_can( 'upload_files' ) ) {
+            wp_send_json_error( [ 'message' => __( 'You are not allowed to do this.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
+        }
+
+        $att_id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
+        if ( ! $att_id || 'attachment' !== get_post_type( $att_id ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid video.', 'ovr-core' ) ], 400 );
+        }
+
+        // Ownership guard (admins bypass; otherwise the attachment must belong
+        // to the current user or to a listing they own — see photo-edit rule).
+        $uid       = get_current_user_id();
+        $listing_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+        $allowed   = current_user_can( 'manage_options' );
+        if ( ! $allowed ) {
+            $att = get_post( $att_id );
+            if ( $att && (int) $att->post_author === $uid ) {
+                $allowed = true;
+            }
+            if ( ! $allowed && $listing_id ) {
+                $listing = get_post( $listing_id );
+                if ( $listing && 'ovr_property' === $listing->post_type && (int) $listing->post_author === $uid ) {
+                    $allowed = true;
+                }
+            }
+        }
+        if ( ! $allowed ) {
+            wp_send_json_error( [ 'message' => __( 'You cannot convert this video.', 'ovr-core' ) ], 403 );
+        }
+
+        $file = get_attached_file( $att_id );
+        if ( ! $file || ! file_exists( $file ) ) {
+            wp_send_json_error( [ 'message' => __( 'The video file could not be found on the server.', 'ovr-core' ) ], 404 );
+        }
+
+        $probe = \OVR\Media\VideoProbe::probe( $file );
+        if ( $probe && \OVR\Media\VideoProbe::is_web_safe( $probe ) ) {
+            update_post_meta( $att_id, '_ovr_video_codec', 'h264' );
+            update_post_meta( $att_id, '_ovr_video_web_compatible', 1 );
+            wp_send_json_success( [
+                'url'     => wp_get_attachment_url( $att_id ),
+                'message' => __( 'This video is already browser-friendly.', 'ovr-core' ),
+            ] );
+        }
+
+        if ( ! \OVR\Media\VideoTranscoder::available() ) {
+            wp_send_json_error( [ 'message' => __( 'Automatic conversion isn’t available on this server. Please convert the video to H.264 MP4 and upload it again.', 'ovr-core' ) ], 501 );
+        }
+
+        $web = \OVR\Media\VideoTranscoder::transcode( $file );
+        if ( ! $web ) {
+            wp_send_json_error( [ 'message' => __( 'Conversion failed. Please convert the video to H.264 MP4 and upload it again.', 'ovr-core' ) ], 500 );
+        }
+
+        // Swap the file under a fresh name so cached URLs never serve stale bytes.
+        $dir      = trailingslashit( dirname( $file ) );
+        $base     = preg_replace( '/\.[a-z0-9]+$/i', '', basename( $file ) );
+        $base     = '' !== (string) $base ? $base : 'video';
+        $new_name = wp_unique_filename( $dir, $base . '-web.mp4' );
+        $new_path = $dir . $new_name;
+
+        if ( ! @rename( $web, $new_path ) ) {
+            @unlink( $web );
+            wp_send_json_error( [ 'message' => __( 'Could not save the converted video.', 'ovr-core' ) ], 500 );
+        }
+
+        // Remove the old (HEVC) file now that the new one is safely in place.
+        if ( $new_path !== $file && is_file( $file ) ) {
+            @unlink( $file );
+        }
+        update_attached_file( $att_id, $new_path );
+        wp_update_post( [ 'ID' => $att_id, 'post_mime_type' => 'video/mp4' ] );
+        update_post_meta( $att_id, '_ovr_video_codec', 'h264' );
+        update_post_meta( $att_id, '_ovr_video_web_compatible', 1 );
+
+        wp_send_json_success( [
+            'id'      => $att_id,
+            'url'     => wp_get_attachment_url( $att_id ),
+            'type'    => 'video/mp4',
+            'message' => __( 'Video converted to a browser-friendly H.264 MP4.', 'ovr-core' ),
         ] );
     }
 
@@ -1027,6 +1303,9 @@ class ListingForm {
         }
         if ( ! is_user_logged_in() || ! current_user_can( 'upload_files' ) ) {
             wp_send_json_error( [ 'message' => __( 'You are not allowed to edit photos.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! \OVR\Subscription\UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
         }
 
         $att_id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
@@ -1059,6 +1338,9 @@ class ListingForm {
         }
         if ( ! is_user_logged_in() || ! current_user_can( 'upload_files' ) ) {
             wp_send_json_error( [ 'message' => __( 'You are not allowed to edit photos.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! \OVR\Subscription\UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
         }
 
         $att_id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
@@ -1112,6 +1394,9 @@ class ListingForm {
         }
         if ( ! is_user_logged_in() || ! current_user_can( 'upload_files' ) ) {
             wp_send_json_error( [ 'message' => __( 'You are not allowed to edit photos.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! current_user_can( 'manage_options' ) && ! \OVR\Subscription\UserSubscription::has_listing_access( get_current_user_id() ) ) {
+            wp_send_json_error( [ 'message' => __( 'An active subscription is required to manage listings.', 'ovr-core' ) ], 403 );
         }
 
         $att_id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;

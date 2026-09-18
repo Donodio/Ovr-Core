@@ -80,7 +80,7 @@ class Lifecycle {
      * Restore a user's listings after a successful payment.
      *
      * Fires on `ovr_payment_completed` with ($user_id, $context).
-     * Context: ['plan_slug' => 'standard_homeowner_5'].
+     * Context: ['plan_slug' => 'standard_homeowner_5', 'payment_id' => 123, 'promo_code' => 'FREE180'].
      */
     public function on_payment_completed( int $user_id, array $context = [] ): void {
         $plan_slug = (string) ( $context['plan_slug'] ?? '' );
@@ -93,7 +93,43 @@ class Lifecycle {
             return;
         }
 
+        // Promo duration override (e.g. 180-day $0 promo) — look up the code's
+        // duration_days and pass it to activate() so expiry is base + N days.
+        $duration_days = null;
+        $promo_code = (string) ( $context['promo_code'] ?? '' );
+        $payment_id = (int) ( $context['payment_id'] ?? 0 );
+
+        // Snapshot first (Section 2): once an offer/payment has authorized a
+        // term, later promo edits must not change what the buyer paid for.
+        // duration_override_days is the promo-authorized term; null means the
+        // plan's own period applies (existing behaviour).
+        $payment_meta = [];
+        if ( $payment_id ) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'ovr_payments';
+            $row = $wpdb->get_row( $wpdb->prepare( "SELECT meta_data FROM {$table} WHERE id = %d", $payment_id ), ARRAY_A );
+            if ( $row && ! empty( $row['meta_data'] ) ) {
+                $decoded = json_decode( (string) $row['meta_data'], true );
+                if ( is_array( $decoded ) ) {
+                    $payment_meta = $decoded;
+                }
+            }
+        }
+        if ( '' === $promo_code && ! empty( $payment_meta['promo_code'] ) ) {
+            $promo_code = (string) $payment_meta['promo_code'];
+        }
+
+        $snapshot_days = $context['duration_override_days'] ?? ( $payment_meta['duration_override_days'] ?? null );
+        if ( null !== $snapshot_days && '' !== $snapshot_days && (int) $snapshot_days > 0 ) {
+            $duration_days = (int) $snapshot_days;
+        } elseif ( '' !== $promo_code ) {
+            $promo_row = \OVR\Payment\PromoCode::get_by_code( $promo_code );
+            if ( $promo_row && ! empty( $promo_row['duration_days'] ) ) {
+                $duration_days = (int) $promo_row['duration_days'];
+            }
+        }
+
         // Use SubscriptionManager to activate (sets status, plan, role, restores listings).
-        SubscriptionManager::activate( $user_id, $plan_slug );
+        SubscriptionManager::activate( $user_id, $plan_slug, $duration_days );
     }
 }

@@ -69,12 +69,17 @@ class Bump {
 
     /**
      * Perform a bump on behalf of $user_id for $property_id. Enforces the daily
-     * limit, records the event, and refreshes the listing's recency signal.
+     * limit (unless $ignore_limit), records the event, and refreshes the
+     * listing's recency signal.
+     *
+     * @param int  $property_id  Property post ID to bump.
+     * @param int  $user_id      User performing the bump.
+     * @param bool $ignore_limit Skip the per-user daily cap (used by admin tooling).
      *
      * @return array{success:bool, message:string, remaining:int}
      */
-    public static function bump( int $property_id, int $user_id ): array {
-        if ( ! self::can_bump( $user_id ) ) {
+    public static function bump( int $property_id, int $user_id, bool $ignore_limit = false ): array {
+        if ( ! $ignore_limit && ! self::can_bump( $user_id ) ) {
             return [
                 'success'   => false,
                 'message'   => sprintf(

@@ -131,14 +131,27 @@ class UserSubscription {
      */
     public static function status_label( string $status ): string {
         $labels = [
-            self::STATUS_NONE      => __( 'No Subscription', 'ovr-core' ),
+            self::STATUS_NONE      => __( 'Base Subscriber', 'ovr-core' ),
             self::STATUS_PENDING   => __( 'Pending Payment', 'ovr-core' ),
             self::STATUS_ACTIVE    => __( 'Active', 'ovr-core' ),
-            self::STATUS_EXPIRED   => __( 'Expired', 'ovr-core' ),
+            self::STATUS_EXPIRED   => __( 'Base Subscriber', 'ovr-core' ),
             self::STATUS_CANCELLED => __( 'Cancelled', 'ovr-core' ),
             self::STATUS_SUSPENDED => __( 'Suspended', 'ovr-core' ),
         ];
         return $labels[ $status ] ?? __( 'Unknown', 'ovr-core' );
+    }
+
+    /**
+     * Whether the user is in a Base Subscriber state (never activated or expired).
+     * Both states share the same business-facing behavior: no paid entitlement,
+     * login allowed, activation/renewal required.
+     */
+    public static function is_base_subscriber( int $user_id = 0 ): bool {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        $status = self::get_status( $user_id );
+        return self::STATUS_NONE === $status || self::STATUS_EXPIRED === $status;
     }
 
     /**

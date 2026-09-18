@@ -21,7 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
             <table class="widefat striped">
                 <thead><tr>
                     <th><?php esc_html_e( 'Code', 'ovr-core' ); ?></th>
+                    <th><?php esc_html_e( 'Promo price', 'ovr-core' ); ?></th>
                     <th><?php esc_html_e( 'Discount', 'ovr-core' ); ?></th>
+                    <th><?php esc_html_e( 'Duration', 'ovr-core' ); ?></th>
                     <th><?php esc_html_e( 'Plans', 'ovr-core' ); ?></th>
                     <th><?php esc_html_e( 'Uses', 'ovr-core' ); ?></th>
                     <th><?php esc_html_e( 'Valid', 'ovr-core' ); ?></th>
@@ -30,7 +32,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                 </tr></thead>
                 <tbody>
                 <?php if ( empty( $rows ) ) : ?>
-                    <tr><td colspan="7"><?php esc_html_e( 'No promo codes yet.', 'ovr-core' ); ?></td></tr>
+                    <tr><td colspan="8"><?php esc_html_e( 'No promo codes yet.', 'ovr-core' ); ?></td></tr>
                 <?php else : foreach ( $rows as $r ) : ?>
                     <?php
                     $plans_raw = $r['applicable_plans'] ?? '';
@@ -43,12 +45,18 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                         $plans_list = esc_html__( 'All plans', 'ovr-core' );
                     }
                     $disc = 'percentage' === $r['discount_type'] ? $r['discount_value'] . '%' : '$' . number_format( (float) $r['discount_value'], 2 );
+                    $promo_price_disp = ( isset( $r['promo_price'] ) && null !== $r['promo_price'] && '' !== (string) $r['promo_price'] )
+                        ? '$' . number_format( (float) $r['promo_price'], 2 )
+                        : '—';
+                    $duration = ! empty( $r['duration_days'] ) ? esc_html( $r['duration_days'] . 'd' ) : '—';
                     $uses = esc_html( $r['current_uses'] . ( null !== $r['max_uses'] ? ' / ' . $r['max_uses'] : '' ) );
                     $valid = trim( ( $r['valid_from'] ?? '' ) . ' ' . ( $r['valid_until'] ?? '' ) ) ?: '—';
                     ?>
                     <tr>
                         <td><code><?php echo esc_html( $r['code'] ); ?></code></td>
+                        <td><?php echo esc_html( $promo_price_disp ); ?></td>
                         <td><?php echo esc_html( $disc ); ?></td>
+                        <td><?php echo $duration; ?></td>
                         <td style="font-size:12px"><?php echo $plans_list; ?></td>
                         <td><?php echo $uses; ?></td>
                         <td style="font-size:12px"><?php echo esc_html( $valid ); ?></td>
@@ -73,15 +81,22 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                 <p><label><strong><?php esc_html_e( 'Code', 'ovr-core' ); ?></strong><br>
                     <input type="text" name="code" value="<?php echo esc_attr( $editing['code'] ?? '' ); ?>" style="width:100%;text-transform:uppercase" required placeholder="SUMMER20"></label></p>
 
+                <p><label><strong><?php esc_html_e( 'Promo Subscription Price (blank = use plan price)', 'ovr-core' ); ?></strong><br>
+                    <input type="number" step="0.01" min="0" name="promo_price" value="<?php echo esc_attr( ( isset( $editing['promo_price'] ) && null !== $editing['promo_price'] ) ? $editing['promo_price'] : '' ); ?>" style="width:100%" placeholder="e.g. 79.00 (0 = free)"></label><br><span style="font-size:12px;color:#646970"><?php esc_html_e( 'Explicit final subscription price under this promo. Leave blank to keep the plan price (or use the legacy discount below).', 'ovr-core' ); ?></span></p>
+
                 <p style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <label><strong><?php esc_html_e( 'Type', 'ovr-core' ); ?></strong><br>
+                    <label><strong><?php esc_html_e( 'Legacy discount type', 'ovr-core' ); ?></strong><br>
                         <select name="discount_type" style="width:100%">
                             <option value="percentage" <?php selected( $editing['discount_type'] ?? 'percentage', 'percentage' ); ?>><?php esc_html_e( 'Percentage %', 'ovr-core' ); ?></option>
                             <option value="fixed" <?php selected( $editing['discount_type'] ?? '', 'fixed' ); ?>><?php esc_html_e( 'Fixed $', 'ovr-core' ); ?></option>
                         </select></label>
-                    <label><strong><?php esc_html_e( 'Value', 'ovr-core' ); ?></strong><br>
-                        <input type="number" step="0.01" min="0" name="discount_value" value="<?php echo esc_attr( $editing['discount_value'] ?? '' ); ?>" style="width:100%" required></label>
+                    <label><strong><?php esc_html_e( 'Legacy discount value', 'ovr-core' ); ?></strong><br>
+                        <input type="number" step="0.01" min="0" name="discount_value" value="<?php echo esc_attr( $editing['discount_value'] ?? '' ); ?>" style="width:100%"></label>
                 </p>
+                <p style="font-size:12px;color:#646970;margin-top:-6px"><?php esc_html_e( 'Legacy discount is only used when no Promo Subscription Price is set. Existing percentage/fixed codes continue to work.', 'ovr-core' ); ?></p>
+
+                <p><label><strong><?php esc_html_e( 'Promo Subscription Duration (days, blank = plan default)', 'ovr-core' ); ?></strong><br>
+                    <input type="number" min="1" name="duration_days" value="<?php echo esc_attr( $editing['duration_days'] ?? '' ); ?>" style="width:100%" placeholder="e.g. 365"></label><br><span style="font-size:12px;color:#646970"><?php esc_html_e( 'When set, this promo grants this many days instead of the plan\'s normal period.', 'ovr-core' ); ?></span></p>
 
                 <p><label><strong><?php esc_html_e( 'Max Uses (blank = unlimited)', 'ovr-core' ); ?></strong><br>
                     <input type="number" min="1" name="max_uses" value="<?php echo esc_attr( $editing['max_uses'] ?? '' ); ?>" style="width:100%"></label></p>

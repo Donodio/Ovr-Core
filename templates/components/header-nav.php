@@ -43,13 +43,18 @@ $site_name    = $site_name ?? ( get_bloginfo( 'name' ) ?: __( 'Our Villages Rent
         <nav class="ovr-nav-links" aria-label="<?php esc_attr_e( 'Primary navigation', 'ovr-core' ); ?>">
             <?php foreach ( $nav_items as $slug => $item ) : ?>
                 <?php if ( ! empty( $item['children'] ) ) : ?>
+                    <?php
+                    $clickable_count = 0;
+                    foreach ( (array) $item['children'] as $c ) { if ( empty( $c['divider'] ) ) { $clickable_count++; } }
+                    $is_mega = $clickable_count > 6;
+                    ?>
                     <div class="ovr-nav-item ovr-has-menu<?php echo ( $active_group ?? '' ) === $slug ? ' active' : ''; ?>">
                         <button type="button" class="ovr-nav-link ovr-nav-toggle" aria-haspopup="true" aria-expanded="false" data-ovr-nav-toggle>
                             <span class="material-symbols-outlined ovr-nav-trigger-icon" aria-hidden="true"><?php echo esc_html( $item['icon'] ?? '' ); ?></span>
                             <?php echo esc_html( $item['label'] ); ?>
                             <span class="material-symbols-outlined ovr-nav-caret" aria-hidden="true">expand_more</span>
                         </button>
-                        <div class="ovr-nav-dropdown" role="menu">
+                        <div class="ovr-nav-dropdown<?php echo $is_mega ? ' ovr-nav-dropdown--mega' : ''; ?>" role="menu">
                             <?php foreach ( $item['children'] as $child ) : ?>
                                 <?php if ( ! empty( $child['divider'] ) ) : ?>
                                     <div class="ovr-nav-dropdown-divider" role="separator"></div>

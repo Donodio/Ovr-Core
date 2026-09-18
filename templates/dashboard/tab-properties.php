@@ -156,7 +156,8 @@ foreach ( $properties as $p ) {
                 </thead>
                 <tbody>
                 <?php foreach ( $properties as $p ) :
-                    $listing_st = (string) get_post_meta( $p->ID, '_ovr_listing_status', true ) ?: 'active';
+                    $listing_st   = \OVR\Property\PropertyQuery::listing_display_status( $p->ID );
+                    $raw_status   = (string) get_post_meta( $p->ID, '_ovr_listing_status', true ) ?: 'active';
                     $address    = trim( (string) get_post_meta( $p->ID, '_ovr_address', true ) );
                     $village    = (string) get_post_meta( $p->ID, '_ovr_village_name', true );
                     $views      = (int) get_post_meta( $p->ID, '_ovr_view_count', true );
@@ -167,18 +168,22 @@ foreach ( $properties as $p ) {
                     $identifier = $address ?: ( $village ?: (string) $p->post_title );
 
                     $status_color = [
-                        'active'          => 'var(--ovr-secondary-container)',
-                        'inactive'        => 'var(--ovr-error-container)',
-                        'pending_renewal' => 'var(--ovr-tertiary-container)',
-                        'archived'        => 'var(--ovr-surface-container)',
-                        'draft'           => 'var(--ovr-surface-container)',
+                        'active'                   => 'var(--ovr-secondary-container)',
+                        'inactive'                 => 'var(--ovr-error-container)',
+                        'pending_renewal'          => 'var(--ovr-tertiary-container)',
+                        'active_pending_renewal'   => 'var(--ovr-tertiary-container)',
+                        'inactive_pending_renewal' => 'var(--ovr-tertiary-container)',
+                        'archived'                 => 'var(--ovr-surface-container)',
+                        'draft'                    => 'var(--ovr-surface-container)',
                     ][ $listing_st ] ?? 'var(--ovr-surface-container)';
                     $status_text = [
-                        'active'          => __( 'Active', 'ovr-core' ),
-                        'inactive'        => __( 'Inactive', 'ovr-core' ),
-                        'pending_renewal' => __( 'Pending', 'ovr-core' ),
-                        'archived'        => __( 'Archived', 'ovr-core' ),
-                        'draft'           => __( 'Draft', 'ovr-core' ),
+                        'active'                   => __( 'Active', 'ovr-core' ),
+                        'inactive'                 => __( 'Inactive', 'ovr-core' ),
+                        'pending_renewal'          => __( 'Pending', 'ovr-core' ),
+                        'active_pending_renewal'   => __( 'Active/Pending', 'ovr-core' ),
+                        'inactive_pending_renewal' => __( 'Inactive/Pending', 'ovr-core' ),
+                        'archived'                 => __( 'Archived', 'ovr-core' ),
+                        'draft'                    => __( 'Draft', 'ovr-core' ),
                     ][ $listing_st ] ?? $listing_st;
 
                     $del_url = wp_nonce_url(
@@ -223,7 +228,7 @@ foreach ( $properties as $p ) {
                                 <span class="material-symbols-outlined">trending_up</span>
                             </a>
                             <a href="<?php echo esc_url( $upgrade_url ); ?>" class="ovr-mylist__act ovr-mylist__act--upgrade" title="<?php esc_attr_e( 'Purchase a promotion upgrade', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Upgrade', 'ovr-core' ); ?>">
-                                <span class="material-symbols-outlined">rocket_launch</span>
+                                <span class="material-symbols-outlined">trending_up</span>
                             </a>
                             <?php if ( $is_archived ) : ?>
                                 <a href="<?php echo esc_url( $restore_url ); ?>" class="ovr-mylist__act ovr-mylist__act--edit" title="<?php esc_attr_e( 'Restore from archive', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Restore', 'ovr-core' ); ?>">

@@ -323,7 +323,6 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                     <label class="ovr-pm-field-label" for="pm-method"><?php esc_html_e( 'Method', 'ovr-core' ); ?></label>
                     <select id="pm-method" name="method">
                         <option value="" <?php selected( $method, '' ); ?>><?php esc_html_e( 'All Methods', 'ovr-core' ); ?></option>
-                        <option value="stripe" <?php selected( $method, 'stripe' ); ?>><?php esc_html_e( 'Stripe', 'ovr-core' ); ?></option>
                         <option value="paypal" <?php selected( $method, 'paypal' ); ?>><?php esc_html_e( 'PayPal', 'ovr-core' ); ?></option>
                         <option value="authorize_net" <?php selected( $method, 'authorize_net' ); ?>><?php esc_html_e( 'Authorize.net', 'ovr-core' ); ?></option>
                         <option value="wallet" <?php selected( $method, 'wallet' ); ?>><?php esc_html_e( 'Wallet', 'ovr-core' ); ?></option>

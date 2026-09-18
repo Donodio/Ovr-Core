@@ -3,14 +3,14 @@
  * Listing Upgrades tab — active boosts + available upgrade products.
  * Scoped under `.ovr-ld`; the dashboard shell supplies the surrounding nav.
  *
- * Purchases are per-listing: a buyer reaches this tab via a listing's "Bump"
+ * Purchases are per-listing: a buyer reaches this tab via a listing's "Upgrade"
  * button (?post=ID), which sets $boost_post. The CTAs then carry that listing
  * into checkout; when paid, UpgradeActivator turns the purchase into a live,
  * time-boxed boost. "Active Upgrades" reflects every listing with a live boost.
  *
  * @package OVR
  * @var \WP_Post[]      $boosted     Listings with a live boost.
- * @var \WP_Post|null   $boost_post  Listing chosen via "Bump" (or null).
+ * @var \WP_Post|null   $boost_post  Listing chosen via "Upgrade" (or null).
  * @var \WP_Post[]      $properties  All the user's listings.
  * @var array           $upgrades
  * @var string          $checkout_url
@@ -50,7 +50,7 @@ $boost_count  = count( $boosted );
         <span class="material-symbols-outlined">info</span>
         <div>
             <p class="ld-up-context-lbl"><?php esc_html_e( 'Pick a listing to boost', 'ovr-core' ); ?></p>
-            <p class="ld-up-context-name"><?php esc_html_e( 'Open My Listings and click “Bump” on the property you want to promote — that brings you back here ready to buy.', 'ovr-core' ); ?></p>
+            <p class="ld-up-context-name"><?php esc_html_e( 'Open My Listings and click “Upgrade” on the property you want to promote — that brings you back here ready to buy.', 'ovr-core' ); ?></p>
         </div>
         <a class="ld-up-context-change" href="<?php echo esc_url( $props_url ); ?>"><?php esc_html_e( 'Go to My Listings', 'ovr-core' ); ?></a>
     </div>
@@ -67,7 +67,7 @@ $boost_count  = count( $boosted );
 
     <?php if ( empty( $boosted ) ) : ?>
         <div class="ld-up-empty">
-            <span class="material-symbols-outlined">rocket_launch</span>
+            <span class="material-symbols-outlined">trending_up</span>
             <p><?php esc_html_e( 'None of your listings are boosted yet. Pick an upgrade below to stand out.', 'ovr-core' ); ?></p>
         </div>
     <?php else : ?>

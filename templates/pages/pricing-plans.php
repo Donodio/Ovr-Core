@@ -84,13 +84,17 @@ if ( 'cards' === $layout && $columns >= 1 && $columns <= 5 ) {
                         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0">
                             <input type="hidden" name="action" value="ovr_start_checkout">
                             <input type="hidden" name="plan" value="<?php echo esc_attr( $plan['slug'] ); ?>">
+                            <input type="hidden" name="ovr_checkout_intent" value="<?php echo esc_attr( wp_generate_uuid4() ); ?>">
                             <?php wp_nonce_field( 'ovr_checkout_action', 'ovr_checkout_nonce' ); ?>
                             <button type="submit" class="<?php echo esc_attr( $btn_class ); ?>" data-plan="<?php echo esc_attr( $plan['slug'] ); ?>">
                                 <?php esc_html_e( 'Activate Free Plan', 'ovr-core' ); ?>
                             </button>
                         </form>
-                    <?php else : ?>
-                        <a href="<?php echo esc_url( add_query_arg( 'plan', $plan['slug'], \OVR\Core\Pages::get_page_url( 'ovr_page_checkout' ) ) ); ?>" class="<?php echo esc_attr( $btn_class ); ?>">
+                    <?php else :
+                        $sel_url = \OVR\Core\Pages::get_page_url( 'ovr_page_subscription_select' );
+                        $href    = add_query_arg( 'plan', $plan['slug'], $sel_url );
+                    ?>
+                        <a href="<?php echo esc_url( $href ); ?>" class="<?php echo esc_attr( $btn_class ); ?>">
                             <?php esc_html_e( 'Select Plan', 'ovr-core' ); ?>
                         </a>
                     <?php endif; ?>

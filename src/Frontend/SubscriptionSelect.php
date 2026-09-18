@@ -52,16 +52,41 @@ class SubscriptionSelect {
         uasort( $plans, static fn( $a, $b ) => ( (int) ( $a['sort_order'] ?? 0 ) ) <=> ( (int) ( $b['sort_order'] ?? 0 ) ) );
 
         $sub_status = UserSubscription::get_status( $user->ID );
-        $is_expired  = ( UserSubscription::STATUS_EXPIRED === $sub_status );
+        $is_expired  = in_array( $sub_status, [ UserSubscription::STATUS_EXPIRED, UserSubscription::STATUS_CANCELLED ], true );
         $is_pending  = ( UserSubscription::STATUS_PENDING === $sub_status );
+        $context     = $is_expired ? 'renewal' : 'new';
+        $origin      = sanitize_key( $_GET['origin'] ?? ( $is_expired ? 'renewal' : 'activation' ) );
+        $valid_origins = [ 'activation', 'renewal', 'dashboard' ];
+        if ( ! in_array( $origin, $valid_origins, true ) ) {
+            $origin = $is_expired ? 'renewal' : 'activation';
+        }
+        $cancel_url  = 'renewal' === $origin
+            ? add_query_arg( 'tab', 'subscription', Pages::get_page_url( 'ovr_page_dashboard' ) )
+            : Pages::get_page_url( 'ovr_page_login' );
+
+        $preselected = sanitize_key( wp_unslash( $_GET['plan'] ?? '' ) );
+        if ( '' !== $preselected && ! isset( $plans[ $preselected ] ) ) {
+            $preselected = '';
+        }
+
+        $settings = (array) get_option( 'ovr_settings', [] );
 
         return TemplateLoader::get_rendered( 'auth/subscription-select.php', [
-            'user'         => $user,
-            'plans'        => $plans,
-            'checkout_url' => Pages::get_page_url( 'ovr_page_checkout' ),
-            'logout_url'   => wp_logout_url( Pages::get_page_url( 'ovr_page_login' ) ),
-            'is_expired'   => $is_expired,
-            'is_pending'   => $is_pending,
+            'user'          => $user,
+            'plans'         => $plans,
+            'preselected'   => $preselected,
+            'continue_url'  => admin_url( 'admin-post.php' ),
+            'checkout_url'  => Pages::get_page_url( 'ovr_page_checkout' ),
+            'logout_url'    => wp_logout_url( Pages::get_page_url( 'ovr_page_login' ) ),
+            'is_expired'    => $is_expired,
+            'is_pending'    => $is_pending,
+            'context'       => $context,
+            'origin'        => $origin,
+            'cancel_url'    => $cancel_url,
+            'nonce'         => wp_create_nonce( 'ovr_continue_checkout' ),
+            'public_nonce'  => wp_create_nonce( 'ovr_public_nonce' ),
+            'ajax_url'      => admin_url( 'admin-ajax.php' ),
+            'symbol'        => (string) ( $settings['currency_symbol'] ?? '$' ),
         ] );
     }
 }

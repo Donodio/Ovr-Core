@@ -160,6 +160,10 @@ class Assets {
                 'error'      => esc_html__( 'Something went wrong. Please try again.', 'ovr-core' ),
                 'noResults'  => esc_html__( 'No properties found matching your criteria.', 'ovr-core' ),
                 'confirm'    => esc_html__( 'Are you sure?', 'ovr-core' ),
+                'videoTitle' => esc_html__( 'Property video tour', 'ovr-core' ),
+                'codecNote'  => esc_html__( 'This video uses a codec (HEVC/H.265) that your browser may not support. Please contact the owner for an alternative format.', 'ovr-core' ),
+                'panoramaAlt' => esc_html__( '360° panorama', 'ovr-core' ),
+                'virtualTourTitle' => esc_html__( 'Virtual Tour', 'ovr-core' ),
             ],
         ] );
 

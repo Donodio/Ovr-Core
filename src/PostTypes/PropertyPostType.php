@@ -30,6 +30,12 @@ class PropertyPostType {
 
     public function init(): void {
         add_action( 'init', [ $this, 'register_post_type' ] );
+        add_action( 'init', [ $this, 'register_clean_url_rewrite' ] );
+        add_action( 'template_redirect', [ $this, 'redirect_old_property_url' ] );
+        add_filter( 'post_type_link', [ $this, 'filter_property_permalink' ], 10, 2 );
+
+        // Assign an immutable public OVR property number on first save.
+        add_action( 'save_post_ovr_property', [ \OVR\Property\PropertyNumber::class, 'maybe_assign' ], 1, 3 );
     }
 
     /**
@@ -90,5 +96,65 @@ class PropertyPostType {
             'protected'                 => true,
             'label_count'               => _n_noop( 'Archived <span class="count">(%s)</span>', 'Archived <span class="count">(%s)</span>', 'ovr-core' ),
         ] );
+    }
+
+    /**
+     * Register an additional clean listing URL pattern: /listing/{id}/
+     *
+     * This is a human-shareable, stable identifier (the WP post ID never changes
+     * even if the title/slug is edited). The existing /property/{slug}/ pattern
+     * continues to work; this rule simply provides an additional entry point.
+     */
+    public static function register_clean_url_rewrite(): void {
+        add_rewrite_rule(
+            'listing/([0-9]+)/?$',
+            'index.php?post_type=ovr_property&p=$matches[1]',
+            'top'
+        );
+
+        if ( get_option( 'ovr_property_rewrite_version' ) !== '3' ) {
+            flush_rewrite_rules();
+            update_option( 'ovr_property_rewrite_version', '3' );
+        }
+    }
+
+    /**
+     * Override ovr_property permalinks from /property/{slug}/ to /listing/{id}/
+     * so get_permalink(), wp_mail links, and SEO tags all use the clean format.
+     */
+    public static function filter_property_permalink( string $url, \WP_Post $post ): string {
+        if ( self::POST_TYPE !== $post->post_type ) {
+            return $url;
+        }
+        return home_url( '/listing/' . $post->ID . '/' );
+    }
+
+    /**
+     * 301 redirect old /property/{slug}/ URLs to the new clean /listing/{id}/
+     * format. Only fires on singular ovr_property views; preserves the query
+     * string (e.g. utm_ parameters) so tracking isn't lost.
+     */
+    public static function redirect_old_property_url(): void {
+        if ( ! is_singular( self::POST_TYPE ) ) {
+            return;
+        }
+
+        $pid    = get_queried_object_id();
+        $slug   = (string) get_post_field( 'post_name', $pid );
+        $req    = (string) ( $_SERVER['REQUEST_URI'] ?? '' );
+
+        // Match /property/{slug}/ or /property/{slug} (no trailing slash).
+        $pattern = '#^/property/' . preg_quote( $slug, '#' ) . '/?$#';
+        if ( ! preg_match( $pattern, $req ) ) {
+            return;
+        }
+
+        $new_url = home_url( '/listing/' . $pid . '/' );
+        if ( ! empty( $_SERVER['QUERY_STRING'] ) ) {
+            $new_url .= '?' . $_SERVER['QUERY_STRING'];
+        }
+
+        wp_safe_redirect( $new_url, 301 );
+        exit;
     }
 }

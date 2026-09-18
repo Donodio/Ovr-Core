@@ -3,6 +3,7 @@
 namespace OVR\Admin;
 
 use OVR\Core\AuditLog;
+use OVR\Property\Bump;
 use OVR\Subscription\UpgradeActivator;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -129,7 +130,7 @@ class PropertyListScreen {
         add_action( 'wp_ajax_ovr_admin_remove_listing_service', [ $this, 'ajax_remove_service' ] );
         add_action( 'wp_ajax_ovr_admin_get_services',  [ $this, 'ajax_get_services' ] );
         add_action( 'wp_ajax_ovr_admin_bulk_action',    [ $this, 'ajax_bulk_action' ] );
-        add_action( 'wp_ajax_ovr_admin_duplicate_property', [ $this, 'ajax_duplicate_property' ] );
+        add_action( 'wp_ajax_ovr_admin_bump_property',  [ $this, 'ajax_bump_property' ] );
         add_action( 'wp_ajax_ovr_admin_restore_property', [ $this, 'ajax_restore_property' ] );
         add_action( 'wp_ajax_ovr_admin_perma_delete_property', [ $this, 'ajax_perma_delete_property' ] );
         add_action( 'admin_post_ovr_admin_archive_listing', [ $this, 'handle_admin_archive' ] );
@@ -248,7 +249,7 @@ class PropertyListScreen {
             }
 
             fputcsv( $output, self::csv_safe_row( [
-                $pid,
+                \OVR\Property\PropertyNumber::get( (int) $pid ),
                 get_post_meta( $pid, '_ovr_admin_status', true ) ?: 'approved',
                 get_post_meta( $pid, '_ovr_base_price', true ),
                 ! is_wp_error( $types ) && $types ? $types[0] : '',
@@ -599,7 +600,7 @@ class PropertyListScreen {
         return $query;
     }
 
-    /** Match listing post IDs by (partial) numeric ID. */
+    /** Match listings by public property number (partial numeric match). */
     private function listing_ids_matching_id( string $term ): array {
         global $wpdb;
         $digits = preg_replace( '/\D+/', '', $term );
@@ -608,7 +609,9 @@ class PropertyListScreen {
         }
         $like = '%' . $wpdb->esc_like( $digits ) . '%';
         $ids  = $wpdb->get_col( $wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND CAST(ID AS CHAR) LIKE %s",
+            "SELECT p.ID FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->prefix}ovr_property_numbers pn ON pn.post_id = p.ID
+             WHERE p.post_type = %s AND CAST(pn.id AS CHAR) LIKE %s",
             self::PT,
             $like
         ) );
@@ -639,9 +642,14 @@ class PropertyListScreen {
         if ( is_numeric( $term ) ) {
             $id_like = '%' . $wpdb->esc_like( $term ) . '%';
             return $wpdb->prepare(
-                " AND ({$wpdb->posts}.ID LIKE %s OR {$wpdb->posts}.post_title LIKE %s) ",
-                $id_like,
-                '%' . $wpdb->esc_like( $term ) . '%'
+                " AND ({$wpdb->posts}.post_title LIKE %s
+                  OR EXISTS (
+                      SELECT 1 FROM {$wpdb->prefix}ovr_property_numbers pn
+                      WHERE pn.post_id = {$wpdb->posts}.ID
+                        AND CAST(pn.id AS CHAR) LIKE %s
+                  )) ",
+                '%' . $wpdb->esc_like( $term ) . '%',
+                $id_like
             );
         }
 
@@ -805,14 +813,15 @@ class PropertyListScreen {
 
     private function render_pid_cell( int $pid ): void {
         $edit_url = admin_url( 'admin.php?page=ovr-edit-listing&post=' . $pid );
+        $public_id = \OVR\Property\PropertyNumber::get( $pid );
         printf(
             '<a href="%s" class="ovr-pls-pid">%d</a>
              <button type="button" class="ovr-pls-copy-id" data-clipboard="%d" title="%s">
-                 <span class="material-symbols-outlined">content_copy</span>
+                  <span class="material-symbols-outlined">content_copy</span>
              </button>',
             esc_url( $edit_url ),
-            $pid,
-            $pid,
+            $public_id,
+            $public_id,
             esc_attr__( 'Copy ID', 'ovr-core' )
         );
     }
@@ -962,7 +971,7 @@ class PropertyListScreen {
             admin_url( 'admin-post.php?action=ovr_admin_archive_listing&post=' . $pid ),
             'ovr_admin_archive_listing_' . $pid
         );
-        $duplicate_nonce = wp_create_nonce( 'ovr_duplicate_property' );
+        $bump_nonce = wp_create_nonce( 'ovr_admin_bump_property_' . $pid );
         $is_trashed = \OVR\PostTypes\PropertyPostType::STATUS_ARCHIVED === get_post_status( $pid );
 
         echo '<div class="ovr-pls-actions">';
@@ -970,7 +979,7 @@ class PropertyListScreen {
         if ( $is_trashed ) {
             // Soft-deleted rows: Restore + Permanently Delete (both confirmed in
             // JS). Editing a trashed listing is blocked by core, so we swap the
-            // usual edit/duplicate actions for recovery ones.
+            // usual edit/bump actions for recovery ones.
             $restore_nonce = wp_create_nonce( 'ovr_restore_property_' . $pid );
             $purge_nonce   = wp_create_nonce( 'ovr_perma_delete_property_' . $pid );
 
@@ -1015,10 +1024,10 @@ class PropertyListScreen {
         );
 
         printf(
-            '<button type="button" class="ovr-pls-act ovr-pls-act--dup" data-pid="%d" data-nonce="%s" title="%s"><span class="material-symbols-outlined">content_copy</span></button>',
+            '<button type="button" class="ovr-pls-act ovr-pls-act--bump" data-pid="%d" data-nonce="%s" title="%s"><span class="material-symbols-outlined">trending_up</span></button>',
             $pid,
-            esc_attr( $duplicate_nonce ),
-            esc_attr__( 'Duplicate', 'ovr-core' )
+            esc_attr( $bump_nonce ),
+            esc_attr__( 'Bump to top of results', 'ovr-core' )
         );
 
         if ( $delete_url ) {
@@ -1368,55 +1377,39 @@ class PropertyListScreen {
     //  AJAX: Bulk actions
     // ──────────────────────────────────────────────
 
-    public function ajax_duplicate_property(): void {
-        if ( ! check_ajax_referer( 'ovr_duplicate_property', 'nonce', false )
-             || ! current_user_can( 'manage_options' ) ) {
+    /**
+     * AJAX: bump a listing to the top of the default search ordering from the
+     * All Properties row action (replaces the old Duplicate action). Admins may
+     * bump any listing and are not subject to the per-landlord daily cap.
+     */
+    public function ajax_bump_property(): void {
+        $post_id = absint( $_POST['listing_id'] ?? 0 );
+
+        if ( ! current_user_can( 'manage_options' )
+             || ! check_ajax_referer( 'ovr_admin_bump_property_' . $post_id, 'nonce', false ) ) {
             wp_send_json_error( [ 'message' => __( 'Permission denied.', 'ovr-core' ) ], 403 );
         }
 
-        $post_id = absint( $_POST['listing_id'] ?? 0 );
-        $post    = get_post( $post_id );
+        $post = get_post( $post_id );
         if ( ! $post || self::PT !== $post->post_type ) {
             wp_send_json_error( [ 'message' => __( 'Listing not found.', 'ovr-core' ) ], 404 );
         }
 
-        $new = wp_insert_post( [
-            'post_type'    => self::PT,
-            'post_status'  => 'draft',
-            'post_title'   => $post->post_title . ' — Copy',
-            'post_author'  => $post->post_author,
-            'post_content' => $post->post_content,
-            'post_excerpt' => $post->post_excerpt,
-        ] );
+        $user_id = get_current_user_id();
+        $result  = Bump::bump( $post_id, $user_id, true );
 
-        if ( is_wp_error( $new ) || ! $new ) {
-            wp_send_json_error( [ 'message' => __( 'Could not duplicate this listing.', 'ovr-core' ) ], 500 );
+        if ( ! $result['success'] ) {
+            wp_send_json_error( [ 'message' => $result['message'] ], 400 );
         }
 
-        // Copy every piece of post meta (except the redundant naming flags).
-        $meta = get_post_meta( $post_id );
-        foreach ( $meta as $key => $values ) {
-            if ( in_array( $key, [ '_edit_last', '_edit_lock' ], true ) ) {
-                continue;
-            }
-            foreach ( $values as $value ) {
-                add_post_meta( $new, $key, $value );
-            }
-        }
-
-        // Clone the taxonomies (village section, type, amenities, features, views…).
-        $taxonomies = get_object_taxonomies( self::PT );
-        foreach ( $taxonomies as $tax ) {
-            $terms = wp_get_object_terms( $post_id, $tax, [ 'fields' => 'ids' ] );
-            if ( ! is_wp_error( $terms ) ) {
-                wp_set_object_terms( $new, $terms, $tax );
-            }
-        }
-
-        AuditLog::record( 'admin.duplicate', 'listing', (int) $new, [ 'source' => $post_id ], (int) $post->post_author );
+        AuditLog::record( 'admin.bump', 'listing', $post_id, [], $user_id );
 
         wp_send_json_success( [
-            'message' => sprintf( __( 'Listing %d duplicated to #%d (draft).', 'ovr-core' ), $post_id, $new ),
+            'message' => sprintf(
+                /* translators: %d: listing/property ID */
+                __( 'Listing #%d bumped to the top of its results.', 'ovr-core' ),
+                $post_id
+            ),
         ] );
     }
 

@@ -63,25 +63,60 @@ class Notifications {
         add_action( 'ovr_support_ticket_created',  [ $this, 'on_support_ticket_created' ], 10, 2 );
         add_action( 'ovr_support_ticket_reply',    [ $this, 'on_support_ticket_reply' ], 10, 2 );
 
-        add_action( 'retrieve_password',           [ $this, 'on_retrieve_password' ], 10, 3 );
+        add_action( 'retrieve_password_key',         [ $this, 'on_retrieve_password_key' ], 10, 2 );
 
         // Capture the title on trash so the deletion notice still has it.
         add_action( 'wp_trash_post',               [ $this, 'capture_trash_title' ], 10, 1 );
     }
 
     /**
-     * Welcome email after a successful registration.
+     * Welcome email after a successful registration, plus the admin
+     * "A new user has registered" notice (Section 1).
+     *
+     * Each send is guarded by its own once-flag so a duplicate event never
+     * re-sends, and a failed admin notice can still be retried by a later
+     * event. Email failure never touches the account itself.
      */
     public function on_user_registered( int $user_id, bool $is_landlord = false ): void {
         $user = get_userdata( $user_id );
         if ( ! $user ) return;
 
-        Mailer::send( 'registration_welcome', [
-            'user_name'     => $user->display_name,
-            'user_email'    => $user->user_email,
-            'login_url'     => Pages::get_page_url( 'ovr_page_login' ),
-            'dashboard_url' => Pages::get_page_url( 'ovr_page_dashboard' ),
-        ], [ 'user_id' => $user_id ] );
+        if ( ! get_user_meta( $user_id, 'ovr_welcome_email_sent', true ) ) {
+            $sent = Mailer::send( 'registration_welcome', [
+                'user_name'       => $user->display_name,
+                'user_email'      => $user->user_email,
+                'login_url'       => Pages::get_page_url( 'ovr_page_login' ),
+                'dashboard_url'   => Pages::get_page_url( 'ovr_page_dashboard' ),
+                'subscription_url'=> Pages::get_page_url( 'ovr_page_subscription_select' ),
+                'admin_email'     => (string) get_option( 'admin_email' ),
+            ], [ 'user_id' => $user_id ] );
+
+            if ( $sent ) {
+                update_user_meta( $user_id, 'ovr_welcome_email_sent', '1' );
+            } else {
+                error_log( 'OVR registration: welcome email failed for user ' . $user_id );
+            }
+        }
+
+        // Admin notice — name + login email only. NEVER a password.
+        if ( ! get_user_meta( $user_id, 'ovr_new_user_admin_notified', true ) ) {
+            $registered_at = (string) get_user_meta( $user_id, 'ovr_registered_at', true );
+            $admin_sent = Mailer::send( 'new_user_registered', [
+                'user_name'      => $user->display_name,
+                'user_email'     => $user->user_email,
+                'login_email'    => $user->user_email,
+                'registered_at'  => $registered_at,
+                'is_landlord'    => $is_landlord ? __( 'Yes', 'ovr-core' ) : __( 'No', 'ovr-core' ),
+                'user_admin_url' => admin_url( 'user-edit.php?user_id=' . $user_id ),
+            ], [] );
+
+            if ( $admin_sent ) {
+                update_user_meta( $user_id, 'ovr_new_user_admin_notified', '1' );
+            } else {
+                // No flag: a later duplicate event retries. Account is untouched.
+                error_log( 'OVR registration: admin new-user notice failed for user ' . $user_id );
+            }
+        }
     }
 
     /**
@@ -105,7 +140,7 @@ class Notifications {
             Mailer::send( 'inquiry_landlord', [
                 'guest_name'      => (string) $row['guest_name'],
                 'listing_title'   => $property->post_title,
-                'property_id'     => (int) $property_id,
+                'property_id'     => \OVR\Property\PropertyNumber::get( (int) $property_id ),
                 'property_url'    => $property_url,
                 'inquiry_message' => (string) ( $row['message'] ?? '' ),
                 'dashboard_url'   => Pages::get_page_url( 'ovr_page_dashboard' ),
@@ -154,10 +189,20 @@ class Notifications {
 
         if ( 'subscription' === $type ) {
             $plan_slug = (string) ( $data['plan_slug'] ?? '' );
-            $plan      = $plan_slug ? Plans::get_plan( $plan_slug ) : null;
-            $vars['membership_name'] = $plan['name'] ?? ucfirst( str_replace( '_', ' ', $plan_slug ) );
-            $vars['dashboard_url']   = Pages::get_page_url( 'ovr_page_dashboard' );
-            Mailer::send( 'subscription_purchase', $vars, [ 'user_id' => $user_id ] );
+            $plan = $plan_slug ? Plans::get_plan( $plan_slug ) : null;
+            $vars['item_name'] = $plan ? (string) $plan['name'] : $plan_slug;
+            $vars['completed_at'] = current_time( 'mysql' );
+            Mailer::send( 'payment_successful_admin', $vars, [] );
+        } else {
+            $vars['item_name'] = (string) ( $data['item_name'] ?? ( $row['meta_data'] ?? '' ) );
+            $vars['completed_at'] = current_time( 'mysql' );
+            Mailer::send( 'payment_successful_admin', $vars, [] );
+        }
+
+        if ( 'subscription' === $type ) {
+            // Subscription activation is handled by on_subscription_activated()
+            // to avoid duplicate emails when both ovr_payment_completed and
+            // ovr_subscription_activated fire for the same purchase.
             return;
         }
 
@@ -193,16 +238,20 @@ class Notifications {
 
     /**
      * Subscription activated (new purchase) — same confirmation as a purchase.
+     * Payment amount is authoritative: the completed payment row, not the plan's
+     * base price, so promo-final prices are reflected correctly.
      */
     public function on_subscription_activated( int $user_id, string $plan_slug = '' ): void {
         $user = get_userdata( $user_id );
         if ( ! $user ) return;
 
         $plan = $plan_slug ? Plans::get_plan( $plan_slug ) : null;
+        $auth_amount = $this->latest_subscription_payment_amount( $user_id );
+        $amount = null !== $auth_amount ? $auth_amount : (float) ( $plan['price'] ?? 0 );
         Mailer::send( 'subscription_purchase', [
             'user_name'       => $user->display_name,
             'membership_name' => $plan['name'] ?? ucfirst( str_replace( '_', ' ', $plan_slug ) ),
-            'payment_amount'  => wc_price_format( (float) ( $plan['price'] ?? 0 ) ),
+            'payment_amount'  => wc_price_format( $amount ),
             'expiration_date' => $this->expiry_date( $user_id ),
             'dashboard_url'   => Pages::get_page_url( 'ovr_page_dashboard' ),
         ], [ 'user_id' => $user_id ] );
@@ -213,11 +262,13 @@ class Notifications {
         if ( ! $user ) return;
 
         $plan = $plan_slug ? Plans::get_plan( $plan_slug ) : null;
+        $auth_amount = $this->latest_subscription_payment_amount( $user_id );
+        $amount = null !== $auth_amount ? $auth_amount : (float) ( $plan['price'] ?? 0 );
         Mailer::send( 'subscription_renewal', [
             'user_name'       => $user->display_name,
             'membership_name' => $plan['name'] ?? ucfirst( str_replace( '_', ' ', $plan_slug ) ),
             'expiration_date' => $this->expiry_date( $user_id ),
-            'payment_amount'  => wc_price_format( (float) ( $plan['price'] ?? 0 ) ),
+            'payment_amount'  => wc_price_format( $amount ),
         ], [ 'user_id' => $user_id ] );
     }
 
@@ -244,13 +295,13 @@ class Notifications {
         if ( $editing || 'pending' !== $post->post_status ) return;
 
         $owner = get_userdata( $user_id );
-        Mailer::send( 'listing_submitted', [
-            'owner_name'   => $owner ? $owner->display_name : '',
-            'listing_title' => $post->post_title,
-            'property_id'  => $post_id,
-            'property_url' => get_edit_post_link( $post_id, 'raw' ) ?: admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
-            'dashboard_url' => Pages::get_page_url( 'ovr_page_dashboard' ),
-        ], [ 'user_id' => $user_id ] );
+            Mailer::send( 'listing_submitted', [
+                'owner_name'    => $owner ? $owner->display_name : '',
+                'listing_title' => $post->post_title,
+                'property_id'   => \OVR\Property\PropertyNumber::get( (int) $post_id ),
+                'property_url'  => get_edit_post_link( $post_id, 'raw' ) ?: admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+                'dashboard_url' => Pages::get_page_url( 'ovr_page_dashboard' ),
+            ], [ 'user_id' => $user_id ] );
     }
 
     /**
@@ -267,17 +318,17 @@ class Notifications {
 
         if ( 'publish' === $new_status && 'publish' !== $prev_status ) {
             Mailer::send( 'listing_approved', [
-                'owner_name'   => $owner->display_name,
+                'owner_name'    => $owner->display_name,
                 'listing_title' => $post->post_title,
-                'property_id'  => $post_id,
-                'property_url' => get_permalink( $post_id ),
+                'property_id'   => \OVR\Property\PropertyNumber::get( (int) $post_id ),
+                'property_url'  => get_permalink( $post_id ),
             ], [ 'user_id' => $owner->ID ] );
         } elseif ( 'rejected' === $new_status ) {
             Mailer::send( 'listing_rejected', [
-                'owner_name'   => $owner->display_name,
+                'owner_name'    => $owner->display_name,
                 'listing_title' => $post->post_title,
-                'property_id'  => $post_id,
-                'property_url' => get_permalink( $post_id ),
+                'property_id'   => \OVR\Property\PropertyNumber::get( (int) $post_id ),
+                'property_url'  => get_permalink( $post_id ),
                 'reject_reason' => (string) get_post_meta( $post_id, '_ovr_reject_reason', true ),
                 'dashboard_url' => Pages::get_page_url( 'ovr_page_dashboard' ),
             ], [ 'user_id' => $owner->ID ] );
@@ -295,9 +346,9 @@ class Notifications {
             $title = (string) get_post_meta( $post_id, '_ovr_title_snapshot', true );
         }
         Mailer::send( 'listing_deleted', [
-            'owner_name'   => $owner ? $owner->display_name : '',
+            'owner_name'    => $owner ? $owner->display_name : '',
             'listing_title' => $title,
-            'property_id'  => $post_id,
+            'property_id'   => \OVR\Property\PropertyNumber::get( (int) $post_id ),
         ], [ 'user_id' => $user_id ] );
     }
 
@@ -397,14 +448,13 @@ class Notifications {
     }
 
     /**
-     * Password reset key generated → send the (already templated) reset email.
-     */
-    public function on_retrieve_password( string $user_login, string $key, string $user_email ): void {
-        $user = get_user_by( 'email', $user_email );
+      * Password reset key generated → send the (already templated) reset email.
+      */
+    public function on_retrieve_password_key( string $user_login, string $key ): void {
+        $user = get_user_by( 'login', $user_login );
         if ( ! $user ) {
-            $user = get_user_by( 'login', $user_login );
+            return;
         }
-        if ( ! $user ) return;
 
         $reset_url = add_query_arg(
             [ 'action' => 'rp', 'key' => $key, 'login' => rawurlencode( $user->user_login ) ],
@@ -414,7 +464,7 @@ class Notifications {
         Mailer::send( 'password_reset', [
             'user_name' => $user->display_name,
             'reset_url' => $reset_url,
-        ], [ 'user_email' => $user_email ] );
+        ], [ 'user_email' => $user->user_email ] );
     }
 
     // ---------------------------------------------------------------------
@@ -430,19 +480,33 @@ class Notifications {
 
     private function gateway_label( string $gateway ): string {
         $labels = [
-            'stripe'        => 'Stripe',
             'paypal'        => 'PayPal',
             'authorize_net' => 'Authorize.Net',
             'wallet'        => 'Wallet',
             'free'          => 'Free',
         ];
-        return $labels[ $gateway ] ?? ( $gateway ? ucfirst( str_replace( '_', ' ', $gateway ) ) : 'the site' );
+        return $labels[ $gateway ] ?? ( $gateway ? ucwords( str_replace( '_', ' ', $gateway ) ) : 'the site' );
     }
 
     private function expiry_date( int $user_id ): string {
         $info    = UserSubscription::get_info( $user_id );
         $expires = (string) ( $info['expiry_date'] ?? '' );
         return $expires ? date_i18n( get_option( 'date_format' ), strtotime( $expires ) ) : '';
+    }
+
+    private function latest_subscription_payment_amount( int $user_id ): ?float {
+        global $wpdb;
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT amount FROM {$wpdb->prefix}ovr_payments WHERE user_id = %d AND payment_type = 'subscription' AND status = 'completed' ORDER BY id DESC LIMIT 1",
+                $user_id
+            ),
+            ARRAY_A
+        );
+        if ( $row && isset( $row['amount'] ) ) {
+            return (float) $row['amount'];
+        }
+        return null;
     }
 
     /**

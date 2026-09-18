@@ -4,7 +4,7 @@ Tags: rental, property, vacation, real estate, listing, saas
 Requires at least: 6.4
 Tested up to: 6.7
 Requires PHP: 8.2
-Stable tag: 1.1.0
+Stable tag: 1.3.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,21 @@ OVR Core is a complete rental listing platform built as a robust WordPress plugi
 4. Navigate to **OVR Properties** in the admin menu to start adding listings.
 
 == Changelog ==
+
+= 1.3.12 =
+* Add: Unified Subscription Activation / Renewal / Extension screen with plan selector, plan details, subscription summary, promo code, payment method selection, Enter Payment, and Cancel Purchase.
+* Add: Credit Card (Authorize.Net) is now the default payment method on the unified subscription screen and checkout.
+* Fix: Removed duplicate Promo Code input from the checkout payment page; promo is now applied only on the subscription selection screen and carried forward securely.
+* Add: Admin successful-payment notification email sent after verified payment completion for both subscriptions and listing upgrades.
+* Add: Origin-aware Cancel Purchase routing for initial activation, renewal, and dashboard contexts.
+
+= 1.3.11 =
+* Add: Unified Base Subscriber business terminology for never-activated and expired users across Dashboard subscription tab, subscription-select page, and status labels.
+* Add: Active/Pending and Inactive/Pending display for listings whose subscription expired, preserving owner's original active/inactive intent.
+* Fix: Expired listings now show business-facing Active/Pending or Inactive/Pending based on pre-expiry status, instead of generic Pending.
+
+= 1.3.10 =
+* Add: Landlord Dashboard Communication sidebar now includes Villages ID Pass (links to the canonical Online Villages ID Request form) and Guest ID Pass (external link to the Villages Guest Pass portal).
 
 = 1.2.0 =
 Milestone 3 — Search, discovery & details (Section 5–10).

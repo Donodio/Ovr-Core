@@ -152,7 +152,7 @@ class AuthorizeNetGateway implements PaymentGateway {
             'x_description'        => $item_name,
             'x_cust_id'            => (string) $user_id,
             'x_email'              => $email,
-            'x_test_request'       => 'FALSE',
+            'x_test_request'       => 'sandbox' === $this->env() ? 'TRUE' : 'FALSE',
         ];
 
         $redirect_url = $this->form_action() . '?' . http_build_query( $fields );
@@ -186,6 +186,10 @@ class AuthorizeNetGateway implements PaymentGateway {
             $trans_id = (string) ( $payment['transaction_id'] ?? '' );
         }
 
+        if ( ! $trans_id ) {
+            return [ 'success' => false, 'message' => __( 'Authorize.net did not return a transaction id.', 'ovr-core' ) ];
+        }
+
         $response_code = isset( $_GET['x_response_code'] ) ? sanitize_text_field( wp_unslash( $_GET['x_response_code'] ) ) : '';
 
         if ( '' !== $response_code && '1' !== $response_code ) {
@@ -195,10 +199,6 @@ class AuthorizeNetGateway implements PaymentGateway {
                 'code'    => $response_code,
                 'message' => __( 'Authorize.net did not approve this payment.', 'ovr-core' ),
             ];
-        }
-
-        if ( ! $trans_id ) {
-            return [ 'success' => false, 'message' => __( 'Authorize.net did not return a transaction id.', 'ovr-core' ) ];
         }
 
         $details = $this->get_transaction_details( $trans_id );

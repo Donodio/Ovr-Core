@@ -67,8 +67,8 @@ $default_plan = $available[ $default_slug ] ?? null;
     <div class="ld-sub-banner ld-sub-banner--err">
         <span class="material-symbols-outlined fill">error</span>
         <div>
-            <p class="ld-sub-banner-t"><?php esc_html_e( 'Subscription Expired', 'ovr-core' ); ?></p>
-            <p class="ld-sub-banner-d"><?php esc_html_e( 'Your subscription has expired. Renew now to reactivate your listings and restore dashboard access.', 'ovr-core' ); ?></p>
+            <p class="ld-sub-banner-t"><?php esc_html_e( 'Base Subscriber', 'ovr-core' ); ?></p>
+            <p class="ld-sub-banner-d"><?php esc_html_e( 'Your subscription has expired. Subscription requires payment for activation or renewal to restore dashboard access and listings.', 'ovr-core' ); ?></p>
         </div>
         <?php if ( $is_paid ) : ?>
             <a href="<?php echo esc_url( add_query_arg( 'plan', $cur_slug, $checkout_url ) ); ?>" class="ld-sub-bb"><?php esc_html_e( 'Renew Now', 'ovr-core' ); ?></a>
@@ -97,8 +97,8 @@ $default_plan = $available[ $default_slug ] ?? null;
     <div class="ld-sub-banner">
         <span class="material-symbols-outlined fill">info</span>
         <div>
-            <p class="ld-sub-banner-t"><?php esc_html_e( 'No Active Subscription', 'ovr-core' ); ?></p>
-            <p class="ld-sub-banner-d"><?php esc_html_e( 'Choose a plan below to activate your landlord dashboard and start listing properties.', 'ovr-core' ); ?></p>
+            <p class="ld-sub-banner-t"><?php esc_html_e( 'Base Subscriber', 'ovr-core' ); ?></p>
+            <p class="ld-sub-banner-d"><?php esc_html_e( 'Subscription requires payment for activation or renewal. Choose a plan below to activate your landlord dashboard and start listing properties.', 'ovr-core' ); ?></p>
         </div>
     </div>
 <?php endif; ?>

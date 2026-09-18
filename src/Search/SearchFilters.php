@@ -25,7 +25,7 @@ class SearchFilters {
     public static function get_villages(): array {
         $terms = get_terms( [
             'taxonomy'   => 'ovr_village',
-            'hide_empty' => true,
+            'hide_empty' => false,
             'orderby'    => 'name',
         ] );
         return ! is_wp_error( $terms ) ? $terms : [];
@@ -68,7 +68,7 @@ class SearchFilters {
     public static function get_property_types(): array {
         $terms = get_terms( [
             'taxonomy'   => 'ovr_property_type',
-            'hide_empty' => true,
+            'hide_empty' => false,
             'orderby'    => 'name',
         ] );
         return ! is_wp_error( $terms ) ? $terms : [];
@@ -156,6 +156,32 @@ class SearchFilters {
         }
 
         return OVR_PLUGIN_URL . 'assets/images/ovr-placeholder.jpg';
+    }
+
+    /**
+     * Resolve the "All Villages" / "All Areas" card image.
+     *
+     * Resolution order (fresh installs work with zero configuration):
+     *   1. Configured Media Library attachment (`ovr_all_villages_image_id`),
+     *      validated to still resolve to a real image.
+     *   2. Client-approved AllRentals artwork bundled with the plugin
+     *      (`assets/images/all-villages.jpg`) — environment-independent,
+     *      no remote fetch, no duplicate attachments, no per-request cost.
+     *   3. Legacy banner (last resort only).
+     *
+     * Shared by the search chip strip and the Village Sections page so both
+     * render the same approved artwork.
+     */
+    public static function get_all_villages_image(): string {
+        $att_id = (int) get_option( 'ovr_all_villages_image_id', 0 );
+        if ( $att_id ) {
+            $url = wp_get_attachment_image_url( $att_id, 'large' );
+            if ( $url ) {
+                return $url;
+            }
+        }
+
+        return OVR_PLUGIN_URL . 'assets/images/all-villages.jpg';
     }
 
     /**

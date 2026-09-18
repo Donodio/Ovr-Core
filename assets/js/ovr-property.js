@@ -68,6 +68,7 @@
 
     function openLightbox(images, index) {
         if (!images.length) return;
+        if (videoModal && !videoModal.hidden) closeVideoViewer();
         var lb = buildLightbox();
         lbState.images    = images;
         lbState.index     = Math.max(0, Math.min(index, images.length - 1));
@@ -164,8 +165,184 @@
     })();
 
     /* ====================================================================
-       2. CALENDAR — click-to-select range
+       1b. VIDEO VIEWER — an uploaded MP4 / MOV or a YouTube/Vimeo link plays
+       in a closable overlay, leaving the photo gallery and slideshow intact.
        ==================================================================== */
+
+    var videoModal = null;
+    var vState     = { lastFocus: null };
+
+    function buildVideoModal() {
+        if (videoModal) return videoModal;
+
+        var el = document.createElement('div');
+        el.className = 'ovr-video-modal';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.setAttribute('aria-label', i18n.videoTitle || 'Property video tour');
+        el.hidden = true;
+        el.innerHTML =
+            '<div class="ovr-video-backdrop" data-ovr-video-close></div>' +
+            '<button type="button" class="ovr-video-close" data-ovr-video-close aria-label="' + (i18n.close || 'Close') + '">' +
+                '<span class="material-symbols-outlined">close</span>' +
+            '</button>' +
+            '<figure class="ovr-video-stage"></figure>';
+
+        document.body.appendChild(el);
+        videoModal = el;
+        return el;
+    }
+
+    function openVideoViewer(galleryEl) {
+        var src   = galleryEl.getAttribute('data-ovr-video-src') || '';
+        var embed = galleryEl.getAttribute('data-ovr-video-embed') || '';
+        if (!src && !embed) return;
+
+        closeLightbox();
+
+        var modal = buildVideoModal();
+        var stage = modal.querySelector('.ovr-video-stage');
+        stage.innerHTML = '';
+        var webOk = galleryEl.getAttribute('data-ovr-video-web') !== '0';
+
+        if (embed) {
+            var autoplay = (embed.indexOf('?') > -1 ? '&' : '?') + 'autoplay=1';
+            var frame = document.createElement('iframe');
+            frame.src = embed + autoplay;
+            frame.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+            frame.setAttribute('allowfullscreen', '');
+            frame.setAttribute('title', i18n.videoTitle || 'Property video tour');
+            stage.appendChild(frame);
+        } else if (src) {
+            var video = document.createElement('video');
+            video.controls = true;
+            video.autoplay = true;
+            video.preload = 'metadata';
+            video.setAttribute('playsinline', '');
+            video.setAttribute('src', src);
+            var type = galleryEl.getAttribute('data-ovr-video-type') || '';
+            if (type) video.setAttribute('type', type);
+            // Poster = the main photo the viewer was opened from.
+            var heroImg = galleryEl.querySelector('.ovr-gallery-imgbtn img');
+            if (heroImg && heroImg.src) video.setAttribute('poster', heroImg.src);
+            stage.appendChild(video);
+            if (!webOk) {
+                var note = document.createElement('p');
+                note.className = 'ovr-video-note';
+                note.textContent = i18n.codecNote ||
+                    'This video uses a codec (HEVC/H.265) that your browser may not support. Please contact the owner for an alternative format.';
+                stage.appendChild(note);
+            }
+        }
+
+        vState.lastFocus = document.activeElement;
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        var closeBtn = modal.querySelector('.ovr-video-close');
+        if (closeBtn) closeBtn.focus();
+    }
+
+    function closeVideoViewer() {
+        if (!videoModal || videoModal.hidden) return;
+        var stage = videoModal.querySelector('.ovr-video-stage');
+        if (stage) { stage.innerHTML = ''; } // stops any playing <video>
+        videoModal.hidden = true;
+        document.body.style.overflow = '';
+        if (vState.lastFocus && typeof vState.lastFocus.focus === 'function') {
+            vState.lastFocus.focus();
+        }
+    }
+
+    /* Open from the play button on the main photo. */
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-ovr-video-open]');
+        if (!btn) return;
+        e.preventDefault();
+        var galleryEl = btn.closest('[data-ovr-gallery]');
+        if (!galleryEl) return;
+
+        var src   = galleryEl.getAttribute('data-ovr-video-src') || '';
+        var embed = galleryEl.getAttribute('data-ovr-video-embed') || '';
+
+        if (embed) {
+            openVideoViewer(galleryEl);
+        } else if (src) {
+            openVideoViewer(galleryEl);
+        }
+    });
+
+    /* Video-viewer controls (delegated). */
+    document.addEventListener('click', function (e) {
+        if (!videoModal || videoModal.hidden) return;
+        if (e.target.closest('[data-ovr-video-close]')) {
+            closeVideoViewer();
+        }
+    });
+
+    /* Esc closes the video viewer. */
+    document.addEventListener('keydown', function (e) {
+        if (!videoModal || videoModal.hidden) return;
+        if (e.key === 'Escape') closeVideoViewer();
+    });
+
+    /* Panorama / Virtual Tour viewer (reuses the video-modal shell for a simple
+       image/iframe lightbox). */
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-ovr-panorama-open]');
+        if (!btn) return;
+        e.preventDefault();
+        var url = btn.getAttribute('data-ovr-panorama-url') || '';
+        var src = btn.getAttribute('data-ovr-panorama-src') || '';
+        if (!url && !src) return;
+
+        var modal = buildVideoModal();
+        var stage = modal.querySelector('.ovr-video-stage');
+        stage.innerHTML = '';
+        stage.removeAttribute('data-ovr-video-src');
+        stage.removeAttribute('data-ovr-video-embed');
+
+        if (src) {
+            var img = document.createElement('img');
+            img.src = src;
+            img.alt = i18n.panoramaAlt || '360° panorama';
+            img.style.maxWidth = '94vw';
+            img.style.maxHeight = '88vh';
+            img.style.objectFit = 'contain';
+            img.style.borderRadius = '8px';
+            stage.appendChild(img);
+        } else if (url) {
+            if (url.match(/\.(mp4|webm|mov|m4v)(\?.*)?$/i)) {
+                var video = document.createElement('video');
+                video.controls = true;
+                video.autoplay = true;
+                video.preload = 'metadata';
+                video.setAttribute('playsinline', '');
+                video.setAttribute('src', url);
+                stage.appendChild(video);
+            } else {
+                var frame = document.createElement('iframe');
+                frame.src = url;
+                frame.setAttribute('allowfullscreen', '');
+                frame.setAttribute('title', i18n.virtualTourTitle || 'Virtual Tour');
+                frame.style.width = 'min(94vw,1100px)';
+                frame.style.aspectRatio = '16/9';
+                frame.style.border = '0';
+                frame.style.borderRadius = '8px';
+                frame.style.background = '#000';
+                stage.appendChild(frame);
+            }
+        }
+
+        vState.lastFocus = document.activeElement;
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        var closeBtn = modal.querySelector('[data-ovr-video-close]');
+        if (closeBtn) closeBtn.focus();
+    });
+
+    /* ====================================================================
+        2. CALENDAR — click-to-select range
+        ==================================================================== */
 
     var calState = { start: null, end: null };
 
@@ -341,6 +518,16 @@
             '.ovr-lightbox-prev{left:24px;top:50%;transform:translateY(-50%)}' +
             '.ovr-lightbox-next{right:24px;top:50%;transform:translateY(-50%)}' +
             '@media (max-width:768px){.ovr-lightbox-prev{left:8px}.ovr-lightbox-next{right:8px}}' +
+            '.ovr-video-modal{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center}' +
+            '.ovr-video-modal[hidden]{display:none}' +
+            '.ovr-video-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.92);cursor:pointer}' +
+            '.ovr-video-stage{position:relative;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;align-items:center;gap:12px;margin:0;padding:0}' +
+            '.ovr-video-stage video{width:auto;max-width:94vw;max-height:78vh;background:#000;border:0;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}' +
+            '.ovr-video-stage iframe{width:min(94vw,1100px);aspect-ratio:16/9;border:0;border-radius:8px;background:#000;box-shadow:0 20px 60px rgba(0,0,0,0.5)}' +
+            '.ovr-video-close{position:absolute;top:24px;right:24px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,0.15);color:#fff;border:none;cursor:pointer;backdrop-filter:blur(4px);z-index:5;transition:background 200ms}' +
+            '.ovr-video-close:hover{background:rgba(255,255,255,0.3)}' +
+            '.ovr-video-note{margin:12px 0 0;padding:10px 16px;font-size:13px;line-height:1.5;color:#6b4e00;background:#fff6d9;border:1px solid #e7cf7e;border-radius:8px;max-width:94vw}' +
+            '@media (max-width:768px){.ovr-video-stage iframe{width:94vw}.ovr-video-close{top:12px;right:12px}}' +
             '.ovr-cal-day{cursor:pointer;transition:background 150ms,color 150ms}' +
             '.ovr-cal-day.is-past,.ovr-cal-day.is-blocked{cursor:not-allowed}' +
             '.ovr-cal-day:not(.is-past):not(.is-blocked):hover{background:var(--ovr-primary-fixed-dim);color:var(--ovr-on-primary-fixed)}' +
@@ -366,54 +553,82 @@
 
         var lat = parseFloat(el.getAttribute('data-lat'));
         var lng = parseFloat(el.getAttribute('data-lng'));
+        var radius = Math.max(0, parseInt(el.getAttribute('data-radius') || '0', 10) || 0);
         if (isNaN(lat) || isNaN(lng)) return;
 
         var mapEl = document.createElement('div');
         mapEl.className = 'ovr-detail-map-canvas';
-
-        // Approximate: nudge the marker a few tens of metres off the exact
-        // coordinates so the home's precise position stays private, while still
-        // landing on (or beside) the correct street.
-        var jitter = 0.0006;
-        var markerLat = lat + jitter;
-        var markerLng = lng - jitter;
-
-        var map = window.L.map(mapEl, { scrollWheelZoom: false }).setView([markerLat, markerLng], 16);
-        var tiles = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            maxZoom: 19
-        }).addTo(map);
-
-        // Never leave a blank box: if the tile server is unreachable (blocked /
-        // offline), show a graceful note instead of an empty map.
-        var tileErrors = 0;
-        tiles.on('tileerror', function () {
-            tileErrors++;
-            if (tileErrors >= 3 && !mapEl.dataset.ovrMapFallback) {
-                mapEl.dataset.ovrMapFallback = '1';
-                var note = document.createElement('div');
-                note.className = 'ovr-detail-map-fallback';
-                note.textContent = 'Map unavailable at the moment. Please see the location details below.';
-                mapEl.appendChild(note);
-            }
-        });
-
-        var icon = window.L.divIcon({
-            className: 'ovr-tack',
-            html: '<span class="material-symbols-outlined">location_on</span>',
-            iconSize: [32, 32],
-            iconAnchor: [16, 32],
-            popupAnchor: [0, -30]
-        });
-        window.L.marker([markerLat, markerLng], { icon: icon, title: '' }).addTo(map);
-
         el.appendChild(mapEl);
 
-        // The map container may be zero-height until CSS loads; invalidate on
-        // resize and once after a tick so tiles render at correct dimensions.
-        window.addEventListener('resize', function () { map.invalidateSize(); });
-        setTimeout(function () { map.invalidateSize(); }, 100);
-        window.addEventListener('load', function () { map.invalidateSize(); });
+        // ONE deterministic initialization, and only once the container has
+        // real dimensions. Creating Leaflet (and requesting tiles) against a
+        // zero-size container lays tiles out for a postage stamp; later
+        // growth then leaves a tiny top-left fragment plus gray void.
+        // Privacy sphere uses the server-provided approximate center +
+        // authoritative radius (see .ovr-privacy-circle in ovr-public.css).
+        function createMap() {
+            var map = window.L.map(mapEl, { scrollWheelZoom: false }).setView([lat, lng], 16);
+            var tiles = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Never leave a blank box: if the tile server is unreachable
+            // (blocked / offline), show a graceful note instead of emptiness.
+            var tileErrors = 0;
+            tiles.on('tileerror', function () {
+                tileErrors++;
+                if (tileErrors >= 3 && !mapEl.dataset.ovrMapFallback) {
+                    mapEl.dataset.ovrMapFallback = '1';
+                    var note = document.createElement('div');
+                    note.className = 'ovr-detail-map-fallback';
+                    note.textContent = 'Map unavailable at the moment. Please see the location details below.';
+                    mapEl.appendChild(note);
+                }
+            });
+
+            var circle = null;
+            if (radius > 0) {
+                circle = window.L.circle([lat, lng], {
+                    radius: radius,
+                    className: 'ovr-privacy-circle',
+                    color: '#5f6368',
+                    fillColor: '#5f6368',
+                    fillOpacity: 0.2,
+                    weight: 2,
+                    opacity: 0.85
+                }).addTo(map);
+                try {
+                    // Small pad: the privacy circle fills a good share of
+                    // the viewport height while surrounding streets stay
+                    // visible. Larger radii automatically fit farther out.
+                    map.fitBounds(circle.getBounds().pad(0.15), { animate: false });
+                } catch (fitErr) { /* keep default view */ }
+            }
+
+            requestAnimationFrame(function () {
+                map.invalidateSize({ animate: false });
+            });
+
+            // Resize only invalidates (never refits): no loops, and manual
+            // user zoom/pan is never overridden.
+            window.addEventListener('resize', function () { map.invalidateSize({ animate: false }); });
+        }
+
+        function waitForMapLayout(attempts) {
+            var rect = mapEl.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                createMap();
+                return;
+            }
+            if ((attempts || 0) < 40) {
+                setTimeout(function () { waitForMapLayout((attempts || 0) + 1); }, 100);
+            } else {
+                // Layout never appeared; create anyway rather than a blank box.
+                createMap();
+            }
+        }
+        waitForMapLayout(0);
     }
 
     initSingleMap();

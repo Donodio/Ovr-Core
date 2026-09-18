@@ -74,9 +74,9 @@ class PaymentSuccess {
         }
 
         $gateways = [
-            'stripe'        => __( 'Card', 'ovr-core' ),
             'paypal'        => __( 'PayPal', 'ovr-core' ),
             'authorize_net' => __( 'Card', 'ovr-core' ),
+            'stripe'        => __( 'Card (Stripe)', 'ovr-core' ),
             'wallet'        => __( 'OVR Balance', 'ovr-core' ),
             'free'          => __( 'Free Plan', 'ovr-core' ),
         ];

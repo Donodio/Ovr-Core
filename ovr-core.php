@@ -3,7 +3,7 @@
  * Plugin Name:       OVR Core — Our Villages Rental
  * Plugin URI:        https://ourvillagesrentals.com
  * Description:       Premium vacation & long-term rental listing platform. Complete SaaS-ready solution with property management, subscription plans, advanced search, and landlord dashboards.
- * Version:           1.1.1
+ * Version:           1.3.12
  * Requires at least: 6.4
  * Requires PHP:      8.2
  * Author:            Our Villages Rental
@@ -26,14 +26,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 | Plugin Constants
 |--------------------------------------------------------------------------
 */
-define( 'OVR_VERSION', '1.2.5' );
+define( 'OVR_VERSION', '1.3.12' );
 define( 'OVR_PLUGIN_FILE', __FILE__ );
 define( 'OVR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'OVR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'OVR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'OVR_PLUGIN_SLUG', 'ovr-core' );
 define( 'OVR_TEXT_DOMAIN', 'ovr-core' );
-define( 'OVR_DB_VERSION', '2.10.0' );
+define( 'OVR_DB_VERSION', '2.14.0' );
 
 /*
 |--------------------------------------------------------------------------

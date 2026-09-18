@@ -33,7 +33,7 @@
     function buildOptions(selected) {
         var html = '<option value="0">All properties</option>';
         propertyList().forEach(function (p) {
-            var label = 'Property #' + p.id + (p.title ? ' — ' + p.title : '');
+            var label = p.title || ('Property #' + p.id);
             html += '<option value="' + p.id + '"' + (String(p.id) === String(selected) ? ' selected' : '') + '>' + label + '</option>';
         });
         return html;

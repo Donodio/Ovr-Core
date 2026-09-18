@@ -42,43 +42,7 @@ class PasswordResetHandler {
 
         // Always show success message to prevent email enumeration.
         if ( $user ) {
-            $reset_key = get_password_reset_key( $user );
-
-            if ( ! is_wp_error( $reset_key ) ) {
-                $reset_url = add_query_arg( [
-                    'action' => 'rp',
-                    'key'    => $reset_key,
-                    'login'  => rawurlencode( $user->user_login ),
-                ], Pages::get_page_url( 'ovr_page_login' ) );
-
-                // Route through the admin-editable template system (M3 F6).
-                $sent = class_exists( '\OVR\Email\Mailer' )
-                    ? \OVR\Email\Mailer::send( 'password_reset', [
-                        'user_name' => $user->display_name,
-                        'reset_url' => $reset_url,
-                    ], [ 'user_email' => $email ] )
-                    : false;
-
-                // Safety net: if the template is missing/disabled, still send a
-                // plain reset email so account recovery never breaks.
-                if ( ! $sent ) {
-                    $message = sprintf(
-                        /* translators: 1: Site name, 2: Reset URL */
-                        __( "Hello,\n\nSomeone requested a password reset for your account at %1\$s.\n\nTo reset your password, click the link below:\n%2\$s\n\nIf you didn't request this, you can safely ignore this email.\n\nThanks,\nOur Villages Rental", 'ovr-core' ),
-                        get_bloginfo( 'name' ),
-                        $reset_url
-                    );
-                    wp_mail(
-                        $email,
-                        sprintf(
-                            /* translators: %s: Site name */
-                            __( '[%s] Password Reset Request', 'ovr-core' ),
-                            get_bloginfo( 'name' )
-                        ),
-                        $message
-                    );
-                }
-            }
+            get_password_reset_key( $user );
         }
 
         set_transient( 'ovr_forgot_success', true, 60 );

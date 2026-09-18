@@ -32,8 +32,9 @@ class Seo {
         // Priority 1 so our tags sit near the top of <head>, before the theme's.
         add_action( 'wp_head', [ $this, 'head_tags' ], 1 );
         add_action( 'wp_head', [ $this, 'structured_data' ], 5 );
-        // Core already prints a canonical on singular views; we add ours only on
-        // the contexts it skips (taxonomy landing pages), so no duplicates.
+        // Override core's canonical on singular property views so it uses the
+        // clean /listing/{id}/ format instead of /property/{slug}/.
+        add_filter( 'post_type_link', [ $this, 'filter_property_canonical' ], 10, 2 );
     }
 
     /** True when another SEO plugin owns the generic head tags. */
@@ -95,7 +96,9 @@ class Seo {
             echo '<meta name="description" content="' . esc_attr( $desc ) . '">' . "\n";
         }
 
-        // Canonical only where core doesn't already emit one (non-singular).
+        // Canonical: core already prints one on singular views and our
+        // post_type_link filter has already redirected it to /listing/{id}/.
+        // Emit one only on non-singular landing pages where core skips it.
         if ( ! is_singular() && '' !== $ctx['url'] ) {
             echo '<link rel="canonical" href="' . esc_url( $ctx['url'] ) . '">' . "\n";
         }
@@ -213,7 +216,7 @@ class Seo {
             if ( is_array( $village ) && ! empty( $village ) ) {
                 $items[] = [ 'name' => $village[0]->name, 'url' => get_term_link( $village[0] ) ];
             }
-            $items[] = [ 'name' => get_the_title( $pid ), 'url' => get_permalink( $pid ) ];
+            $items[] = [ 'name' => get_the_title( $pid ), 'url' => home_url( '/listing/' . $pid . '/' ) ];
         } elseif ( $this->is_landing() ) {
             $term = get_queried_object();
             if ( $term instanceof \WP_Term ) {
@@ -283,7 +286,7 @@ class Seo {
             return [
                 'title'       => '' !== $title ? $title : get_the_title( $pid ),
                 'description' => $desc,
-                'url'         => (string) get_permalink( $pid ),
+                'url'         => home_url( '/listing/' . $pid . '/' ),
                 'image'       => has_post_thumbnail( $pid ) ? (string) get_the_post_thumbnail_url( $pid, 'large' ) : '',
                 'og_type'     => 'product',
                 'noindex'     => '1' === (string) get_post_meta( $pid, '_ovr_seo_noindex', true ),
@@ -323,6 +326,18 @@ class Seo {
     }
 
     /* ───────────────────────── Helpers ───────────────────────── */
+
+    /**
+     * Override the canonical URL for ovr_property posts so it uses the clean
+     * /listing/{id}/ format. This prevents duplicate-content signals between
+     * /property/{slug}/ and /listing/{id}/.
+     */
+    public function filter_property_canonical( string $url, \WP_Post $post ): string {
+        if ( 'ovr_property' === $post->post_type ) {
+            return home_url( '/listing/' . $post->ID . '/' );
+        }
+        return $url;
+    }
 
     private function site_name(): string {
         $settings = (array) get_option( Settings::OPTION, [] );

@@ -114,7 +114,7 @@ $rates_note   = '' !== $rental_type ? $rental_type : __( 'Monthly rates availabl
                     <span class="ovr-card-id">
                         <?php
                         /* translators: %s: property listing ID */
-                        printf( esc_html__( 'ID: %s', 'ovr-core' ), esc_html( (string) $post_id ) );
+                        printf( esc_html__( 'ID: %s', 'ovr-core' ), esc_html( (string) \OVR\Property\PropertyNumber::get( (int) $post_id ) ) );
                         ?>
                     </span>
                 <?php endif; ?>

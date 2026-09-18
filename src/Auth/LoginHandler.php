@@ -76,18 +76,12 @@ class LoginHandler {
         ] );
 
         if ( is_wp_error( $user ) ) {
-            // Surface the security challenges verbatim so privileged users are
-            // never stuck behind a generic "invalid credentials" message:
-            //   • ovr_2fa_required  → an emailed one-time code is expected.
-            //   • ovr_locked_out    → the IP is temporarily throttled.
-            // Everything else stays generic to avoid account enumeration.
+            // Surface the lockout message verbatim so throttled IPs understand
+            // the delay; everything else stays generic to avoid enumeration.
             $message = __( 'Invalid email or password. Please try again.', 'ovr-core' );
-            foreach ( [ 'ovr_2fa_required', 'ovr_locked_out' ] as $code ) {
-                $specific = $user->get_error_message( $code );
-                if ( is_string( $specific ) && '' !== $specific ) {
-                    $message = $specific;
-                    break;
-                }
+            $locked = $user->get_error_message( 'ovr_locked_out' );
+            if ( is_string( $locked ) && '' !== $locked ) {
+                $message = $locked;
             }
             $this->store_errors( [ $message ] );
             return;
@@ -198,12 +192,10 @@ class LoginHandler {
         }
 
         return TemplateLoader::get_rendered( 'auth/login.php', [
-            'errors'      => self::get_errors(),
-            'login_url'   => Pages::get_page_url( 'ovr_page_login' ),
+            'errors'       => self::get_errors(),
+            'login_url'    => Pages::get_page_url( 'ovr_page_login' ),
             'register_url' => Pages::get_page_url( 'ovr_page_register' ),
-            'forgot_url'  => Pages::get_page_url( 'ovr_page_forgot_password' ),
-            'enable_2fa'  => ! ( defined( 'OVR_DISABLE_2FA' ) && OVR_DISABLE_2FA )
-                && ! empty( (array) get_option( 'ovr_settings', [] )['enable_2fa'] ),
+            'forgot_url'   => Pages::get_page_url( 'ovr_page_forgot_password' ),
         ] );
     }
 }

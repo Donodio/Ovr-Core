@@ -239,6 +239,9 @@ class Plugin {
 
         $this->modules['wallet'] = new Wallet();
         $this->modules['wallet']->init();
+
+        $this->modules['paypal_webhook'] = new \OVR\Payment\PayPalWebhookHandler();
+        $this->modules['paypal_webhook']->init();
     }
 
     private function boot_admin(): void {
@@ -309,6 +312,11 @@ class Plugin {
         $this->modules['admin_ad_banners']->init();
         $this->modules['admin_storage']->init();
         $this->modules['admin_import']->init();
+
+        // TEMPORARY one-off data repair (stale Spotlight on post 346). Remove
+        // this line and src/Admin/SpotlightRepair.php after the repair runs.
+        $this->modules['admin_spotlight_repair'] = new \OVR\Admin\SpotlightRepair();
+        $this->modules['admin_spotlight_repair']->init();
     }
 
     /**

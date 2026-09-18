@@ -808,7 +808,7 @@ tr:hover .ovr-pls-copy-id {
 
 .ovr-pls-act--view:hover { background: #e6f0fa; color: #2271b1; }
 .ovr-pls-act--edit:hover { background: #f0f6fc; color: #043959; }
-.ovr-pls-act--dup:hover { background: #e6f7e6; color: #008a20; }
+.ovr-pls-act--bump:hover { background: #fff6d9; color: #b8860b; }
 .ovr-pls-act--delete:hover { background: #fce8e8; color: #b32d2e; }
 .ovr-pls-act--restore:hover { background: #e6f0fa; color: #2271b1; }
 .ovr-pls-act--perma:hover { background: #fce8e8; color: #b32d2e; }

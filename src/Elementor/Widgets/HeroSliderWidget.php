@@ -178,7 +178,7 @@ class HeroSliderWidget extends Widget_Base {
         $this->add_control( 'card2_title', [
             'label'     => esc_html__( 'Card 2 — Title', 'ovr-core' ),
             'type'      => Controls_Manager::TEXT,
-            'default'   => esc_html__( 'List My Property', 'ovr-core' ),
+            'default'   => esc_html__( 'Advertise Your Rental Home', 'ovr-core' ),
             'condition' => [ 'hero_layout' => 'action_cards' ],
             'separator' => 'before',
         ] );
@@ -193,7 +193,7 @@ class HeroSliderWidget extends Widget_Base {
         $this->add_control( 'card2_btn_text', [
             'label'     => esc_html__( 'Card 2 — Button Text', 'ovr-core' ),
             'type'      => Controls_Manager::TEXT,
-            'default'   => esc_html__( 'Get Started', 'ovr-core' ),
+            'default'   => esc_html__( 'Advertise Your Rental Home', 'ovr-core' ),
             'condition' => [ 'hero_layout' => 'action_cards' ],
         ] );
 
@@ -380,6 +380,23 @@ class HeroSliderWidget extends Widget_Base {
         $card2_url  = ! empty( $settings['card2_btn_link']['url'] ) ? $settings['card2_btn_link']['url'] : $register_url;
         $card1_attr = $this->link_attributes( $settings['card1_btn_link'] ?? [] );
         $card2_attr = $this->link_attributes( $settings['card2_btn_link'] ?? [] );
+
+        // Legacy DB correction (Chunk 4): pages built before 2026-09-07 stored
+        // "Start Listing" / "Get Started" / "Advertise With Us" / "List My Property"
+        // / "Advertise Your Rental Home" — auto-correct at render time so the fix
+        // is immediate even before the Elementor DB is re-saved. Elementor will
+        // persist the corrected value on next save.
+        $legacy_btns = [ 'Start Listing', 'Get Started', 'Advertise With Us', 'List My Property', 'Advertise Your Rental Home' ];
+        $card2_btn   = $settings['card2_btn_text'] ?? '';
+        if ( in_array( trim( (string) $card2_btn ), $legacy_btns, true ) ) {
+            $card2_btn = __( 'Advertise Your Rental Home', 'ovr-core' );
+        } else {
+            $card2_btn = $settings['card2_btn_text'] ?? __( 'Advertise Your Rental Home', 'ovr-core' );
+        }
+        $card2_title = $settings['card2_title'] ?? __( 'Advertise Your Rental Home', 'ovr-core' );
+        if ( in_array( trim( (string) $card2_title ), [ 'Advertise With Us', 'ADVERTISE YOUR RENTAL' ], true ) ) {
+            $card2_title = __( 'Advertise Your Rental Home', 'ovr-core' );
+        }
         ?>
         <div class="ovr-hero-actions">
             <a href="<?php echo esc_url( $card1_url ); ?>" class="ovr-hero-action-card"<?php echo $card1_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
@@ -390,9 +407,9 @@ class HeroSliderWidget extends Widget_Base {
             </a>
             <a href="<?php echo esc_url( $card2_url ); ?>" class="ovr-hero-action-card"<?php echo $card2_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
                 <span class="material-symbols-outlined ovr-hero-action-icon ovr-hero-action-icon--gold">home</span>
-                <h3 class="ovr-h3"><?php echo esc_html( $settings['card2_title'] ?? 'List My Property' ); ?></h3>
+                <h3 class="ovr-h3"><?php echo esc_html( $card2_title ); ?></h3>
                 <p class="ovr-body-md"><?php echo esc_html( $settings['card2_desc'] ?? '' ); ?></p>
-                <span class="ovr-btn ovr-btn-outline"><?php echo esc_html( $settings['card2_btn_text'] ?? 'Get Started' ); ?></span>
+                <span class="ovr-btn ovr-btn-outline"><?php echo esc_html( $card2_btn ); ?></span>
             </a>
         </div>
         <?php

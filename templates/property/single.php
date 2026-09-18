@@ -92,24 +92,90 @@ $pano_url   = (string)( $meta['panorama_url'] ?? '' );
 // Uploaded media (Features B & C): native video + 360 panorama image.
 $video_id   = (int) ( $meta['video_id'] ?? 0 );
 $video_src  = $video_id ? ( wp_get_attachment_url( $video_id ) ?: '' ) : '';
+// Explicit MIME type so the browser can play the file without trusting the
+// host/CDN Content-Type header (some servers serve .mp4 as octet-stream).
+$video_type = ( '' !== $video_src ) ? (string) get_post_mime_type( $video_id ) : '';
+// Web-safety flag for the uploaded video (HEVC investigation). A video whose
+// real codec is not H.264/AVC (e.g. HEVC/H.265 in an .mp4 container) cannot be
+// played by most browsers — surface a clear notice instead of a dead player.
+$video_web_ok = true;
+if ( $video_id && '' !== $video_src ) {
+    if ( '1' !== (string) get_post_meta( $video_id, '_ovr_video_web_compatible', true ) ) {
+        $v_codec = strtolower( (string) get_post_meta( $video_id, '_ovr_video_codec', true ) );
+        if ( '' !== $v_codec ) {
+            $video_web_ok = in_array( $v_codec, [ 'h264', 'avc1' ], true );
+        } else {
+            // No codec recorded at upload (e.g. pre-existing media): probe the
+            // local file when possible; otherwise assume safe.
+            $v_file = get_attached_file( $video_id );
+            if ( $v_file && is_file( $v_file ) ) {
+                $v_probe = \OVR\Media\VideoProbe::probe( $v_file );
+                if ( $v_probe ) {
+                    $video_web_ok = \OVR\Media\VideoProbe::is_web_safe( $v_probe );
+                }
+            }
+        }
+    }
+}
 $pano_id    = (int) ( $meta['panorama_id'] ?? 0 );
 $pano_src   = $pano_id ? ( wp_get_attachment_image_url( $pano_id, 'full' ) ?: wp_get_attachment_url( $pano_id ) ) : '';
 
 // YouTube/Vimeo → embed URL for an inline iframe player.
+// Native MP4/WebM/MOV URLs supplied in the video_url field must render as a
+// <video> element, not an iframe — otherwise a raw .mp4 opens as a broken
+// iframe (reported on listing #367). Detect direct video files first.
+//
+// Priority: YouTube/Vimeo first, then direct video file, then uploaded attachment.
 $video_embed = '';
-if ( '' === $video_src && '' !== $video_url ) {
-    $video_embed = $video_url;
+if ( '' !== $video_url ) {
     if ( preg_match( '/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/', $video_url, $vm ) ) {
         $video_embed = 'https://www.youtube.com/embed/' . $vm[1];
     } elseif ( preg_match( '/vimeo\.com\/(\d+)/', $video_url, $vm ) ) {
         $video_embed = 'https://player.vimeo.com/video/' . $vm[1];
+    } elseif ( preg_match( '/\.(mp4|webm|mov|m4v)(\?.*)?$/i', $video_url ) ) {
+        $video_src  = $video_url;
+        $ext = strtolower( pathinfo( parse_url( $video_url, PHP_URL_PATH ) ?: '', PATHINFO_EXTENSION ) );
+        $video_type = match ( $ext ) {
+            'webm' => 'video/webm',
+            'mov', 'm4v' => 'video/mp4',
+            default => 'video/mp4',
+        };
+        $video_embed = '';
+    } else {
+        $video_embed = $video_url;
     }
 }
 
-// Feature C: a Virtual Tour exists when there's an uploaded panorama image or a tour link.
-$has_tour = ( '' !== $pano_src ) || ( '' !== $pano_url );
+// A video URL mistakenly stored in the Virtual Tour field (panorama_url) is
+// NOT a tour: a YouTube/Vimeo or direct MP4/WebM/MOV link belongs to the video
+// system, and rendering it as a tour iframe produces a provider embed error
+// (reported on listing #346: a youtu.be link opened as a broken Virtual Tour).
+// Detect these and suppress the Virtual Tour action for them. This does not
+// promote such a value to video — genuine video lives in video_url / video_id.
+$pano_is_video = false;
+if ( '' !== $pano_url ) {
+    if ( preg_match( '/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/', $pano_url )
+        || preg_match( '/vimeo\.com\/(\d+)/', $pano_url )
+        || preg_match( '/\.(mp4|webm|mov|m4v)(\?.*)?$/i', $pano_url ) ) {
+        $pano_is_video = true;
+    }
+}
+
+// Feature C: a Virtual Tour exists only for a genuine tour destination
+// (an uploaded 360 panorama image, or a non-video external tour URL).
+$has_tour = ( '' !== $pano_src ) || ( '' !== $pano_url && ! $pano_is_video );
 $lat        = (float) ( $meta['latitude']  ?? 0 );
 $lng        = (float) ( $meta['longitude'] ?? 0 );
+
+// PRIVACY: public visitors must never receive exact coordinates.
+if ( $lat && $lng && ! \OVR\Property\LocationPrivacy::can_see_exact() ) {
+    $approx = \OVR\Property\LocationPrivacy::approx_area( (int) $post_id, $lat, $lng );
+    $schema_lat = $approx['lat'];
+    $schema_lng = $approx['lng'];
+} else {
+    $schema_lat = $lat;
+    $schema_lng = $lng;
+}
 
 $city       = (string)( $meta['city']    ?? '' );
 $state      = (string)( $meta['state']   ?? '' );
@@ -172,22 +238,13 @@ if ( $ref && 0 === strpos( $ref, $search_url ) ) {
     $back_url = $referer;
 }
 
-// Lightweight page-view counter (total + per-month) — skip owner and admin screens.
+// Lightweight page-view counter (total + per-month) — read current values.
+// The increment itself is performed via a cache-safe JS beacon (see AjaxHandler::record_view)
+// so that cached/CDN pages are still counted. We keep the pre-beacon values
+// here for the initial render; the beacon will bump them after load.
 $views   = (int) get_post_meta( $post_id, '_ovr_view_count', true );
 $monthly = get_post_meta( $post_id, '_ovr_monthly_views', true );
 $monthly = is_array( $monthly ) ? $monthly : [];
-if ( ! is_admin() && ! $is_owner ) {
-    $views++;
-    update_post_meta( $post_id, '_ovr_view_count', $views );
-
-    $mkey             = wp_date( 'Y-m' );
-    $monthly[ $mkey ] = (int) ( $monthly[ $mkey ] ?? 0 ) + 1;
-    if ( count( $monthly ) > 12 ) {
-        ksort( $monthly );
-        $monthly = array_slice( $monthly, -12, null, true );
-    }
-    update_post_meta( $post_id, '_ovr_monthly_views', $monthly );
-}
 
 // Schema.org Lodging structured data.
 $schema = [
@@ -206,8 +263,8 @@ if ( $rating_avg > 0 && $rating_n > 0 ) {
         'reviewCount' => $rating_n,
     ];
 }
-if ( $lat && $lng ) {
-    $schema['geo'] = [ '@type' => 'GeoCoordinates', 'latitude' => $lat, 'longitude' => $lng ];
+if ( $schema_lat && $schema_lng ) {
+    $schema['geo'] = [ '@type' => 'GeoCoordinates', 'latitude' => $schema_lat, 'longitude' => $schema_lng ];
 }
 
 // Image gallery (M3 F11): featured + gallery thumbnails for richer results.
@@ -277,7 +334,7 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                         <span class="ovr-detail-id">
                             <?php
                             /* translators: %d: listing/property ID */
-                            printf( esc_html__( 'Property ID #%d', 'ovr-core' ), $post_id );
+                            printf( esc_html__( 'Property ID #%d', 'ovr-core' ), \OVR\Property\PropertyNumber::get( (int) $post_id ) );
                             ?>
                         </span>
                         <?php if ( $village ) : ?>
@@ -313,14 +370,20 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                     'title'        => $title,
                     'video_url'    => $video_url,
                     'video_src'    => $video_src,
+                    'video_type'   => $video_type,
                     'video_embed'  => $video_embed,
+                    'video_web_ok' => $video_web_ok,
                     'panorama_url' => $pano_url,
+                    'panorama_id'  => $pano_id,
+                    'panorama_src' => $pano_src,
                     'captions'     => (array) get_post_meta( $post_id, '_ovr_gallery_captions', true ),
                 ] );
                 ?>
 
                 <?php if ( $has_tour ) : ?>
-                    <button type="button" class="ovr-virtual-tour-btn" data-ovr-tour-open>
+                    <button type="button" class="ovr-virtual-tour-btn" data-ovr-tour-open
+                            data-ovr-tour-url="<?php echo esc_url( $pano_url ); ?>"
+                            data-ovr-tour-src="<?php echo esc_url( $pano_src ); ?>">
                         <span class="material-symbols-outlined">360</span>
                         <?php esc_html_e( 'Virtual Tour', 'ovr-core' ); ?>
                     </button>
@@ -346,15 +409,16 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
                         <?php echo esc_html( $pets_label ); ?>
                     </span>
                     <?php
-                    // Golf cart status — always surfaced in the specs strip
-                    // (it replaces the square-footage chip). The term historically
-                    // lives in ovr_feature, but legacy listings store it as an
-                    // ovr_amenity, so both are checked.
-                    $has_golf_cart = \OVR\Property\PropertyQuery::has_golf_cart( $post_id );
+                    // Golf cart status — canonical label from PropertyQuery, not a
+                    // boolean. Empty/unselcted renders nothing; explicit negative
+                    // values (e.g. "Golf Cart Not Provided") render that label.
+                    $golf_cart_label = \OVR\Property\PropertyQuery::golf_cart_label( $post_id );
+                    if ( '' !== $golf_cart_label ) :
                     ?>
                     <span class="ovr-detail-spec"><span class="material-symbols-outlined">golf_course</span>
-                        <?php echo $has_golf_cart ? esc_html__( 'Golf Cart Included', 'ovr-core' ) : esc_html__( 'No Golf Cart', 'ovr-core' ); ?>
+                        <?php echo esc_html( $golf_cart_label ); ?>
                     </span>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Status chips -->
@@ -625,6 +689,15 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
             }
         }
 
+        // PRIVACY: public visitors must never receive exact coordinates.
+        $map_radius = 0;
+        if ( $map_lat && $map_lng && ! \OVR\Property\LocationPrivacy::can_see_exact() ) {
+            $area = \OVR\Property\LocationPrivacy::approx_area( (int) $post_id, $map_lat, $map_lng );
+            $map_lat    = $area['lat'];
+            $map_lng    = $area['lng'];
+            $map_radius = (int) $area['radius'];
+        }
+
         // Only render the section when there is some location context to show.
         $has_location = ( $map_lat && $map_lng ) || '' !== trim( (string) $village_name ) || ! empty( $village );
         if ( $has_location ) :
@@ -647,11 +720,12 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
 
                     <?php if ( $map_lat && $map_lng ) : ?>
                         <div class="ovr-media-map">
-                            <div class="ovr-detail-map"
-                                 id="ovr-detail-map"
-                                 data-ovr-single-map
-                                 data-lat="<?php echo esc_attr( (string) $map_lat ); ?>"
-                                 data-lng="<?php echo esc_attr( (string) $map_lng ); ?>"></div>
+                             <div class="ovr-detail-map"
+                                  id="ovr-detail-map"
+                                  data-ovr-single-map
+                                  data-lat="<?php echo esc_attr( (string) $map_lat ); ?>"
+                                  data-lng="<?php echo esc_attr( (string) $map_lng ); ?>"
+                                  data-radius="<?php echo esc_attr( (string) max( 0, $map_radius ) ); ?>"></div>
                             <?php if ( $map_caption ) : ?>
                                 <div class="ovr-media-map-caption">
                                     <span class="material-symbols-outlined">location_on</span>
@@ -768,6 +842,38 @@ $reviews_html   = TemplateLoader::get_rendered( 'property/reviews-section.php', 
     openBtn.addEventListener('click', open);
     modal.querySelectorAll('[data-ovr-tour-close]').forEach(function(el){ el.addEventListener('click', close); });
     document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !modal.hidden) { close(); } });
+})();
+</script>
+<?php endif; ?>
+<?php
+// Cache-safe view beacon: counts this page view even when the HTML is served
+// from cache/CDN. Skips the listing owner and admins so their own previews
+// never inflate the chart. Fires once per page load via fetch with
+// keepalive to survive fast navigation/unload.
+$ovr_view_nonce = wp_create_nonce( 'ovr_record_view_' . $post_id );
+$ovr_view_ajax  = admin_url( 'admin-ajax.php' );
+if ( ! $is_owner && ! current_user_can( 'manage_options' ) ) :
+?>
+<script>
+(function(){
+    var pid   = <?php echo (int) $post_id; ?>;
+    var nonce = <?php echo wp_json_encode( $ovr_view_nonce ); ?>;
+    var url   = <?php echo wp_json_encode( $ovr_view_ajax ); ?>;
+    var key   = 'ovr_viewed_' + pid;
+    // Deduplicate within the same tab session so a refresh within 30s or
+    // bfcache restore doesn't double-count. Server still guards via monthly
+    // bucket, so this is just client-side courtesy.
+    try { if ( sessionStorage.getItem(key) ) { return; } } catch(e){}
+    var payload = new URLSearchParams({ action: 'ovr_record_view', post_id: String(pid), nonce: nonce });
+    // Prefer fetch with keepalive (modern browsers); fallback to image beacon.
+    if ( window.fetch ) {
+        fetch(url, { method: 'POST', body: payload, credentials: 'same-origin', keepalive: true })
+            .catch(function(){});
+        try { sessionStorage.setItem(key, '1'); } catch(e){}
+    } else {
+        var img = new Image();
+        img.src = url + '?' + payload.toString();
+    }
 })();
 </script>
 <?php endif; ?>

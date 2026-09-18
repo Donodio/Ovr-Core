@@ -140,8 +140,38 @@ if ( $show_admin_tab ) {
 $ld_step_keys = array_map( static fn( $t ) => $t[0], $ld_tabs );
 
 // Existing uploaded media (Features B/C/D) for re-render on edit.
-$video_att_id = (int) $m( 'video_id' );
+$video_att_id  = (int) $m( 'video_id' );
 $video_att_url = $video_att_id ? ( wp_get_attachment_url( $video_att_id ) ?: '' ) : '';
+$video_att_mime = ( '' !== $video_att_url ) ? (string) get_post_mime_type( $video_att_id ) : '';
+
+// Video web-safety (HEVC investigation): detect whether the stored file uses a
+// codec browsers can actually play. ffprobe reads the real codec; when probing
+// is unavailable we trust the codec recorded at upload time (fallback: safe).
+$video_needs_convert = false;
+$video_conv_msg      = '';
+if ( $video_att_id && '' !== $video_att_url ) {
+    $video_file   = get_attached_file( $video_att_id );
+    $video_safe   = ( '1' === (string) get_post_meta( $video_att_id, '_ovr_video_web_compatible', true ) );
+    $video_codec  = '';
+    if ( ! $video_safe && $video_file && is_file( $video_file ) ) {
+        $probe_info = \OVR\Media\VideoProbe::probe( $video_file );
+        if ( $probe_info ) {
+            $video_safe = \OVR\Media\VideoProbe::is_web_safe( $probe_info );
+            $video_codec = (string) ( $probe_info['codec'] ?? '' );
+        }
+    }
+    if ( '' === $video_codec ) {
+        $video_codec = (string) get_post_meta( $video_att_id, '_ovr_video_codec', true );
+    }
+    if ( ! $video_safe && '' !== $video_codec && ! in_array( $video_codec, [ 'h264', 'avc1' ], true ) ) {
+        $video_needs_convert = true;
+        if ( \OVR\Media\VideoTranscoder::available() ) {
+            $video_conv_msg = __( 'This video uses HEVC/H.265, which most browsers and phones can’t play. Convert it now so visitors can watch it.', 'ovr-core' );
+        } else {
+            $video_conv_msg = __( 'This video uses HEVC/H.265, which most browsers and phones can’t play. Convert it to an H.264 MP4 (HandBrake/VLC) and upload it again.', 'ovr-core' );
+        }
+    }
+}
 $pano_att_id  = (int) $m( 'panorama_id' );
 $pano_att_url = $pano_att_id ? ( wp_get_attachment_image_url( $pano_att_id, 'large' ) ?: wp_get_attachment_url( $pano_att_id ) ) : '';
 $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
@@ -156,9 +186,9 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 <span class="ld-fm-statuspill is-id">
                     <?php
                     /* translators: %d: listing/property ID */
-                    printf( esc_html__( 'Property ID: #%d', 'ovr-core' ), (int) $pid );
+                    printf( esc_html__( 'Property ID: #%d', 'ovr-core' ), \OVR\Property\PropertyNumber::get( (int) $pid ) );
                     ?>
-                    <button type="button" class="ld-fm-copy-id" data-copy="#<?php echo (int) $pid; ?>" title="<?php esc_attr_e( 'Copy Property ID', 'ovr-core' ); ?>">
+                    <button type="button" class="ld-fm-copy-id" data-copy="#<?php echo \OVR\Property\PropertyNumber::get( (int) $pid ); ?>" title="<?php esc_attr_e( 'Copy Property ID', 'ovr-core' ); ?>">
                         <span class="material-symbols-outlined">content_copy</span>
                         <span class="ld-fm-copy-id-msg"><?php esc_html_e( 'Copy', 'ovr-core' ); ?></span>
                     </button>
@@ -231,7 +261,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 <div class="ld-fm-card ld-fm-statuscard">
                     <div class="ld-fm-statuscard-id">
                         <span class="ld-fm-statuscard-id-label"><?php esc_html_e( 'Property ID', 'ovr-core' ); ?></span>
-                        <span class="ld-fm-statuscard-id-num">#<?php echo (int) $pid; ?></span>
+                        <span class="ld-fm-statuscard-id-num">#<?php echo \OVR\Property\PropertyNumber::get( (int) $pid ); ?></span>
                         <span class="ld-fm-subhint" style="margin:0"><?php esc_html_e( 'Use this number when contacting support or sharing your listing.', 'ovr-core' ); ?></span>
                     </div>
                     <div class="ld-fm-statuscard-controls">
@@ -340,6 +370,8 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                 <?php
                 $city_val = (string) $m( 'city' );
                 if ( '' === $city_val && ! $is_edit ) { $city_val = 'The Villages'; }
+                $state_val = (string) $m( 'state' );
+                if ( '' === $state_val && ! $is_edit ) { $state_val = 'FL'; }
                 ?>
                 <div class="ld-fm-grid">
                     <div class="ld-fm-field">
@@ -348,7 +380,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     </div>
                     <div class="ld-fm-field">
                         <label class="ld-fm-label" for="ld-fm-state"><?php esc_html_e( 'State', 'ovr-core' ); ?></label>
-                        <input class="ld-fm-input" id="ld-fm-state" name="state" type="text" value="<?php echo esc_attr( (string) $m( 'state' ) ); ?>">
+                        <input class="ld-fm-input" id="ld-fm-state" name="state" type="text" value="<?php echo esc_attr( $state_val ); ?>">
                     </div>
                     <div class="ld-fm-field">
                         <label class="ld-fm-label" for="ld-fm-zip"><?php esc_html_e( 'ZIP', 'ovr-core' ); ?></label>
@@ -500,10 +532,16 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Photos', 'ovr-core' ); ?></h2>
                 <p class="ld-fm-hint">
-                    <?php esc_html_e( 'Upload your photos (JPG, PNG, WEBP — up to 10MB each).', 'ovr-core' ); ?>
+                    <?php
+                    printf(
+                        /* translators: %s: formatted max photo size, e.g. "3.5 MB" */
+                        esc_html__( 'Upload your photos (JPG, PNG, WEBP — up to %s each).', 'ovr-core' ),
+                        esc_html( size_format( (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'photo' ) ) )
+                    );
+                    ?>
                     <strong><?php esc_html_e( 'Drag photos to reorder them.', 'ovr-core' ); ?></strong>
                     <?php esc_html_e( 'The one marked ★ Main Listing Photo is shown first; press “Set as main” on any other photo to change it.', 'ovr-core' ); ?>
-                    <?php esc_html_e( 'Every photo is automatically watermarked when you upload it. Use the buttons on each photo to rotate or remove it.', 'ovr-core' ); ?>
+                    <?php esc_html_e( 'Every photo is automatically watermarked when you upload it.', 'ovr-core' ); ?>
                 </p>
 
                 <div class="ld-fm-uploader" id="ld-fm-uploader">
@@ -514,13 +552,12 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                     </label>
                     <div class="ld-fm-thumbs" id="ld-fm-thumbs">
                         <?php
-                        $render_thumb = static function ( $g, $url, $caption, $watermarked ) {
+                        $render_thumb = static function ( $g, $url, $caption ) {
                             ?>
-                            <div class="ld-fm-thumb<?php echo $watermarked ? ' is-watermarked' : ''; ?>" data-id="<?php echo esc_attr( (string) $g ); ?>" draggable="true">
+                            <div class="ld-fm-thumb" data-id="<?php echo esc_attr( (string) $g ); ?>" draggable="true">
                                 <div class="ld-fm-thumb-media">
                                     <img src="<?php echo esc_url( $url ); ?>" alt="<?php echo esc_attr( $caption ); ?>">
                                     <span class="ld-fm-thumb-main"><span class="material-symbols-outlined">star</span><?php esc_html_e( 'Main Listing Photo', 'ovr-core' ); ?></span>
-                                    <span class="ld-fm-thumb-wm"><span class="material-symbols-outlined">verified</span><?php esc_html_e( 'Watermarked', 'ovr-core' ); ?></span>
                                     <div class="ld-fm-thumb-tools">
                                         <button type="button" class="ld-fm-thumb-btn" data-act="rotate" data-dir="left" title="<?php esc_attr_e( 'Rotate left', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Rotate photo left', 'ovr-core' ); ?>"><span class="material-symbols-outlined">rotate_left</span></button>
                                         <button type="button" class="ld-fm-thumb-btn" data-act="rotate" data-dir="right" title="<?php esc_attr_e( 'Rotate right', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Rotate photo right', 'ovr-core' ); ?>"><span class="material-symbols-outlined">rotate_right</span></button>
@@ -536,7 +573,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         foreach ( $gids as $g ) {
                             $url = wp_get_attachment_image_url( $g, 'medium' ) ?: wp_get_attachment_url( $g );
                             if ( ! $url ) { continue; }
-                            $render_thumb( $g, $url, (string) ( $caption_map[ (string) $g ] ?? '' ), (bool) get_post_meta( $g, '_ovr_watermarked', true ) );
+                            $render_thumb( $g, $url, (string) ( $caption_map[ (string) $g ] ?? '' ) );
                         }
                         ?>
                     </div>
@@ -547,16 +584,24 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             <!-- Video sub-section -->
             <div class="ld-fm-card">
                 <h2 class="ld-fm-sec"><?php esc_html_e( 'Video', 'ovr-core' ); ?></h2>
-                <p class="ld-fm-hint"><?php esc_html_e( 'When a listing has a video it becomes the primary media — shown first on the listing page and flagged on search cards. Upload a file (MP4, MOV, or WebM) or paste a YouTube/Vimeo link.', 'ovr-core' ); ?></p>
+                <p class="ld-fm-hint"><?php esc_html_e( 'A video makes a listing’s first impression. For guaranteed playback on phones and browsers, upload an H.264 MP4 (MOV and WebM are also accepted). Newer phone recordings are often HEVC/H.265 — those are converted to H.264 automatically here when possible, otherwise you’ll get clear instructions.', 'ovr-core' ); ?>
+                    <?php
+                    printf(
+                        /* translators: %s: formatted max video size, e.g. "25 MB" */
+                        esc_html__( 'Videos can be up to %s — for longer or larger clips, paste a YouTube or Vimeo link below instead.', 'ovr-core' ),
+                        esc_html( size_format( (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'video' ) ) )
+                    );
+                    ?>
+                </p>
 
                 <div class="ld-fm-field">
                     <label class="ld-fm-label"><?php esc_html_e( 'Upload a video', 'ovr-core' ); ?></label>
-                    <div class="ld-fm-media-up" data-ld-media="video">
+                    <div class="ld-fm-media-up" data-ld-media="video" data-max="<?php echo (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'video' ); ?>" data-max-lbl="<?php echo esc_attr( size_format( (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'video' ) ) ); ?>">
                         <input type="hidden" name="video_id" id="ld-fm-video-id" value="<?php echo esc_attr( (string) $video_att_id ); ?>">
                         <input type="file" id="ld-fm-video-file" accept="video/mp4,video/quicktime,video/webm" hidden>
                         <div class="ld-fm-media-preview" id="ld-fm-video-preview"<?php echo $video_att_url ? '' : ' hidden'; ?>>
                             <?php if ( $video_att_url ) : ?>
-                                <video src="<?php echo esc_url( $video_att_url ); ?>" controls preload="metadata"></video>
+                                <video src="<?php echo esc_url( $video_att_url ); ?>" controls preload="metadata"<?php echo $video_att_mime ? ' type="' . esc_attr( $video_att_mime ) . '"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>></video>
                             <?php endif; ?>
                         </div>
                         <div class="ld-fm-media-actions">
@@ -564,6 +609,18 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                             <button type="button" class="ld-fm-btn ld-fm-media-remove"<?php echo $video_att_id ? '' : ' hidden'; ?>><span class="material-symbols-outlined">delete</span><?php esc_html_e( 'Remove', 'ovr-core' ); ?></button>
                         </div>
                         <p class="ld-fm-media-status" role="status"></p>
+                        <?php if ( $video_needs_convert ) : ?>
+                            <p class="ld-fm-media-warn" role="alert" data-ovr-video-warn>
+                                <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                                <span data-ovr-video-warn-text><?php echo esc_html( $video_conv_msg ); ?></span>
+                                <?php if ( \OVR\Media\VideoTranscoder::available() ) : ?>
+                                    <button type="button" class="ld-fm-btn ld-fm-btn--mini" data-ovr-video-convert="<?php echo esc_attr( (string) $video_att_id ); ?>">
+                                        <span class="material-symbols-outlined" aria-hidden="true">auto_fix</span>
+                                        <?php esc_html_e( 'Convert for browser', 'ovr-core' ); ?>
+                                    </button>
+                                <?php endif; ?>
+                            </p>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -580,7 +637,7 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
 
                 <div class="ld-fm-field">
                     <label class="ld-fm-label"><?php esc_html_e( 'Upload a 360° / panorama image', 'ovr-core' ); ?></label>
-                    <div class="ld-fm-media-up" data-ld-media="pano">
+                    <div class="ld-fm-media-up" data-ld-media="pano" data-max="<?php echo (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'pano' ); ?>" data-max-lbl="<?php echo esc_attr( size_format( (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'pano' ) ) ); ?>">
                         <input type="hidden" name="panorama_id" id="ld-fm-pano-id" value="<?php echo esc_attr( (string) $pano_att_id ); ?>">
                         <input type="file" id="ld-fm-pano-file" accept="image/jpeg,image/png,image/webp" hidden>
                         <div class="ld-fm-media-preview" id="ld-fm-pano-preview"<?php echo $pano_att_url ? '' : ' hidden'; ?>>
@@ -788,8 +845,40 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         </div>
 
                         <div class="ld-fm-price-list" id="ld-fm-price-list">
-                        <?php
-                        $render_price_row = static function ( $i, $r ) use ( $per_options ) {
+                         <?php
+                        // Pricing date picker: hybrid text + hidden native + calendar button
+                        // (mirrors the Availability Calendar rows so manual typing and the
+                        // picker both stay reliable).
+                        $render_price_date = static function ( $i, $field, $iso, $label, $data_key ) {
+                            $display = '';
+                            if ( '' !== $iso ) {
+                                $dt = DateTime::createFromFormat( 'Y-m-d', $iso );
+                                if ( $dt ) { $display = $dt->format( 'm/d/Y' ); }
+                            }
+                            ?>
+                            <div class="ld-fm-date">
+                                <input type="text"
+                                       class="ld-fm-input ld-fm-date-text"
+                                       data-ovr-date="<?php echo esc_attr( $data_key ); ?>"
+                                       inputmode="numeric"
+                                       autocomplete="off"
+                                       placeholder="<?php esc_attr_e( 'MM/DD/YYYY', 'ovr-core' ); ?>"
+                                       value="<?php echo esc_attr( $display ); ?>">
+                                <input type="date"
+                                       class="ld-fm-date-native"
+                                       name="pricing[<?php echo esc_attr( $i ); ?>][<?php echo esc_attr( $field ); ?>]"
+                                       value="<?php echo esc_attr( (string) $iso ); ?>"
+                                       tabindex="-1"
+                                       aria-hidden="true">
+                                <button type="button"
+                                        class="ld-fm-date-btn"
+                                        title="<?php echo esc_attr( $label ); ?>"
+                                        aria-label="<?php echo esc_attr( $label ); ?>"><span class="material-symbols-outlined">calendar_month</span></button>
+                            </div>
+                            <?php
+                        };
+
+                        $render_price_row = static function ( $i, $r ) use ( $per_options, $render_price_date ) {
                             ?>
                             <div class="ld-fm-price-row" draggable="true">
                                 <div class="ld-fm-price-handle" title="<?php esc_attr_e( 'Reorder', 'ovr-core' ); ?>" aria-hidden="true"><span class="material-symbols-outlined">drag_indicator</span></div>
@@ -799,11 +888,11 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'From', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="date" name="pricing[<?php echo esc_attr( $i ); ?>][start_date]" value="<?php echo esc_attr( (string) ( $r['from'] ?? '' ) ); ?>">
+                                    <?php $render_price_date( $i, 'start_date', (string) ( $r['from'] ?? '' ), __( 'Pick a start date', 'ovr-core' ), 'start' ); ?>
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'To', 'ovr-core' ); ?></label>
-                                    <input class="ld-fm-input" type="date" name="pricing[<?php echo esc_attr( $i ); ?>][end_date]" value="<?php echo esc_attr( (string) ( $r['to'] ?? '' ) ); ?>">
+                                    <?php $render_price_date( $i, 'end_date', (string) ( $r['to'] ?? '' ), __( 'Pick an end date', 'ovr-core' ), 'end' ); ?>
                                 </div>
                                 <div class="ld-fm-field">
                                     <label class="ld-fm-label ld-fm-price-mlabel"><?php esc_html_e( 'Price', 'ovr-core' ); ?></label>
@@ -1102,13 +1191,9 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ovr-ld .ld-fm-thumb-media:active{cursor:grabbing}
     .ovr-ld .ld-fm-thumb-media img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
     .ovr-ld .ld-fm-thumb.is-uploading{display:flex;align-items:center;justify-content:center;aspect-ratio:4/3}
-    .ovr-ld .ld-fm-thumb-main{display:none;position:absolute;top:8px;left:8px;align-items:center;gap:4px;background:var(--p);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+    .ovr-ld .ld-fm-thumb-main{display:none;position:absolute;left:8px;right:8px;bottom:8px;align-items:center;justify-content:center;gap:4px;background:var(--p);color:#fff;font-size:11px;font-weight:700;padding:6px 8px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.25)}
     .ovr-ld .ld-fm-thumb-main .material-symbols-outlined{font-size:14px}
     .ovr-ld .ld-fm-thumb.is-primary .ld-fm-thumb-main{display:inline-flex}
-    .ovr-ld .ld-fm-thumb-wm{display:none;position:absolute;top:8px;left:8px;align-items:center;gap:4px;background:rgba(10,31,44,.85);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
-    .ovr-ld .ld-fm-thumb-wm .material-symbols-outlined{font-size:13px}
-    .ovr-ld .ld-fm-thumb.is-watermarked .ld-fm-thumb-wm{display:inline-flex}
-    .ovr-ld .ld-fm-thumb.is-primary.is-watermarked .ld-fm-thumb-wm{top:40px}
     .ovr-ld .ld-fm-thumb-tools{position:absolute;top:8px;right:8px;display:flex;gap:6px}
     .ovr-ld .ld-fm-thumb-btn{width:30px;height:30px;border:none;border-radius:7px;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
     .ovr-ld .ld-fm-thumb-btn:hover{background:rgba(0,0,0,.82)}
@@ -1263,6 +1348,14 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     .ovr-ld .ld-fm-media-preview video,.ovr-ld .ld-fm-media-preview img{display:block;width:100%;max-height:300px;object-fit:cover}
     .ovr-ld .ld-fm-media-actions{display:flex;gap:10px;flex-wrap:wrap}
     .ovr-ld .ld-fm-media-status{font-size:13px;color:var(--sv,#5f6b7a);margin:0;min-height:1em}
+    .ovr-ld .ld-fm-media-status.is-warn{color:#7a5a00}
+    .ovr-ld .ld-fm-media-status.is-err{color:#b3261e}
+    .ovr-ld .ld-fm-media-warn{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;color:#7a5a00;background:#fff6d9;border:1px solid #e7cf7e;border-radius:10px;padding:10px 12px;margin:0;max-width:560px}
+    .ovr-ld .ld-fm-media-warn .material-symbols-outlined{font-size:18px;flex-shrink:0;margin-top:1px}
+    .ovr-ld .ld-fm-media-warn [data-ovr-video-warn-text]{flex:1 1 auto;min-width:0}
+    .ovr-ld .ld-fm-btn--mini{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;padding:7px 14px;border-radius:9999px;border:1px solid #b8860b;background:#fff;color:#6b4e00;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+    .ovr-ld .ld-fm-btn--mini:hover{background:#ffefbf}
+    .ovr-ld .ld-fm-btn--mini .material-symbols-outlined{font-size:15px}
     .ovr-ld .ld-fm-docs{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
     .ovr-ld .ld-fm-doc-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--gray-border,#dbdbdb);border-radius:10px;background:var(--surf,#fff)}
     .ovr-ld .ld-fm-doc-ext{flex:0 0 auto;font-size:11px;font-weight:800;letter-spacing:.04em;padding:4px 8px;border-radius:6px;background:var(--p-light,#e0f0ee);color:var(--p,#004c4c)}
@@ -1364,6 +1457,15 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     var toastEl = null;
     var _ajaxUrl = form.getAttribute('data-ajax');
     var _nonce   = form.getAttribute('data-nonce');
+
+    // ── Upload caps (bytes, mirrored from the server + a label for messages).
+    //    Rejecting oversized files in the browser avoids sending a request that
+    //    is guaranteed to be refused server-side.
+    var MAX_PHOTO_BYTES = <?php echo (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'photo' ); ?>;
+    var MAX_PHOTO_LBL   = '<?php echo esc_js( size_format( (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'photo' ) ) ); ?>';
+    var MAX_VIDEO_BYTES = <?php echo (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'video' ); ?>;
+    var MAX_VIDEO_LBL   = '<?php echo esc_js( size_format( (int) \OVR\Frontend\ListingForm::effective_upload_cap( 'video' ) ) ); ?>';
+
     function autoSave(cb){
         if (saving) { if (cb) { cb(); } return; }
         if (window.__ovrSyncRte) { window.__ovrSyncRte(); }
@@ -1859,6 +1961,18 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     var priceIdx  = <?php echo (int) ( count( $price_rows ) + 1 ); ?>;
     var priceDrag = null;
     function bindPriceDrag(row){
+        // Hybrid date wiring (same helper as the Availability Calendar — covers
+        // both From and To so typing MM/DD/YYYY and the calendar button stay in sync).
+        row.querySelectorAll('.ld-fm-date').forEach(function(wrap){
+            var textEl = wrap.querySelector('.ld-fm-date-text');
+            var nativeEl = wrap.querySelector('.ld-fm-date-native');
+            var btnEl = wrap.querySelector('.ld-fm-date-btn');
+            initAvailDateField(textEl, nativeEl, btnEl);
+        });
+        // Wire change validation for the native inputs as well (fallback).
+        row.querySelectorAll('input[type="date"]').forEach(function(inp){
+            inp.addEventListener('change', function(){ validateAvailRow(row); });
+        });
         linkRowDates(row);
         row.addEventListener('dragstart', function(e){
             // Don't start a row drag when interacting with an input/select.
@@ -1941,20 +2055,18 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
 
     var T = {
         main:    '<?php echo esc_js( __( 'Main Listing Photo', 'ovr-core' ) ); ?>',
-        wm:      '<?php echo esc_js( __( 'Watermarked', 'ovr-core' ) ); ?>',
         setmain: '<?php echo esc_js( __( 'Set as main', 'ovr-core' ) ); ?>',
         rotate:  '<?php echo esc_js( __( 'Rotate photo', 'ovr-core' ) ); ?>',
         crop:    '<?php echo esc_js( __( 'Crop photo', 'ovr-core' ) ); ?>',
-        addwm:   '<?php echo esc_js( __( 'Add watermark', 'ovr-core' ) ); ?>',
         del:     '<?php echo esc_js( __( 'Remove photo', 'ovr-core' ) ); ?>',
         cap:     '<?php echo esc_js( __( 'Add a caption…', 'ovr-core' ) ); ?>',
         upfail:  '<?php echo esc_js( __( 'Upload failed. Please try again.', 'ovr-core' ) ); ?>',
+        tooBig:  '<?php echo esc_js( __( 'Some photos were skipped — each photo must be', 'ovr-core' ) ); ?> ',
         rotfail: '<?php echo esc_js( __( 'Could not rotate the photo. Please try again.', 'ovr-core' ) ); ?>',
         cropfail:'<?php echo esc_js( __( 'Could not crop the photo. Please try again.', 'ovr-core' ) ); ?>',
         cropttl: '<?php echo esc_js( __( 'Crop photo', 'ovr-core' ) ); ?>',
         cropapply:'<?php echo esc_js( __( 'Apply crop', 'ovr-core' ) ); ?>',
-        cancel:  '<?php echo esc_js( __( 'Cancel', 'ovr-core' ) ); ?>',
-        wmfail:  '<?php echo esc_js( __( 'Could not watermark the photo. Please try again.', 'ovr-core' ) ); ?>'
+        cancel:  '<?php echo esc_js( __( 'Cancel', 'ovr-core' ) ); ?>'
     };
 
     if (thumbs) {
@@ -1978,13 +2090,11 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         // Build a fresh tile (used for new uploads; existing tiles render in PHP).
         var buildTile = function(id, url){
             var t = document.createElement('div');
-            // New uploads are auto-watermarked server-side (Phase 3) — reflect that.
-            t.className = 'ld-fm-thumb is-watermarked'; t.setAttribute('data-id', String(id)); t.setAttribute('draggable', 'true');
+            t.className = 'ld-fm-thumb'; t.setAttribute('data-id', String(id)); t.setAttribute('draggable', 'true');
             t.innerHTML =
                 '<div class="ld-fm-thumb-media">' +
                     '<img src="' + url + '" alt="">' +
                     '<span class="ld-fm-thumb-main"><span class="material-symbols-outlined">star</span>' + T.main + '</span>' +
-                    '<span class="ld-fm-thumb-wm"><span class="material-symbols-outlined">verified</span>' + T.wm + '</span>' +
                     '<div class="ld-fm-thumb-tools">' +
                         '<button type="button" class="ld-fm-thumb-btn" data-act="rotate" data-dir="left" aria-label="' + T.rotate + '"><span class="material-symbols-outlined">rotate_left</span></button>' +
                         '<button type="button" class="ld-fm-thumb-btn" data-act="rotate" data-dir="right" aria-label="' + T.rotate + '"><span class="material-symbols-outlined">rotate_right</span></button>' +
@@ -2097,8 +2207,18 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
             });
         }
         if (fileIn) { fileIn.addEventListener('change', function(){
-            var files = Array.prototype.slice.call(fileIn.files || []);
-            files.reduce(function(p, f){ return p.then(function(){ return uploadOne(f); }); }, Promise.resolve())
+            var picked = Array.prototype.slice.call(fileIn.files || []);
+            var ok = [], skipped = 0;
+            picked.forEach(function(f){
+                if (MAX_PHOTO_BYTES && f && f.size > MAX_PHOTO_BYTES) { skipped++; }
+                else { ok.push(f); }
+            });
+            if (skipped) {
+                errEl.textContent = T.tooBig + MAX_PHOTO_LBL + '.';
+            } else if (errEl) {
+                errEl.textContent = '';
+            }
+            ok.reduce(function(p, f){ return p.then(function(){ return uploadOne(f); }); }, Promise.resolve())
                  .then(function(){ fileIn.value=''; });
         }); }
 
@@ -2213,7 +2333,8 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
     // ── Video / Panorama single-file uploaders (Features B, C) ──
     var MEDIA_T = {
         uploading: '<?php echo esc_js( __( 'Uploading…', 'ovr-core' ) ); ?>',
-        upfail:    '<?php echo esc_js( __( 'Upload failed. Please try again.', 'ovr-core' ) ); ?>'
+        upfail:    '<?php echo esc_js( __( 'Upload failed. Please try again.', 'ovr-core' ) ); ?>',
+        tooBig:    '<?php echo esc_js( __( 'This file is larger than the allowed maximum of', 'ovr-core' ) ); ?>'
     };
     function wireSingleMedia(kind){
         var wrap = form.querySelector('.ld-fm-media-up[data-ld-media="' + kind + '"]');
@@ -2224,17 +2345,29 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
         var pick   = wrap.querySelector('.ld-fm-media-pick');
         var rem    = wrap.querySelector('.ld-fm-media-remove');
         var status = wrap.querySelector('.ld-fm-media-status');
+        var maxB   = parseInt(wrap.getAttribute('data-max'), 10) || 0;
+        var maxLbl = wrap.getAttribute('data-max-lbl') || '';
         if (pick && fileIn2) { pick.addEventListener('click', function(){ fileIn2.click(); }); }
         if (rem) {
             rem.addEventListener('click', function(){
                 idIn.value = ''; if (prev) { prev.innerHTML = ''; prev.hidden = true; } rem.hidden = true;
-                if (status) { status.textContent = ''; }
+                if (status) { status.textContent = ''; status.classList.remove('is-warn','is-err'); }
+                var warn = wrap.querySelector('.ld-fm-media-warn');
+                if (warn) { warn.remove(); }
             });
         }
         if (fileIn2) {
             fileIn2.addEventListener('change', function(){
                 var file = fileIn2.files && fileIn2.files[0]; if (!file) { return; }
-                if (status) { status.textContent = MEDIA_T.uploading; }
+                if (maxB && file.size > maxB) {
+                    if (status) {
+                        status.textContent = MEDIA_T.tooBig + ' ' + maxLbl + '.';
+                        status.classList.add('is-err'); status.classList.remove('is-warn');
+                    }
+                    fileIn2.value = '';
+                    return;
+                }
+                if (status) { status.textContent = MEDIA_T.uploading; status.classList.remove('is-warn','is-err'); }
                 var fd = new FormData();
                 fd.append('action', 'ovr_upload_listing_media');
                 fd.append('nonce', nonce); fd.append('kind', kind === 'video' ? 'video' : 'pano');
@@ -2245,24 +2378,76 @@ $doc_rows     = \OVR\Frontend\ListingForm::get_documents( $pid );
                         if (res && res.success && res.data && res.data.id) {
                             idIn.value = res.data.id;
                             if (prev) {
+                                var mt = (res.data && res.data.type) ? ' type="' + res.data.type + '"' : '';
                                 prev.innerHTML = (kind === 'video')
-                                    ? '<video src="' + res.data.url + '" controls preload="metadata"></video>'
+                                    ? '<video src="' + res.data.url + '"' + mt + ' controls preload="metadata"></video>'
                                     : '<img src="' + res.data.url + '" alt="">';
                                 prev.hidden = false;
                             }
                             if (rem) { rem.hidden = false; }
-                            if (status) { status.textContent = ''; }
+                            if (status) {
+                                if (res.data.warning) { status.textContent = res.data.warning; status.classList.add('is-warn'); status.classList.remove('is-err'); }
+                                else { status.textContent = ''; status.classList.remove('is-warn','is-err'); }
+                            }
+                            // A converted (or fresh web-safe) upload replaces any
+                            // earlier HEVC warning block in the video card.
+                            if (kind === 'video') {
+                                var warn = wrap.querySelector('.ld-fm-media-warn');
+                                if (warn) { warn.remove(); }
+                            }
                         } else {
-                            if (status) { status.textContent = (res && res.data && res.data.message) ? res.data.message : MEDIA_T.upfail; }
+                            if (status) { status.textContent = (res && res.data && res.data.message) ? res.data.message : MEDIA_T.upfail; status.classList.add('is-err'); status.classList.remove('is-warn'); }
                         }
                     })
-                    .catch(function(){ if (status) { status.textContent = MEDIA_T.upfail; } })
+                    .catch(function(){ if (status) { status.textContent = MEDIA_T.upfail; status.classList.add('is-err'); } })
                     .then(function(){ fileIn2.value = ''; });
             });
         }
     }
     wireSingleMedia('video');
     wireSingleMedia('pano');
+
+    // ── Legacy HEVC → H.264 "Convert for browser" (listing video only) ──
+    var convertBtn = form.querySelector('[data-ovr-video-convert]');
+    if (convertBtn) {
+        convertBtn.addEventListener('click', function(){
+            if (convertBtn.disabled) { return; }
+            var warnText = form.querySelector('[data-ovr-video-warn-text]');
+            var id = convertBtn.getAttribute('data-ovr-video-convert');
+            convertBtn.disabled = true;
+            var label = convertBtn.textContent.trim();
+            convertBtn.textContent = '<?php echo esc_js( __( 'Converting…', 'ovr-core' ) ); ?>';
+            var fd = new FormData();
+            fd.append('action', 'ovr_convert_video');
+            fd.append('nonce', nonce);
+            fd.append('id', id);
+            fd.append('post_id', document.querySelector('input[name="post_id"]') ? document.querySelector('input[name="post_id"]').value : 0);
+            fetch(_ajaxUrl, { method:'POST', credentials:'same-origin', body:fd })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    if (res && res.success && res.data) {
+                        var vidWrap = form.querySelector('.ld-fm-media-up[data-ld-media="video"]');
+                        var idIn = vidWrap ? vidWrap.querySelector('input[type="hidden"]') : null;
+                        var prev = vidWrap ? vidWrap.querySelector('.ld-fm-media-preview') : null;
+                        if (idIn) { idIn.value = res.data.id || id; }
+                        if (prev) {
+                            prev.innerHTML = '<video src="' + res.data.url + '" type="video/mp4" controls preload="metadata"></video>';
+                            prev.hidden = false;
+                        }
+                        var warn = form.querySelector('[data-ovr-video-warn]');
+                        if (warn) { warn.remove(); }
+                        var statusEl = vidWrap ? vidWrap.querySelector('.ld-fm-media-status') : null;
+                        if (statusEl) { statusEl.textContent = res.data.message || ''; statusEl.classList.add('is-warn'); }
+                    } else {
+                        if (warnText) { warnText.textContent = (res && res.data && res.data.message) ? res.data.message : '<?php echo esc_js( __( 'Conversion failed.', 'ovr-core' ) ); ?>'; }
+                    }
+                })
+                .catch(function(){
+                    if (warnText) { warnText.textContent = '<?php echo esc_js( __( 'Conversion failed. Please try again.', 'ovr-core' ) ); ?>'; }
+                })
+                .then(function(){ convertBtn.disabled = false; convertBtn.textContent = label; });
+        });
+    }
 
     // ── Documents uploader (Feature D) ──
     (function(){

@@ -14,6 +14,8 @@ use OVR\Property\IcalSync;
 use OVR\Property\Geocoder;
 use OVR\Search\SearchHandler;
 use OVR\Core\Pages;
+use OVR\Email\Mailer;
+use OVR\Auth\RegistrationHandler;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -46,6 +48,10 @@ class AjaxHandler {
         add_action( 'wp_ajax_ovr_apply_promo', [ $this, 'apply_promo' ] );
         add_action( 'wp_ajax_nopriv_ovr_apply_promo', [ $this, 'apply_promo' ] );
 
+        // Section 2: authoritative subscription-offer preview. Logged-in only —
+        // user identity is always server-derived, never accepted from the client.
+        add_action( 'wp_ajax_ovr_subscription_offer', [ $this, 'subscription_offer' ] );
+
         // Admin: manual iCal sync trigger.
         add_action( 'wp_ajax_ovr_ical_sync', [ $this, 'ical_sync' ] );
 
@@ -77,6 +83,10 @@ class AjaxHandler {
 		// Contact OVR form ([ovr_contact_form] on the Contact page).
 		add_action( 'wp_ajax_ovr_contact', [ \OVR\Frontend\ContactForm::class, 'ajax_submit' ] );
 		add_action( 'wp_ajax_nopriv_ovr_contact', [ \OVR\Frontend\ContactForm::class, 'ajax_submit' ] );
+
+		// Single property view beacon (cache-safe). Public page — no login required.
+		add_action( 'wp_ajax_ovr_record_view', [ $this, 'record_view' ] );
+		add_action( 'wp_ajax_nopriv_ovr_record_view', [ $this, 'record_view' ] );
 	}
 
     /**
@@ -388,10 +398,15 @@ class AjaxHandler {
         }
 
         $user_id = get_current_user_id();
+        $old_user = get_userdata( $user_id );
+        $old_login = $old_user ? (string) $old_user->user_login : '';
+        $old_email = $old_user ? (string) $old_user->user_email : '';
+        $old_name  = $old_user ? (string) $old_user->display_name : '';
+
         $email   = sanitize_email(      wp_unslash( $_POST['email']   ?? '' ) );
         $phone   = sanitize_text_field( wp_unslash( $_POST['phone']   ?? '' ) );
-        $address = sanitize_text_field( wp_unslash( $_POST['address'] ?? '' ) );
         $bio     = sanitize_textarea_field( wp_unslash( $_POST['bio'] ?? '' ) );
+        $password = (string) ( $_POST['current_password'] ?? '' );
 
         $update = [ 'ID' => $user_id ];
 
@@ -411,33 +426,80 @@ class AjaxHandler {
             if ( $last )  $update['last_name']  = $last;
         }
 
-        if ( $email && is_email( $email ) ) $update['user_email'] = $email;
-
         // WordPress stores the bio in the user's `description` field.
         $update['description'] = $bio;
 
-        wp_update_user( $update );
+        $result = wp_update_user( $update );
 
-        if ( $phone ) {
-            update_user_meta( $user_id, 'ovr_phone', $phone );
-        } else {
-            delete_user_meta( $user_id, 'ovr_phone' );
+        $email_changing = false;
+        if ( ! is_wp_error( $result ) && $email && is_email( $email ) && $email !== $old_email ) {
+            // Password confirmation is required to change the email address.
+            if ( '' === $password || ! wp_check_password( $password, $old_user->user_pass, $user_id ) ) {
+                wp_safe_redirect( add_query_arg( [ 'tab' => 'profile', 'profile_error' => 'password' ], $referer ) );
+                exit;
+            }
+
+            // New email must not already belong to another account.
+            $existing = get_user_by( 'email', $email );
+            if ( $existing && (int) $existing->ID !== $user_id ) {
+                wp_safe_redirect( add_query_arg( [ 'tab' => 'profile', 'profile_error' => 'email_taken' ], $referer ) );
+                exit;
+            }
+
+            // Store a pending email change with a one-time verification token.
+            // The actual user_email / user_login update happens only after the
+            // owner clicks the confirmation link sent to the new address.
+            $token        = wp_generate_password( 32, false );
+            $token_hash   = wp_hash_password( $token );
+            $expires      = time() + DAY_IN_SECONDS;
+
+            update_user_meta( $user_id, 'ovr_pending_email', $email );
+            update_user_meta( $user_id, 'ovr_email_change_token', $token_hash );
+            update_user_meta( $user_id, 'ovr_email_change_expires', (string) $expires );
+
+            Mailer::send( 'email_verification', [
+                'user_name'  => $old_name,
+                'verify_url' => RegistrationHandler::email_change_url( $user_id, $token ),
+            ], [ 'user_id' => $user_id ] );
+
+            $email_changing = true;
         }
 
-        $cc_email = sanitize_email( wp_unslash( $_POST['cc_email'] ?? '' ) );
-        if ( $cc_email && is_email( $cc_email ) ) {
-            update_user_meta( $user_id, 'ovr_cc_email', $cc_email );
-        } else {
-            delete_user_meta( $user_id, 'ovr_cc_email' );
+        if ( ! is_wp_error( $result ) ) {
+            if ( $phone ) {
+                update_user_meta( $user_id, 'ovr_phone', $phone );
+            } else {
+                delete_user_meta( $user_id, 'ovr_phone' );
+            }
+
+            $cc_email = sanitize_email( wp_unslash( $_POST['cc_email'] ?? '' ) );
+            if ( $cc_email && is_email( $cc_email ) ) {
+                update_user_meta( $user_id, 'ovr_cc_email', $cc_email );
+            } else {
+                delete_user_meta( $user_id, 'ovr_cc_email' );
+            }
+
+            if ( array_key_exists( 'address', $_POST ) ) {
+                $address = sanitize_text_field( wp_unslash( $_POST['address'] ) );
+                if ( '' !== $address ) {
+                    update_user_meta( $user_id, 'ovr_address', $address );
+                } else {
+                    delete_user_meta( $user_id, 'ovr_address' );
+                }
+            }
         }
 
-        if ( '' !== $address ) {
-            update_user_meta( $user_id, 'ovr_address', $address );
+        $redirect_args = [ 'tab' => 'profile' ];
+        if ( $email_changing ) {
+            $redirect_args['profile_saved']      = '1';
+            $redirect_args['profile_email_check'] = '1';
+        } elseif ( ! is_wp_error( $result ) ) {
+            $redirect_args['profile_saved'] = '1';
         } else {
-            delete_user_meta( $user_id, 'ovr_address' );
+            $redirect_args['profile_error'] = 'save_failed';
         }
 
-        wp_safe_redirect( add_query_arg( [ 'tab' => 'profile', 'profile_saved' => '1' ], $referer ) );
+        wp_safe_redirect( add_query_arg( $redirect_args, $referer ) );
         exit;
     }
 
@@ -917,11 +979,93 @@ class AjaxHandler {
             wp_send_json_error( [ 'message' => $result['message'] ], 400 );
         }
         $row = $result['row'];
-        wp_send_json_success( [
+        $payload = [
             'discount_type'  => $row['discount_type'],
             'discount_value' => (float) $row['discount_value'],
             'message'        => $result['message'],
-        ] );
+        ];
+        // When a plan is supplied, resolve through the ONE canonical offer
+        // engine so the client only ever displays server-derived numbers.
+        if ( '' !== $plan ) {
+            $offer = \OVR\Subscription\SubscriptionOffer::build( get_current_user_id(), $plan, 'new', $code );
+            if ( is_wp_error( $offer ) ) {
+                wp_send_json_error( [ 'message' => $offer->get_error_message() ], 400 );
+            }
+            $payload = array_merge( $payload, \OVR\Subscription\SubscriptionOffer::present( $offer ) );
+        }
+        wp_send_json_success( $payload );
+    }
+
+    /**
+     * Authoritative subscription-offer preview (Section 2).
+     *
+     * Builds and persists a server-authoritative offer for the CURRENT logged-in
+     * user + selected plan + optional promo, and returns the display payload.
+     * The client may render these values but can never author them.
+     */
+    public function subscription_offer(): void {
+        if ( ! check_ajax_referer( 'ovr_public_nonce', 'nonce', false ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'message' => __( 'Please log in to continue.', 'ovr-core' ) ], 401 );
+        }
+
+        $plan    = sanitize_key( wp_unslash( $_POST['plan'] ?? '' ) );
+        $context = sanitize_key( wp_unslash( $_POST['context'] ?? 'new' ) );
+        $promo   = sanitize_text_field( wp_unslash( $_POST['promo_code'] ?? '' ) );
+        $user_id = get_current_user_id();
+
+        $offer = \OVR\Subscription\SubscriptionOffer::build( $user_id, $plan, $context, $promo );
+        if ( is_wp_error( $offer ) ) {
+            wp_send_json_error( [ 'message' => $offer->get_error_message() ], 400 );
+        }
+
+        $persisted = \OVR\Subscription\SubscriptionOffer::persist( $offer );
+        if ( is_wp_error( $persisted ) ) {
+            wp_send_json_error( [ 'message' => $persisted->get_error_message() ], 500 );
+        }
+
+        wp_send_json_success( \OVR\Subscription\SubscriptionOffer::present( $persisted ) );
+    }
+
+    /**
+     * Cache-safe page-view counter for a single property (beacon from
+     * single.php). Increments _ovr_view_count + _ovr_monthly_views unless the
+     * caller is the listing owner or an admin (those previews never count).
+     * Nonce is per-post so a stolen nonce can't bump arbitrary listings.
+     */
+    public function record_view(): void {
+        $post_id = absint( $_POST['post_id'] ?? $_GET['post_id'] ?? 0 );
+        if ( ! $post_id || 'ovr_property' !== get_post_type( $post_id ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid property.', 'ovr-core' ) ], 400 );
+        }
+        $nonce = (string) ( $_POST['nonce'] ?? $_GET['nonce'] ?? '' );
+        if ( ! wp_verify_nonce( $nonce, 'ovr_record_view_' . $post_id ) ) {
+            wp_send_json_error( [ 'message' => __( 'Security check failed.', 'ovr-core' ) ], 403 );
+        }
+
+        $author = (int) get_post_field( 'post_author', $post_id );
+        $is_owner = is_user_logged_in() && get_current_user_id() === $author;
+        if ( $is_owner || current_user_can( 'manage_options' ) ) {
+            wp_send_json_success( [ 'skipped' => 'owner_or_admin' ] );
+        }
+
+        $views = (int) get_post_meta( $post_id, '_ovr_view_count', true );
+        $views++;
+        update_post_meta( $post_id, '_ovr_view_count', $views );
+
+        $monthly = get_post_meta( $post_id, '_ovr_monthly_views', true );
+        $monthly = is_array( $monthly ) ? $monthly : [];
+        $mkey = function_exists( 'wp_date' ) ? wp_date( 'Y-m' ) : gmdate( 'Y-m' );
+        $monthly[ $mkey ] = (int) ( $monthly[ $mkey ] ?? 0 ) + 1;
+        if ( count( $monthly ) > 12 ) {
+            ksort( $monthly );
+            $monthly = array_slice( $monthly, -12, null, true );
+        }
+        update_post_meta( $post_id, '_ovr_monthly_views', $monthly );
+
+        wp_send_json_success( [ 'views' => $views ] );
     }
 
     /**

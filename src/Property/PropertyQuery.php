@@ -78,6 +78,30 @@ class PropertyQuery {
     public const HIDDEN_OWNER_STATUSES = [ 'inactive', 'pending_renewal' ];
 
     /**
+     * Business-facing display status for a listing. For pending_renewal listings,
+     * this returns "Active/Pending" or "Inactive/Pending" based on the owner's
+     * pre-expiry intent, preserving the owner's original active/inactive choice.
+     *
+     * @return string One of: active, inactive, pending_renewal, Active/Pending,
+     *                 Inactive/Pending, archived, draft, or the raw status.
+     */
+    public static function listing_display_status( int $post_id ): string {
+        $status = (string) get_post_meta( $post_id, '_ovr_listing_status', true );
+
+        if ( 'pending_renewal' === $status ) {
+            $prior = (string) get_post_meta( $post_id, '_ovr_listing_status_pre_expiry', true );
+            if ( 'inactive' === $prior ) {
+                return 'inactive_pending_renewal';
+            }
+            if ( 'active' === $prior ) {
+                return 'active_pending_renewal';
+            }
+        }
+
+        return $status ?: 'active';
+    }
+
+    /**
      * Golf-cart condition slugs. These live in BOTH the ovr_feature and
      * ovr_amenity taxonomies (legacy data was imported as amenities), so any
      * code that reads golf-cart state must check both.
@@ -447,6 +471,15 @@ class PropertyQuery {
             'meta_query'     => [ 'relation' => 'AND' ],
             'tax_query'      => [ 'relation' => 'AND' ],
         ];
+
+        // Explicit WP_Query performance/shape flags pass straight through so
+        // callers requesting `'fields' => 'ids'` actually receive IDs (e.g.
+        // get_slider() maps posts with absint()).
+        foreach ( [ 'fields', 'no_found_rows', 'update_post_meta_cache', 'update_post_term_cache' ] as $passthrough ) {
+            if ( array_key_exists( $passthrough, $filters ) ) {
+                $args[ $passthrough ] = $filters[ $passthrough ];
+            }
+        }
 
         // Public visibility gate (Phase 8B). Hide listings the owner set to
         // Inactive, and listings an admin set to anything other than Approved.
@@ -998,10 +1031,16 @@ class PropertyQuery {
 
     /**
      * Listings with an active Homepage Slider boost, for the homepage rail.
-     * Falls back to featured listings when nobody has bought the slider, so
-     * the homepage section is never empty.
+     * Falls back to the newest published listings so the section is never blank.
+     *
+     * Spotlight (Homepage Slider) listings come first; remaining slots are
+     * filled with normal newest listings. Results are deduplicated by ID and
+     * truncated to $count. Every returned post is guaranteed to be an
+     * ovr_property.
      */
     public static function get_slider( int $count = 6 ): \WP_Query {
+        $count = max( 1, min( 120, absint( $count ) ) );
+
         // Manual ordering (M3 F9): when configured, show exactly these listings
         // in the admin-defined order (visibility gate still applies).
         $settings = (array) get_option( 'ovr_settings', [] );
@@ -1020,16 +1059,57 @@ class PropertyQuery {
             }
         }
 
-        $slider = self::query( [
-            'slider_only' => true,
-            'per_page'    => $count,
-            'sort'        => 'newest',
-        ] );
+        // Spotlight tier: ONLY listings with a live Homepage Slider boost, in
+        // genuine newest-first order by ORIGINAL publication date. The generic
+        // "newest" sort also enables the search boost ordering (active Featured
+        // / Bumped first, then post_modified) — that must NOT apply here, or a
+        // merely-Featured property (or one whose post_modified changed on a
+        // later edit) would jump to the front of the Spotlight rail. So build
+        // the args directly and drop the boost order, exactly like the fallback.
+        $args = self::build_args( [ 'slider_only' => true, 'per_page' => $count, 'sort' => 'newest' ] );
+        unset( $args['_ovr_boost_first'], $args['meta_key'], $args['orderby'], $args['order'] );
+        $args['orderby']       = 'date';
+        $args['order']         = 'DESC';
+        $args['fields']        = 'ids';
+        $args['no_found_rows'] = true;
+        $slider = new \WP_Query( $args );
 
-        if ( $slider->have_posts() ) {
-            return $slider;
+        $spotlight_ids = array_map( 'absint', $slider->posts );
+
+        if ( count( $spotlight_ids ) < $count ) {
+            $remaining = $count - count( $spotlight_ids );
+            $args = self::build_args( [ 'per_page' => $remaining, 'sort' => 'newest' ] );
+            unset( $args['_ovr_boost_first'], $args['meta_key'], $args['orderby'], $args['order'] );
+            $args['post__not_in'] = $spotlight_ids;
+            $args['orderby']      = 'date';
+            $args['order']        = 'DESC';
+            $args['fields']       = 'ids';
+            $fallback = new \WP_Query( $args );
+            $fallback_ids = array_map( 'absint', $fallback->posts );
+            $spotlight_ids = array_values( array_unique( array_merge( $spotlight_ids, $fallback_ids ) ) );
         }
-        return self::get_featured( $count );
+
+        if ( empty( $spotlight_ids ) ) {
+            return new \WP_Query( [
+                'post_type'      => 'ovr_property',
+                'post_status'    => 'publish',
+                'posts_per_page' => $count,
+                'no_found_rows'  => true,
+                'fields'         => 'ids',
+                'orderby'        => 'date',
+                'order'          => 'DESC',
+            ] );
+        }
+
+        return new \WP_Query( [
+            'post_type'      => 'ovr_property',
+            'post_status'    => 'publish',
+            'posts_per_page' => $count,
+            'no_found_rows'  => true,
+            'fields'         => 'ids',
+            'post__in'       => $spotlight_ids,
+            'orderby'        => 'post__in',
+        ] );
     }
 
     /**

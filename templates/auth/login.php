@@ -118,25 +118,7 @@ $logged_out = isset( $_GET['logged_out'] ) && '1' === $_GET['logged_out'];
                     </a>
                 </div>
 
-                <?php if ( ! empty( $enable_2fa ) ) : ?>
-                <div class="ovr-form-group">
-                    <label class="ovr-form-label" for="ovr-2fa-code"><?php esc_html_e( 'One-time code (if emailed)', 'ovr-core' ); ?></label>
-                    <div class="ovr-input-icon-wrap">
-                        <span class="ovr-input-icon material-symbols-outlined">pin</span>
-                        <input
-                            type="text"
-                            id="ovr-2fa-code"
-                            name="ovr_2fa_code"
-                            class="ovr-form-input"
-                            inputmode="numeric"
-                            autocomplete="one-time-code"
-                            value=""
-                            size="20"
-                            placeholder="<?php esc_attr_e( '6-digit code', 'ovr-core' ); ?>"
-                        >
-                    </div>
-                </div>
-                <?php endif; ?>
+
 
                 <button type="submit" name="ovr_login_submit" class="ovr-btn ovr-btn-primary ovr-btn-full ovr-btn-lg">
                     <span class="material-symbols-outlined">login</span>

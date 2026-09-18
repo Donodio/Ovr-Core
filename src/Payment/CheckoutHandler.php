@@ -2,14 +2,14 @@
 /**
  * Checkout Handler.
  *
- * Wires the "Select Plan" buttons on /pricing/ to a payment gateway.
+ *  Wires the "Select Plan" buttons on /pricing/ to a payment gateway.
  *
- *   POST /wp-admin/admin-post.php?action=ovr_start_checkout
+ *  POST /wp-admin/admin-post.php?action=ovr_start_checkout
  *
- * Starts a checkout for the active gateway (Stripe Checkout Sessions, PayPal
- * Orders, or the internal Wallet) and finalizes it server-side on the buyer's
- * return redirect by re-confirming the payment with the provider. Never treats
- * a redirect alone as proof of payment.
+ *  Starts a checkout for the active gateway (Authorize.Net / PayPal) and
+ *  finalizes it server-side on the buyer's return redirect by re-confirming
+ *  the payment with the provider. Never treats a redirect alone as proof of
+ *  payment.
  *
  * Also surfaces a one-time admin notice on plan-management screens letting
  * admins know they need to configure their payment API keys.
@@ -35,16 +35,19 @@ class CheckoutHandler {
     private array $gateways = [];
 
     public function init(): void {
-        // Register all available gateways.
-        // Wallet / On Account removed per business decision — too much
-        // complexity for low usage. Historical wallet data remains readable.
-        $this->gateways['stripe']        = new StripeGateway();
+        // Register available gateways. Wallet/On Account removed per business
+        // decision. Stripe removed per client-approved processor list.
         $this->gateways['paypal']        = new PayPalGateway();
         $this->gateways['authorize_net'] = new AuthorizeNetGateway();
 
         add_action( 'admin_post_ovr_start_checkout',        [ $this, 'handle_start' ] );
         add_action( 'admin_post_nopriv_ovr_start_checkout', [ $this, 'handle_start_anon' ] );
         add_action( 'wp_ajax_ovr_start_checkout',           [ $this, 'handle_ajax' ] );
+
+        // Section 2: "Continue to Payment" from the subscription-selection step.
+        // Builds the authoritative offer server-side and forwards to checkout.
+        add_action( 'admin_post_ovr_continue_checkout',        [ $this, 'handle_continue' ] );
+        add_action( 'admin_post_nopriv_ovr_continue_checkout', [ $this, 'handle_continue' ] );
 
         // Finalize a gateway redirect-back (Stripe/PayPal) before the page renders.
         add_action( 'template_redirect', [ $this, 'maybe_finalize_gateway_return' ] );
@@ -137,30 +140,53 @@ class CheckoutHandler {
             return;
         }
 
+        // Section 2: authoritative offer supplied by the checkout page. The
+        // browser submits only the opaque offer id; price + duration are loaded
+        // from the persisted server-side snapshot and can never be overridden.
+        $offer_id = sanitize_text_field( wp_unslash( $_POST['ovr_offer_id'] ?? '' ) );
+        if ( '' !== $offer_id ) {
+            $this->start_from_offer( $offer_id, $referer );
+            return;
+        }
+
         $plan_slug = sanitize_key( $_POST['plan'] ?? '' );
         $plan      = Plans::get_plan( $plan_slug );
 
-        if ( ! $plan ) {
+        if ( ! $plan || empty( $plan['is_active'] ) ) {
             wp_safe_redirect( add_query_arg( 'ovr_checkout', 'invalid_plan', $referer ) );
             exit;
         }
 
-        // Promo code attached to subscription (if supplied).
-        $promo_code = strtoupper( sanitize_text_field( wp_unslash( $_POST['promo_code'] ?? '' ) ) );
-        $promo_row  = null;
-        $discount   = 0.0;
-        if ( '' !== $promo_code ) {
-            $promo_check = PromoCode::validate( $promo_code, $plan_slug );
-            if ( ! $promo_check['valid'] ) {
-                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'invalid_promo', $referer ) );
-                exit;
-            }
-            $promo_row = $promo_check['row'];
-            $discount  = PromoCode::discount_amount( $promo_row, (float) ( $plan['price'] ?? 0 ) );
-        }
-
         // Needed by both the free-plan branch below and the gateway branch.
         $user_id = get_current_user_id();
+
+        // Single canonical offer calculation. Direct checkout (pricing page)
+        // passes plan + promo; we reconstruct the authoritative price and
+        // duration server-side and never trust submitted amounts. A bad promo
+        // degrades to the base plan instead of blocking the purchase.
+        $offer = \OVR\Subscription\SubscriptionOffer::build(
+            $user_id,
+            $plan_slug,
+            'new',
+            sanitize_text_field( wp_unslash( $_POST['promo_code'] ?? '' ) )
+        );
+        if ( is_wp_error( $offer ) ) {
+            wp_safe_redirect( add_query_arg( 'ovr_checkout', 'invalid_plan', $referer ) );
+            exit;
+        }
+
+        $promo_code     = (string) ( $offer['promo_code'] ?? '' );
+        $price          = (float) $offer['final_price'];
+        $price_for_dupe = $price;
+
+        $offer_meta = [
+            'base_price'             => (float) $offer['base_price'],
+            'base_duration_days'     => (int) $offer['base_duration_days'],
+            'final_price'            => (float) $offer['final_price'],
+            'final_duration_days'    => (int) $offer['final_duration_days'],
+            'duration_override_days' => $offer['duration_override_days'],
+            'purchase_context'       => 'new',
+        ];
 
         // Guard accidental double purchases — double-clicking "Complete
         // Purchase", re-submitting the form, or going back and submitting
@@ -172,7 +198,6 @@ class CheckoutHandler {
         // successful purchase leaves them in, so it is the signal that the
         // earlier payment did its job. Someone expired or unsubscribed is
         // trying to *become* active and must never be turned away.
-        $price_for_dupe = max( 0.0, (float) ( $plan['price'] ?? 0 ) - $discount );
         if ( UserSubscription::is_active( $user_id ) ) {
             $duplicate = $this->recent_duplicate_payment( $user_id, $plan_slug, $price_for_dupe );
             if ( $duplicate ) {
@@ -181,35 +206,29 @@ class CheckoutHandler {
             }
         }
 
-        // Free plan: no payment, but still record a $0 "completed" payment row
-        // and fire ovr_payment_completed so Lifecycle restores listings + sets
-        // editing_enabled. Brief: "Secondary status controlling editing
-        // permissions, activated upon successful subscription payment".
-        $price = max( 0.0, (float) ( $plan['price'] ?? 0 ) - $discount );
+        // Free plan: no payment, but still record a $0 "pending" payment row
+        // via find_or_create_free_payment() so duplicate POSTs for the same
+        // checkout intent cannot create multiple completed free payment rows
+        // or fire ovr_payment_completed more than once.
         if ( 0.0 === $price ) {
-            $free_meta = [ 'plan_slug' => $plan_slug ];
+            $free_meta = array_merge( [ 'plan_slug' => $plan_slug ], $offer_meta );
             if ( '' !== $promo_code ) {
                 $free_meta['promo_code'] = $promo_code;
             }
-            global $wpdb;
-            $wpdb->insert( $wpdb->prefix . 'ovr_payments', [
-                'user_id'        => $user_id,
-                'payment_type'   => 'subscription',
-                'amount'         => 0.00,
-                'currency'       => $plan['currency'] ?? 'USD',
-                'gateway'        => 'free',
-                'transaction_id' => 'free_' . wp_generate_uuid4(),
-                'status'         => 'completed',
-                'meta_data'      => wp_json_encode( $free_meta ),
-            ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
+            $checkout_intent = sanitize_text_field( wp_unslash( $_POST['ovr_checkout_intent'] ?? '' ) );
+            if ( '' === $checkout_intent ) {
+                $checkout_intent = wp_generate_uuid4();
+            }
+            $payment_id = $this->find_or_create_free_payment( $user_id, 'subscription', $free_meta, $checkout_intent );
 
-            $payment_id = (int) $wpdb->insert_id;
-
-            do_action( 'ovr_payment_completed', $user_id, [
-                'payment_id' => $payment_id,
-                'plan_slug'  => $plan_slug,
-                'amount'     => 0.0,
-                'gateway'    => 'free',
+            $this->complete_payment_atomically( $payment_id, [
+                'payment_id'   => $payment_id,
+                'plan_slug'    => $plan_slug,
+                'amount'       => 0.0,
+                'gateway'      => 'free',
+                'promo_code'   => $promo_code,
+                'duration_override_days' => $offer['duration_override_days'],
+                'final_duration_days'    => (int) $offer['final_duration_days'],
             ] );
 
             wp_safe_redirect( $this->success_url( $payment_id ) );
@@ -226,7 +245,7 @@ class CheckoutHandler {
             update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
         }
 
-        $checkout_meta = [];
+        $checkout_meta = $offer_meta;
         if ( '' !== $promo_code ) {
             $checkout_meta['promo_code'] = $promo_code;
         }
@@ -254,7 +273,7 @@ class CheckoutHandler {
     /**
      * Send the buyer to a gateway-supplied URL.
      *
-     * Approval URLs live on the provider's own domain (checkout.stripe.com,
+     * Approval URLs live on the provider's own domain (secure.authorize.net,
      * www.paypal.com …). wp_safe_redirect() rejects off-site hosts and silently
      * falls back to wp-admin, which strands the buyer after the order has
      * already been created at the provider. Whitelist just the host we are
@@ -282,8 +301,7 @@ class CheckoutHandler {
      * buyer owns and runs through the SAME gateway flow as subscriptions
      * (carrying payment_type=listing_upgrade + the boost details as meta). The
      * boost activates via UpgradeActivator the moment the payment is confirmed:
-     *   - Wallet / free → completed immediately (boost is live right away).
-     *   - Stripe / PayPal (live) → redirected to the provider, then finalized on
+     *   - PayPal / Authorize.Net → redirected to the provider, then finalized on
      *     return, which fires ovr_payment_completed and activates the boost.
      *   - Any gateway not yet configured → recorded pending for admin completion.
      */
@@ -338,22 +356,17 @@ class CheckoutHandler {
             'property_id'  => $property_id,
         ];
 
-        // Free upgrade → record a completed $0 payment and activate immediately.
+        // Free upgrade → record a $0 "pending" payment via find_or_create_free_payment()
+        // and atomically complete it so duplicate POSTs cannot create two rows or
+        // fire the completion event twice for the same upgrade intent.
         if ( $amount <= 0 ) {
-            global $wpdb;
-            $wpdb->insert( $wpdb->prefix . 'ovr_payments', [
-                'user_id'        => $user_id,
-                'payment_type'   => 'listing_upgrade',
-                'amount'         => 0.00,
-                'currency'       => 'USD',
-                'gateway'        => 'free',
-                'transaction_id' => 'free_' . wp_generate_uuid4(),
-                'status'         => 'completed',
-                'meta_data'      => wp_json_encode( $meta ),
-            ], [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ] );
-            $payment_id = (int) $wpdb->insert_id;
+            $checkout_intent = sanitize_text_field( wp_unslash( $_POST['ovr_checkout_intent'] ?? '' ) );
+            if ( '' === $checkout_intent ) {
+                $checkout_intent = wp_generate_uuid4();
+            }
+            $payment_id = $this->find_or_create_free_payment( $user_id, 'listing_upgrade', $meta, $checkout_intent );
 
-            do_action( 'ovr_payment_completed', $user_id, [
+            $this->complete_payment_atomically( $payment_id, [
                 'payment_id'   => $payment_id,
                 'amount'       => 0.0,
                 'gateway'      => 'free',
@@ -391,6 +404,174 @@ class CheckoutHandler {
             'ovr_checkout' => $reason,
         ], Pages::get_page_url( 'ovr_page_checkout' ) ) );
         exit;
+    }
+
+    /**
+     * "Continue to Payment" from /subscription-select/ (Section 2).
+     *
+     * Rebuilds the authoritative offer from the submitted plan + promo (client
+     * values are never trusted for money/duration), persists it, and forwards
+     * the buyer to the checkout screen with the opaque offer id.
+     */
+    public function handle_continue(): void {
+        $fallback = Pages::get_page_url( 'ovr_page_subscription_select' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_safe_redirect( add_query_arg( 'redirect_to', urlencode( $fallback ), Pages::get_page_url( 'ovr_page_login' ) ) );
+            exit;
+        }
+
+        if ( ! isset( $_POST['ovr_continue_nonce'] ) ||
+             ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ovr_continue_nonce'] ) ), 'ovr_continue_checkout' ) ) {
+            wp_safe_redirect( add_query_arg( 'ovr_offer', 'nonce_failed', $fallback ) );
+            exit;
+        }
+
+        $plan    = sanitize_key( wp_unslash( $_POST['plan'] ?? '' ) );
+        $context = sanitize_key( wp_unslash( $_POST['context'] ?? 'new' ) );
+        $promo   = sanitize_text_field( wp_unslash( $_POST['promo_code'] ?? '' ) );
+        $user_id = get_current_user_id();
+
+        $offer = \OVR\Subscription\SubscriptionOffer::build( $user_id, $plan, $context, $promo );
+        if ( is_wp_error( $offer ) ) {
+            wp_safe_redirect( add_query_arg( 'ovr_offer', 'invalid_plan', $fallback ) );
+            exit;
+        }
+
+        $persisted = \OVR\Subscription\SubscriptionOffer::persist( $offer );
+        if ( is_wp_error( $persisted ) ) {
+            wp_safe_redirect( add_query_arg( 'ovr_offer', 'error', $fallback ) );
+            exit;
+        }
+
+        $url = add_query_arg( 'offer_id', (string) $persisted['offer_id'], Pages::get_page_url( 'ovr_page_checkout' ) );
+        if ( ! empty( $persisted['promo_error'] ) ) {
+            $url = add_query_arg( 'ovr_offer', 'promo_invalid', $url );
+        }
+        wp_safe_redirect( $url );
+        exit;
+    }
+
+    /**
+     * Start checkout from a persisted authoritative offer (Section 2). The
+     * offer is claimed atomically so a double-click can only begin one checkout.
+     */
+    private function start_from_offer( string $offer_id, string $referer ): void {
+        $user_id = get_current_user_id();
+
+        $offer = \OVR\Subscription\SubscriptionOffer::resolve_for_checkout( $offer_id, $user_id );
+        if ( is_wp_error( $offer ) ) {
+            // Idempotent replay: a consumed offer that already produced a
+            // payment should surface that payment, not an error.
+            $existing = $this->payment_for_offer( $offer_id );
+            if ( $existing ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'completed', $this->success_url( $existing ) ) );
+                exit;
+            }
+            wp_safe_redirect( add_query_arg( 'ovr_checkout', 'invalid_plan', $referer ) );
+            exit;
+        }
+
+        // Atomic open → consumed claim. A failed claim means another request
+        // already started this offer; reuse its payment instead of double-charging.
+        if ( ! \OVR\Subscription\SubscriptionOffer::claim( $offer_id ) ) {
+            $existing = $this->payment_for_offer( $offer_id );
+            if ( $existing ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'completed', $this->success_url( $existing ) ) );
+                exit;
+            }
+            wp_safe_redirect( add_query_arg( 'ovr_checkout', 'pending', $referer ) );
+            exit;
+        }
+
+        $plan_slug = (string) $offer['plan_slug'];
+        $price     = (float) $offer['final_price'];
+
+        $meta = [
+            'plan_slug'              => $plan_slug,
+            'offer_id'               => $offer_id,
+            'base_price'             => (float) $offer['base_price'],
+            'base_duration_days'     => (int) $offer['base_duration_days'],
+            'final_price'            => (float) $offer['final_price'],
+            'final_duration_days'    => (int) $offer['final_duration_days'],
+            'duration_override_days' => $offer['duration_override_days'],
+            'purchase_context'       => (string) $offer['purchase_context'],
+        ];
+        if ( ! empty( $offer['promo_code'] ) ) {
+            $meta['promo_code'] = (string) $offer['promo_code'];
+        }
+
+        // Free offer ($0 promo or free plan) → hardened free-payment path; the
+        // offer id is the durable checkout intent.
+        if ( $price <= 0 ) {
+            $payment_id = $this->find_or_create_free_payment( $user_id, 'subscription', $meta, $offer_id );
+            \OVR\Subscription\SubscriptionOffer::mark_status( $offer_id, \OVR\Subscription\SubscriptionOffer::STATUS_CONSUMED, $payment_id );
+
+            $this->complete_payment_atomically( $payment_id, [
+                'payment_id'   => $payment_id,
+                'plan_slug'    => $plan_slug,
+                'amount'       => 0.0,
+                'gateway'      => 'free',
+                'payment_type' => 'subscription',
+                'promo_code'   => (string) ( $meta['promo_code'] ?? '' ),
+                'duration_override_days' => $offer['duration_override_days'],
+                'final_duration_days'    => (int) $offer['final_duration_days'],
+            ] );
+
+            wp_safe_redirect( $this->success_url( $payment_id ) );
+            exit;
+        }
+
+        $gateway_slug = sanitize_key( $_POST['gateway'] ?? '' );
+
+        if ( ! UserSubscription::is_active( $user_id ) ) {
+            update_user_meta( $user_id, UserSubscription::META_STATUS, UserSubscription::STATUS_PENDING );
+        }
+
+        $result = $this->gateway( $gateway_slug )->start_checkout( [
+            'user_id'    => $user_id,
+            'plan_slug'  => $plan_slug,
+            'amount'     => $price,
+            'currency'   => (string) ( $offer['currency'] ?? 'USD' ),
+            'return_url' => Pages::get_page_url( 'ovr_page_payment_success' ),
+            'cancel_url' => Pages::get_page_url( 'ovr_page_subscription_select' ),
+            'meta'       => $meta,
+        ] );
+
+        if ( ! empty( $result['payment_id'] ) ) {
+            global $wpdb;
+            // Tie the payment row to the offer id (unique) for durable idempotency
+            // and so Section 3 can resolve the authoritative duration snapshot.
+            $wpdb->update(
+                $wpdb->prefix . 'ovr_payments',
+                [ 'checkout_intent_id' => $offer_id ],
+                [ 'id' => (int) $result['payment_id'] ],
+                [ '%s' ],
+                [ '%d' ]
+            );
+            \OVR\Subscription\SubscriptionOffer::mark_status( $offer_id, \OVR\Subscription\SubscriptionOffer::STATUS_CONSUMED, (int) $result['payment_id'] );
+        }
+
+        if ( ! empty( $result['redirect_url'] ) ) {
+            $this->redirect_to_gateway( $result['redirect_url'] );
+        }
+
+        wp_safe_redirect( add_query_arg( [
+            'ovr_checkout' => 'error',
+            'reason'       => urlencode( $result['message'] ?? 'unknown' ),
+        ], $referer ) );
+        exit;
+    }
+
+    /**
+     * Find a payment already tied to an offer id (durable checkout intent).
+     */
+    private function payment_for_offer( string $offer_id ): int {
+        global $wpdb;
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            'SELECT id FROM ' . $wpdb->prefix . 'ovr_payments WHERE checkout_intent_id = %s ORDER BY id DESC LIMIT 1',
+            $offer_id
+        ) );
     }
 
     /**
@@ -444,12 +625,130 @@ class CheckoutHandler {
     }
 
     /**
-     * When a gateway redirects the buyer back (Stripe/PayPal), verify/capture
+     * Find an existing free payment for the same logical checkout intent, or
+     * create one. The durable checkout_intent_id survives pending → completed,
+     * so a replayed request for the same checkout intent finds the existing
+     * row instead of creating a duplicate.
+     *
+     * The named-lock guard makes creation concurrency-safe: two simultaneous
+     * POSTs for the same intent can only create one row.
+     *
+     * @param string|null $checkout_intent_id Durable checkout-instance identity.
+     * @return int Payment ID (existing or newly inserted).
+     */
+    private function find_or_create_free_payment( int $user_id, string $payment_type, array $meta, ?string $checkout_intent_id = null ): int {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_payments';
+        $meta_json = wp_json_encode( $meta );
+        $lock_hash = md5( (string) $user_id . '|' . $payment_type . '|' . $meta_json . '|' . ( $checkout_intent_id ?? '' ) );
+        $lock_name = 'ovr_free_intent_' . $lock_hash;
+
+        $wpdb->query( $wpdb->prepare( "SELECT GET_LOCK(%s, 3)", $lock_name ) );
+
+        // 1) Durable intent lookup: find any existing payment for this checkout
+        //    intent, regardless of status. This closes the replay-after-completion
+        //    gap because a completed payment still matches.
+        if ( $checkout_intent_id ) {
+            $by_intent = $wpdb->get_row( $wpdb->prepare( "
+                SELECT id, status FROM {$table}
+                WHERE checkout_intent_id = %s
+                ORDER BY id DESC
+                LIMIT 1
+            ", $checkout_intent_id ), ARRAY_A );
+
+            if ( $by_intent ) {
+                $wpdb->query( $wpdb->prepare( "SELECT RELEASE_LOCK(%s)", $lock_name ) );
+                return (int) $by_intent['id'];
+            }
+        }
+
+        // 2) Fallback: pending-only lookup keyed by business metadata. This
+        //    preserves idempotency for in-flight duplicate submissions.
+        $existing = $wpdb->get_row( $wpdb->prepare( "
+            SELECT id FROM {$table}
+            WHERE user_id = %d
+              AND payment_type = %s
+              AND amount = 0
+              AND gateway = 'free'
+              AND status = 'pending'
+              AND meta_data = %s
+            LIMIT 1
+        ", $user_id, $payment_type, $meta_json ), ARRAY_A );
+
+        if ( $existing ) {
+            $wpdb->query( $wpdb->prepare( "SELECT RELEASE_LOCK(%s)", $lock_name ) );
+            return (int) $existing['id'];
+        }
+
+        // 3) No match — insert a new pending row with the durable intent ID.
+        $insert_data = [
+            'user_id'        => $user_id,
+            'payment_type'   => $payment_type,
+            'amount'         => 0.00,
+            'currency'       => 'USD',
+            'gateway'        => 'free',
+            'transaction_id' => 'free_' . wp_generate_uuid4(),
+            'status'         => 'pending',
+            'meta_data'      => $meta_json,
+        ];
+        $insert_formats = [ '%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s' ];
+
+        if ( $checkout_intent_id ) {
+            $insert_data['checkout_intent_id'] = $checkout_intent_id;
+            $insert_formats[] = '%s';
+        }
+
+        $wpdb->insert( $table, $insert_data, $insert_formats );
+
+        $payment_id = (int) $wpdb->insert_id;
+
+        $wpdb->query( $wpdb->prepare( "SELECT RELEASE_LOCK(%s)", $lock_name ) );
+
+        return $payment_id;
+    }
+
+    /**
+     * Atomically transition a pending payment to completed and fire the
+     * completion event exactly once.
+     *
+     * The conditional WHERE status='pending' makes the transition safe under
+     * concurrency: only the request that actually flips the row from pending
+     * to completed fires ovr_payment_completed.
+     *
+     * @return bool True if this request owned the transition.
+     */
+    public function complete_payment_atomically( int $payment_id, array $context ): bool {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ovr_payments';
+        $row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $payment_id ), ARRAY_A );
+
+        if ( ! $row || 'pending' !== $row['status'] ) {
+            return false;
+        }
+
+        $result = $wpdb->update(
+            $table,
+            [ 'status' => 'completed' ],
+            [ 'id' => $payment_id, 'status' => 'pending' ],
+            [ '%s', '%s' ],
+            [ '%d', '%s' ]
+        );
+
+        if ( 1 === $result ) {
+            do_action( 'ovr_payment_completed', (int) $row['user_id'], $context );
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * When a gateway redirects the buyer back (Authorize.Net/PayPal), verify/capture
      * the payment, mark it completed, and fire activation. Idempotent.
      */
     public function maybe_finalize_gateway_return(): void {
         $gw = isset( $_GET['ovr_gw'] ) ? sanitize_key( wp_unslash( $_GET['ovr_gw'] ) ) : '';
-        if ( ! in_array( $gw, [ 'stripe', 'paypal', 'authorize_net' ], true ) ) {
+        if ( ! in_array( $gw, [ 'paypal', 'authorize_net' ], true ) ) {
             return;
         }
 
@@ -470,6 +769,30 @@ class CheckoutHandler {
         }
 
         $success_url = $this->success_url( (int) $row['id'] );
+
+        // Require provider-correlated evidence before any state mutation.
+        // An untrusted browser must not mutate another user's payment by
+        // supplying only the predictable local payment_id.
+        if ( 'paypal' === $gw ) {
+            $token = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
+            // Token must be present and match the stored PayPal order ID.
+            if ( '' === $token || '' === (string) ( $row['transaction_id'] ?? '' ) || $token !== (string) $row['transaction_id'] ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'pending', $success_url ) );
+                exit;
+            }
+        } elseif ( 'authorize_net' === $gw ) {
+            $x_trans_id = isset( $_GET['x_trans_id'] ) ? sanitize_text_field( wp_unslash( $_GET['x_trans_id'] ) ) : '';
+            if ( '' === $x_trans_id ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'pending', $success_url ) );
+                exit;
+            }
+            // Do not trust x_response_code alone without a transaction ID.
+            $x_response_code = isset( $_GET['x_response_code'] ) ? sanitize_text_field( wp_unslash( $_GET['x_response_code'] ) ) : '';
+            if ( '' !== $x_response_code && '' === $x_trans_id ) {
+                wp_safe_redirect( add_query_arg( 'ovr_checkout', 'pending', $success_url ) );
+                exit;
+            }
+        }
 
         // Already finalized → just show the receipt (idempotent on refresh).
         if ( 'completed' === $row['status'] ) {
@@ -493,12 +816,14 @@ class CheckoutHandler {
             // the row does not linger in the admin queue as if it were awaiting
             // review. Indeterminate errors (network/auth) stay pending.
             if ( ! empty( $res['failed'] ) ) {
-                $wpdb->update( $table, [ 'status' => 'failed' ], [ 'id' => (int) $row['id'] ], [ '%s' ], [ '%d' ] );
-                do_action( 'ovr_payment_failed', (int) $row['user_id'], [
-                    'payment_id' => (int) $row['id'],
-                    'gateway'    => $gw,
-                    'code'       => (string) ( $res['code'] ?? '' ),
-                ] );
+                $wpdb->update( $table, [ 'status' => 'failed' ], [ 'id' => (int) $row['id'], 'status' => 'pending' ], [ '%s', '%s' ], [ '%d', '%s' ] );
+                if ( $wpdb->rows_affected > 0 ) {
+                    do_action( 'ovr_payment_failed', (int) $row['user_id'], [
+                        'payment_id' => (int) $row['id'],
+                        'gateway'    => $gw,
+                        'code'       => (string) ( $res['code'] ?? '' ),
+                    ] );
+                }
                 wp_safe_redirect( add_query_arg( 'ovr_checkout', 'failed', $success_url ) );
                 exit;
             }
@@ -507,17 +832,20 @@ class CheckoutHandler {
             exit;
         }
 
-        $wpdb->update( $table, [ 'status' => 'completed' ], [ 'id' => (int) $row['id'] ], [ '%s' ], [ '%d' ] );
-
-        $meta      = json_decode( (string) ( $row['meta_data'] ?? '' ), true );
+        // Atomically transition pending → completed. If another request already
+        // completed this payment, the WHERE clause matches zero rows and the
+        // completion event fires exactly once.
+        $meta = json_decode( (string) ( $row['meta_data'] ?? '' ), true );
         $plan_slug = is_array( $meta ) ? (string) ( $meta['plan_slug'] ?? '' ) : '';
+        $promo_from_meta = is_array( $meta ) ? (string) ( $meta['promo_code'] ?? '' ) : '';
 
-        do_action( 'ovr_payment_completed', (int) $row['user_id'], [
+        $this->complete_payment_atomically( (int) $row['id'], [
             'payment_id'   => (int) $row['id'],
             'plan_slug'    => $plan_slug,
             'amount'       => (float) $row['amount'],
             'gateway'      => $gw,
             'payment_type' => (string) ( $row['payment_type'] ?? 'subscription' ),
+            'promo_code'   => $promo_from_meta,
         ] );
 
         wp_safe_redirect( add_query_arg( 'ovr_checkout', 'completed', $success_url ) );
@@ -525,7 +853,7 @@ class CheckoutHandler {
     }
 
     /**
-     * The buyer backed out at the gateway (PayPal/Stripe send them to cancel_url
+     * The buyer backed out at the gateway (PayPal/Authorize.Net send them to cancel_url
      * with ovr_checkout=cancelled and the order id as `token`). Close the row out
      * so an abandoned checkout is not left sitting in the admin queue looking
      * like a payment that still needs to be actioned.
@@ -543,19 +871,24 @@ class CheckoutHandler {
         $table = $wpdb->prefix . 'ovr_payments';
 
         // Authorize.net returns to its cancel_url carrying ovr_gw + payment_id.
+        // Require that the visitor is the payment owner; otherwise an
+        // arbitrary user who guesses payment_id could cancel another's checkout.
         $gw = isset( $_GET['ovr_gw'] ) ? sanitize_key( wp_unslash( $_GET['ovr_gw'] ) ) : '';
         if ( 'authorize_net' === $gw ) {
             $payment_id = isset( $_GET['payment_id'] ) ? absint( $_GET['payment_id'] ) : 0;
             if ( $payment_id ) {
-                $updated = $wpdb->update(
-                    $table,
-                    [ 'status' => 'cancelled' ],
-                    [ 'id' => $payment_id, 'status' => 'pending' ],
-                    [ '%s' ],
-                    [ '%d', '%s' ]
-                );
-                if ( $updated ) {
-                    do_action( 'ovr_checkout_cancelled', (string) $payment_id );
+                $owner_row = $wpdb->get_row( $wpdb->prepare( "SELECT user_id FROM {$table} WHERE id = %d", $payment_id ), ARRAY_A );
+                if ( $owner_row && (int) $owner_row['user_id'] === get_current_user_id() ) {
+                    $updated = $wpdb->update(
+                        $table,
+                        [ 'status' => 'cancelled' ],
+                        [ 'id' => $payment_id, 'status' => 'pending' ],
+                        [ '%s' ],
+                        [ '%d', '%s' ]
+                    );
+                    if ( $updated ) {
+                        do_action( 'ovr_checkout_cancelled', (string) $payment_id );
+                    }
                 }
             }
             return;
@@ -605,17 +938,20 @@ class CheckoutHandler {
             exit;
         }
 
-        $wpdb->update( $table, [ 'status' => 'completed' ], [ 'id' => $payment_id ], [ '%s' ], [ '%d' ] );
-
-        $meta      = json_decode( (string) ( $row['meta_data'] ?? '' ), true );
+        // Atomically transition to completed. If another request already
+        // completed this payment, the WHERE clause matches zero rows and the
+        // completion event fires exactly once.
+        $meta = json_decode( (string) ( $row['meta_data'] ?? '' ), true );
         $plan_slug = is_array( $meta ) ? (string) ( $meta['plan_slug'] ?? '' ) : '';
+        $promo_from_meta2 = is_array( $meta ) ? (string) ( $meta['promo_code'] ?? '' ) : '';
 
-        do_action( 'ovr_payment_completed', (int) $row['user_id'], [
+        $this->complete_payment_atomically( $payment_id, [
             'payment_id'   => $payment_id,
             'plan_slug'    => $plan_slug,
             'amount'       => (float) $row['amount'],
-            'gateway'      => (string) $row['gateway'],
+            'gateway'      => (string) ( $row['gateway'] ?? 'admin' ),
             'payment_type' => (string) ( $row['payment_type'] ?? 'subscription' ),
+            'promo_code'   => $promo_from_meta2,
         ] );
 
         wp_safe_redirect( add_query_arg( 'ovr_paid', 'done', $back ) );
@@ -706,7 +1042,7 @@ class CheckoutHandler {
         <div class="notice notice-info is-dismissible">
             <p>
                 <strong><?php esc_html_e( 'OVR — Payment gateway not configured.', 'ovr-core' ); ?></strong>
-                <?php esc_html_e( 'No payment gateway credentials are set, so card/PayPal payments are recorded as "pending" until an admin marks them paid. Add your Stripe or PayPal keys under OVR → Settings → Payments to enable live checkout.', 'ovr-core' ); ?>
+                <?php esc_html_e( 'No payment gateway credentials are set, so card/PayPal payments are recorded as "pending" until an admin marks them paid. Add your Authorize.Net or PayPal keys under OVR → Settings → Payments to enable live checkout.', 'ovr-core' ); ?>
             </p>
         </div>
         <?php

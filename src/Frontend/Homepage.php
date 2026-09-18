@@ -67,6 +67,16 @@ class Homepage {
 
             $village = (string) get_post_meta( $pid, '_ovr_village_name', true );
 
+            // Short description for the spotlight slider: prefer explicit excerpt,
+            // fall back to trimmed post_content. Capped to 200 characters so the
+            // card stays readable even for longer descriptions.
+            $raw_excerpt = (string) get_post_field( 'post_excerpt', $pid );
+            if ( '' === trim( $raw_excerpt ) ) {
+                $raw_excerpt = (string) get_post_field( 'post_content', $pid );
+            }
+            $plain = wp_strip_all_tags( $raw_excerpt );
+            $excerpt = mb_strlen( $plain ) > 200 ? rtrim( mb_substr( $plain, 0, 197 ), '.,;:!? ' ) . '…' : $plain;
+
             $cards[] = [
                 'image'        => get_the_post_thumbnail_url( $pid, 'large' ) ?: OVR_PLUGIN_URL . 'assets/images/ovr-placeholder.jpg',
                 'title'        => $post->post_title ?: __( 'Village Rental', 'ovr-core' ),
@@ -75,6 +85,7 @@ class Homepage {
                 'availability' => $village ? sprintf( __( 'Village of %s', 'ovr-core' ), $village ) : __( 'Owner-Direct Rental', 'ovr-core' ),
                 'price'        => SeasonalPricing::price_summary( $pid ),
                 'permalink'    => get_permalink( $pid ),
+                'excerpt'      => $excerpt,
             ];
         }
 

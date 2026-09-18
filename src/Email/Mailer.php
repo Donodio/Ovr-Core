@@ -97,17 +97,34 @@ class Mailer {
         }
         $admin = self::admin_email();
 
+        // Optional CC address stored on the user (landlord) profile — when a
+        // notification is addressed to the user, a copy is also sent there.
+        $cc = '';
+        if ( ! empty( $ctx['user_id'] ) ) {
+            $cc = (string) get_user_meta( (int) $ctx['user_id'], 'ovr_cc_email', true );
+        } elseif ( '' !== $user ) {
+            $u2 = get_user_by( 'email', $user );
+            if ( $u2 ) {
+                $cc = (string) get_user_meta( (int) $u2->ID, 'ovr_cc_email', true );
+            }
+        }
+        $cc = is_email( $cc ) ? $cc : '';
+
         switch ( $mode ) {
             case 'admin':
                 return [ $admin ];
             case 'both':
-                return [ $user, $admin ];
+                $list = [ $user, $admin ];
+                if ( '' !== $cc ) { $list[] = $cc; }
+                return $list;
             case 'custom':
                 // Allow comma-separated custom recipients.
                 return array_map( 'trim', explode( ',', $custom ) );
             case 'user':
             default:
-                return [ $user ];
+                $list = [ $user ];
+                if ( '' !== $cc ) { $list[] = $cc; }
+                return $list;
         }
     }
 

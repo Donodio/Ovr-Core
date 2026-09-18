@@ -21,21 +21,28 @@ class SubscriptionManager {
      *
      * Sets the plan, status, expiry, grants the ovr_landlord role,
      * and restores any pending_renewal listings.
+     *
+     * @param int|null $duration_days Optional promo duration override (e.g. 180 for a free 180-day promo). When set, expiry is base + N days regardless of plan period.
      */
-    public static function activate( int $user_id, string $plan_slug ): void {
+    public static function activate( int $user_id, string $plan_slug, ?int $duration_days = null ): void {
         $plan   = Plans::get_plan( $plan_slug );
         $period = is_array( $plan ) && isset( $plan['period'] ) ? (string) $plan['period'] : 'annually';
 
-        // Each billing period must map to its own term. Anything unrecognised
-        // falls back to a year, but quarterly/monthly are named explicitly so a
-        // quarterly plan cannot silently grant twelve months.
-        $terms = [
-            'monthly'   => '+1 month',
-            'quarterly' => '+3 months',
-            'annually'  => '+1 year',
-            'yearly'    => '+1 year',
-        ];
-        $term = $terms[ $period ] ?? '+1 year';
+        // Promo duration override takes precedence (e.g. 180-day free promo).
+        if ( null !== $duration_days && $duration_days > 0 ) {
+            $term = '+' . $duration_days . ' days';
+        } else {
+            // Each billing period must map to its own term. Anything unrecognised
+            // falls back to a year, but quarterly/monthly are named explicitly so a
+            // quarterly plan cannot silently grant twelve months.
+            $terms = [
+                'monthly'   => '+1 month',
+                'quarterly' => '+3 months',
+                'annually'  => '+1 year',
+                'yearly'    => '+1 year',
+            ];
+            $term = $terms[ $period ] ?? '+1 year';
+        }
 
         // Renewing before the current term ends must add to the time already
         // paid for, not restart from today — otherwise an early renewal quietly

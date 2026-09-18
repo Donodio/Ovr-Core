@@ -3,10 +3,10 @@
  * Checkout page renderer.
  *
  * Review-and-pay step for a subscription plan. Renders the order summary + a
- * payment form, then hands off to the existing `ovr_start_checkout` flow
- * (CheckoutHandler) on submit. Card fields in the template are display-only and
- * are never submitted to the server — card capture is delegated to the
- * provider's hosted checkout (Stripe Checkout / PayPal).
+ *  payment form, then hands off to the existing `ovr_start_checkout` flow
+ *  (CheckoutHandler) on submit. Card fields in the template are display-only and
+ *  are never submitted to the server — card capture is delegated to the
+ *  provider's hosted checkout (Authorize.Net / PayPal).
  *
  * @package OVR\Frontend
  * @since   1.0.0
@@ -41,25 +41,72 @@ class Checkout {
         $cancel_url  = add_query_arg( 'tab', 'subscription', Pages::get_page_url( 'ovr_page_dashboard' ) );
 
         // Subscription plan checkout.
-        if ( ! empty( $_GET['plan'] ) ) {
+        // Section 2: an authoritative offer handed off from subscription selection.
+        $offer_id = sanitize_text_field( wp_unslash( $_GET['offer_id'] ?? '' ) );
+        if ( '' !== $offer_id ) {
+            $offer = \OVR\Subscription\SubscriptionOffer::resolve_for_checkout( $offer_id, get_current_user_id() );
+            if ( is_wp_error( $offer ) ) {
+                return self::notice(
+                    $offer->get_error_message(),
+                    Pages::get_page_url( 'ovr_page_subscription_select' ),
+                    __( 'Choose a plan', 'ovr-core' )
+                );
+            }
+            $ctx   = (string) $offer['purchase_context'];
+            $order = [
+                'type'             => 'plan',
+                'purchase_context' => $ctx,
+                'eyebrow'          => ( 'renewal' === $ctx ) ? __( 'Subscription Renewal', 'ovr-core' ) : __( 'Subscription', 'ovr-core' ),
+                /* translators: %d: number of days */
+                'sub'              => sprintf( __( '%d-day term', 'ovr-core' ), (int) $offer['final_duration_days'] ),
+                'name'             => (string) $offer['plan_name'],
+                'regular_price'    => (float) $offer['base_price'],
+                'price'            => (float) $offer['final_price'],
+                'discount'         => max( 0.0, (float) $offer['base_price'] - (float) $offer['final_price'] ),
+                'duration_days'    => (int) $offer['final_duration_days'],
+                'base_duration_days' => (int) $offer['base_duration_days'],
+                'fields'           => [
+                    'plan'         => (string) $offer['plan_slug'],
+                    'ovr_offer_id' => (string) $offer['offer_id'],
+                ],
+            ];
+            if ( ! empty( $offer['promo_code'] ) ) {
+                $order['fields']['promo_code'] = (string) $offer['promo_code'];
+            }
+        } elseif ( ! empty( $_GET['plan'] ) ) {
             $slug = sanitize_key( wp_unslash( $_GET['plan'] ) );
             $plan = Plans::get_plan( $slug );
             if ( $plan && ! empty( $plan['is_active'] ) ) {
-                // Regular list price vs. the (optionally admin-set) price we are
-                // actually offering this member. The special price defaults to
-                // the regular price; a lower value can be injected per user via
-                // the `ovr_checkout_member_price` filter.
-                $regular = (float) ( $plan['price'] ?? 0 );
-                $your    = (float) apply_filters( 'ovr_checkout_member_price', $regular, $slug, get_current_user_id() );
-                $order = [
-                    'type'          => 'plan',
-                    'eyebrow'       => __( 'Subscription Renewal', 'ovr-core' ),
-                    'name'          => (string) ( $plan['name'] ?? '' ),
-                    'sub'           => 'annually' === ( $plan['period'] ?? 'monthly' ) ? __( 'Annual Renewal', 'ovr-core' ) : __( 'Monthly Subscription', 'ovr-core' ),
-                    'regular_price' => $regular,
-                    'price'         => $your,
-                    'fields'        => [ 'plan' => $slug ],
-                ];
+                // Single canonical calculation (same engine as Section 2).
+                $offer = \OVR\Subscription\SubscriptionOffer::build(
+                    get_current_user_id(),
+                    $slug,
+                    'new',
+                    sanitize_text_field( wp_unslash( $_GET['promo_code'] ?? '' ) )
+                );
+                if ( is_wp_error( $offer ) ) {
+                    $offer = null;
+                }
+                if ( $offer ) {
+                    $order = [
+                        'type'             => 'plan',
+                        'purchase_context' => (string) ( $offer['purchase_context'] ?? 'new' ),
+                        'eyebrow'          => __( 'Subscription', 'ovr-core' ),
+                        'sub'              => ( 'annually' === ( $plan['period'] ?? 'monthly' ) || 'yearly' === ( $plan['period'] ?? '' ) )
+                            ? __( 'Annual Subscription', 'ovr-core' )
+                            : __( 'Monthly Subscription', 'ovr-core' ),
+                        'name'             => (string) ( $plan['name'] ?? '' ),
+                        'regular_price'    => (float) $offer['base_price'],
+                        'price'            => (float) $offer['final_price'],
+                        'discount'         => max( 0.0, (float) $offer['base_price'] - (float) $offer['final_price'] ),
+                        'duration_days'    => (int) $offer['final_duration_days'],
+                        'base_duration_days' => (int) $offer['base_duration_days'],
+                        'fields'           => [ 'plan' => $slug, 'ovr_checkout_intent' => wp_generate_uuid4() ],
+                    ];
+                    if ( ! empty( $offer['promo_code'] ) ) {
+                        $order['fields']['promo_code'] = (string) $offer['promo_code'];
+                    }
+                }
             }
         // Listing upgrade checkout. A boost must target a specific listing the
         // buyer owns — that context arrives via the listing's "Bump" button.
@@ -95,7 +142,7 @@ class Checkout {
                     'sub'     => sprintf( __( '%1$d-Day Boost · %2$s', 'ovr-core' ), $term, $property->post_title ?: __( 'your listing', 'ovr-core' ) ),
                     'price'   => ListingUpgrades::price_for( $product, $term ),
                     'thumb'   => $thumb_url ?: '',
-                    'fields'  => [ 'upgrade' => $id, 'term' => (string) $term, 'property_id' => (string) $property_id ],
+                    'fields'  => [ 'upgrade' => $id, 'term' => (string) $term, 'property_id' => (string) $property_id, 'ovr_checkout_intent' => wp_generate_uuid4() ],
                 ];
                 $cancel_url = add_query_arg( 'tab', 'upgrades', Pages::get_page_url( 'ovr_page_dashboard' ) );
             }
@@ -112,17 +159,19 @@ class Checkout {
 
         $user     = wp_get_current_user();
         $settings = (array) get_option( 'ovr_settings', [] );
+        $is_subscription_checkout = ( 'plan' === ( $order['type'] ?? '' ) );
 
         return TemplateLoader::get_rendered( 'pages/checkout.php', [
-            'default_gateway' => \OVR\Payment\CheckoutHandler::default_gateway(),
-            'order'           => $order,
-            'symbol'          => $settings['currency_symbol'] ?? '$',
-            'balance'         => Wallet::get_balance( $user->ID ),
-            'user'            => $user,
-            'checkout_action' => admin_url( 'admin-post.php' ),
-            'cancel_url'      => $cancel_url,
-            'promo_nonce'     => wp_create_nonce( 'ovr_public_nonce' ),
-            'ajax_url'        => admin_url( 'admin-ajax.php' ),
+            'default_gateway'          => 'authorize_net',
+            'order'                    => $order,
+            'is_subscription_checkout' => $is_subscription_checkout,
+            'symbol'                   => $settings['currency_symbol'] ?? '$',
+            'balance'                  => Wallet::get_balance( $user->ID ),
+            'user'                     => $user,
+            'checkout_action'          => admin_url( 'admin-post.php' ),
+            'cancel_url'               => $cancel_url,
+            'promo_nonce'              => wp_create_nonce( 'ovr_public_nonce' ),
+            'ajax_url'                 => admin_url( 'admin-ajax.php' ),
         ] );
     }
 

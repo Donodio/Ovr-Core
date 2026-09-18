@@ -191,12 +191,18 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
             <?php
             $ovr_settings     = (array) get_option( 'ovr_settings', [] );
             $verified_banner = ! empty( $ovr_settings['verified_banner_url'] ) ? (string) $ovr_settings['verified_banner_url'] : '';
-            // Fall back to the bundled OVR Verified banner — prefer PNG (client-
-            // supplied raster) then SVG so either asset works out-of-the-box.
+            // Fall back to the bundled OVR Verified banner image. Raster is
+            // preferred over the vector safety net: the client-supplied PNG/JPG
+            // is the canonical graphic, the SVG only renders if no raster asset
+            // ships with the plugin.
             if ( '' === $verified_banner ) {
-                if ( file_exists( OVR_PLUGIN_DIR . 'assets/images/ovr-verified-banner.png' ) ) {
-                    $verified_banner = OVR_PLUGIN_URL . 'assets/images/ovr-verified-banner.png';
-                } elseif ( file_exists( OVR_PLUGIN_DIR . 'assets/images/ovr-verified-banner.svg' ) ) {
+                foreach ( [ 'ovr-verified-banner.png', 'ovr-verified-banner.jpg' ] as $raster ) {
+                    if ( file_exists( OVR_PLUGIN_DIR . 'assets/images/' . $raster ) ) {
+                        $verified_banner = OVR_PLUGIN_URL . 'assets/images/' . $raster;
+                        break;
+                    }
+                }
+                if ( '' === $verified_banner && file_exists( OVR_PLUGIN_DIR . 'assets/images/ovr-verified-banner.svg' ) ) {
                     $verified_banner = OVR_PLUGIN_URL . 'assets/images/ovr-verified-banner.svg';
                 }
             }
@@ -285,7 +291,7 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
             <p class="ovr-owner-meta-foot">
                 <?php
                 /* translators: 1: listing ID, 2: last updated date */
-                printf( esc_html__( 'ID %1$s · Updated %2$s', 'ovr-core' ), esc_html( (string) $post_id ), esc_html( $last_updated ) );
+                printf( esc_html__( 'ID %1$s · Updated %2$s', 'ovr-core' ), esc_html( (string) \OVR\Property\PropertyNumber::get( (int) $post_id ) ), esc_html( $last_updated ) );
                 ?>
             </p>
         </div>
@@ -309,13 +315,14 @@ $last_updated  = get_the_modified_date( get_option( 'date_format' ) ?: 'M j, Y',
     .ovr-owner-phone a{font-weight:600}
     /* OVR Verified Owner banner — shown ONLY when the owner is verified (YES);
        nothing renders otherwise. Renders the uploaded banner image when set,
-       else falls back to a gold trust badge. The container uses flex-wrap and
-       constrained sizing so the banner never overlaps property info or buttons. */
+       else falls back to the bundled official graphic, then to a gold trust
+       badge. Sizing keeps the full banner visible (aspect preserved) at a
+       legible-but-modest size that fits comfortably inside the card width. */
     .ovr-owner-pm-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
     .ovr-owner-block-label{flex:1 1 auto;min-width:140px}
-    .ovr-owner-pm-head .ovr-verified-banner-img{max-width:120px;width:auto;height:auto;display:block;object-fit:contain;flex-shrink:0}
-    @media (max-width:600px){ .ovr-owner-pm-head .ovr-verified-banner-img{max-width:100px} }
-    .ovr-verified-banner{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.02em;line-height:1;white-space:nowrap;flex-shrink:0}
+    .ovr-owner-pm-head .ovr-verified-banner-img{max-width:150px;width:auto;height:auto;max-height:75px;display:block;object-fit:contain;flex-shrink:0;border-radius:6px}
+    @media (max-width:600px){ .ovr-owner-pm-head .ovr-verified-banner-img{max-width:125px} }
+    .ovr-verified-banner{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.02em;line-height:1;white-space:nowrap;flex-shrink:0;border:1px solid #e7cf7e}
     .ovr-verified-banner.is-verified{background:var(--ovr-gold,#DEAF0C);color:#1b1b20;box-shadow:0 1px 3px rgba(222,175,12,.4)}
     .ovr-verified-banner .material-symbols-outlined{font-size:18px}
 </style>

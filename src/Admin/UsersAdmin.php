@@ -359,6 +359,7 @@ class UsersAdmin {
         $plan_name = $plan['name'] ?? $plan_slug;
         $expires   = (string) get_user_meta( (int) $user->ID, \OVR\Subscription\UserSubscription::META_EXPIRES, true );
         $phone     = (string) get_user_meta( (int) $user->ID, 'ovr_phone', true );
+        $cc_email  = (string) get_user_meta( (int) $user->ID, 'ovr_cc_email', true );
         $balance   = (string) get_user_meta( (int) $user->ID, \OVR\Payment\Wallet::META_BALANCE, true );
         $override  = (string) get_user_meta( (int) $user->ID, self::META_PRICE_OVERRIDE, true );
 
@@ -422,6 +423,13 @@ class UsersAdmin {
                 <th><label for="ovr_phone"><?php esc_html_e( 'Phone Number', 'ovr-core' ); ?></label></th>
                 <td>
                     <input type="text" name="ovr_phone" id="ovr_phone" class="regular-text" value="<?php echo esc_attr( $phone ); ?>">
+                </td>
+            </tr>
+            <tr>
+                <th><label for="ovr_cc_email"><?php esc_html_e( 'Additional CC Email', 'ovr-core' ); ?></label></th>
+                <td>
+                    <input type="email" name="ovr_cc_email" id="ovr_cc_email" class="regular-text" value="<?php echo esc_attr( $cc_email ); ?>" placeholder="<?php esc_attr_e( 'Optional — copies of notifications will be CC\'d here', 'ovr-core' ); ?>">
+                    <p class="description"><?php esc_html_e( 'Optional. Copies of inquiry and booking notifications are CC\'d here. Leave blank if not needed.', 'ovr-core' ); ?></p>
                 </td>
             </tr>
             <tr>
@@ -574,6 +582,15 @@ class UsersAdmin {
 
         if ( isset( $_POST['ovr_phone'] ) ) {
             update_user_meta( $user_id, 'ovr_phone', sanitize_text_field( wp_unslash( $_POST['ovr_phone'] ) ) );
+        }
+
+        if ( isset( $_POST['ovr_cc_email'] ) ) {
+            $cc = sanitize_email( wp_unslash( $_POST['ovr_cc_email'] ) );
+            if ( $cc && is_email( $cc ) ) {
+                update_user_meta( $user_id, 'ovr_cc_email', $cc );
+            } else {
+                delete_user_meta( $user_id, 'ovr_cc_email' );
+            }
         }
 
         // About Me / bio — the SAME WordPress bio field the user edits on their

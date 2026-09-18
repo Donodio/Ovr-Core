@@ -52,6 +52,7 @@ $featured_cards = [
         'details'      => __( '2 Bed, 2 Bath • Courtyard Villa', 'ovr-core' ),
         'availability' => __( 'Available: Jan-Mar Term', 'ovr-core' ),
         'price'        => __( '$4,500 / month', 'ovr-core' ),
+        'excerpt'      => __( 'Charming courtyard villa steps from Spanish Springs town square — screened lanai, golf cart included.', 'ovr-core' ),
     ],
     [
         'image'        => 'https://lh3.googleusercontent.com/aida-public/AB6AXuBBlDYeUe41OaVeNzmu1rrhQU7GZyOVXdNYzYqDnBmDHpy7XJXqXztGBFhSdmAfupthVlVQzixmjBc6Yx6hdtkSQTR_01YmUHsPOZsdv96UOXQFHhT3N15Xski-6VE0mq5OgyC2TjmDM8QlDInY1TloRn9YlFW_kC9PrzRG01NduU1Nl2xnv4ylgH5DFUEL8HmAjvLfD1VypUlEShZ77zLdcVZIEKmP-apuWcDSh2IECfl9vKnnE9HO-S0XTvwYLs-XvRjhRyBnqgE',
@@ -60,6 +61,7 @@ $featured_cards = [
         'details'      => __( '3 Bed, 2 Bath • Designer Home', 'ovr-core' ),
         'availability' => __( 'Available: Year-Round Long Term', 'ovr-core' ),
         'price'        => __( '$2,800 / month', 'ovr-core' ),
+        'excerpt'      => __( 'Designer home with open floor plan, modern kitchen and private outdoor living space.', 'ovr-core' ),
     ],
     [
         'image'        => 'https://lh3.googleusercontent.com/aida-public/AB6AXuAv5t0lF-dy1YJDy3Q5awAVLs7hXZO6M2s4__WkITlSt8LqEBaujVdNvK21qRN8_I3KXXU0N-a3v-9qaDCHKL43YycAqZjEDdPky2UXIWpWM09SWSxNDID81DGNo_OU6ngTpkpCoOHn055ePaCimlVKTJG5TJsekx-RNU0qtfnFAarpuVJEG_TBm2uGj5x_iZ2gSPL8Et5bcKrD1ZcvlsEuKF3K4lVNKmH2AXDjgx2Z7h0AcIl4taeNKfnAhCvD57eDPDiXmfN07WE',
@@ -68,6 +70,7 @@ $featured_cards = [
         'details'      => __( '3 Bed, 3 Bath • Premier Home', 'ovr-core' ),
         'availability' => __( 'Available: Oct-Dec', 'ovr-core' ),
         'price'        => __( '$5,200 / month', 'ovr-core' ),
+        'excerpt'      => __( 'Premier home on a quiet cul-de-sac — premium finishes, executive golf nearby.', 'ovr-core' ),
     ],
 ];
 ?>
@@ -90,9 +93,9 @@ $featured_cards = [
                     </div>
                     <div class="bg-surface rounded-lg p-6 shadow-lg flex-1 border border-border-gray flex flex-col items-center text-center transform transition-transform hover:-translate-y-1">
                         <span class="material-symbols-outlined text-4xl text-featured-gold mb-4" style="font-variation-settings: 'FILL' 1;">home</span>
-                        <h2 class="text-card-title font-card-title text-on-surface mb-2"><?php esc_html_e( 'Advertise With Us', 'ovr-core' ); ?></h2>
+                        <h2 class="text-card-title font-card-title text-on-surface mb-2"><?php esc_html_e( 'Advertise Your Rental Home', 'ovr-core' ); ?></h2>
                         <p class="text-body-md font-body-md text-muted-text mb-6"><?php esc_html_e( 'Reach thousands of renters looking for homes in our community.', 'ovr-core' ); ?></p>
-                        <a class="mt-auto w-full bg-surface text-primary-container border border-primary-container text-label-md font-label-md py-3 rounded h-tap-target-min hover:bg-surface-container-low transition-colors" href="<?php echo esc_url( $pricing_url ); ?>"><?php esc_html_e( 'Advertise With Us', 'ovr-core' ); ?></a>
+                        <a class="mt-auto w-full bg-surface text-primary-container border border-primary-container text-label-md font-label-md py-3 rounded h-tap-target-min hover:bg-surface-container-low transition-colors" href="<?php echo esc_url( $pricing_url ); ?>"><?php esc_html_e( 'Advertise Your Rental Home', 'ovr-core' ); ?></a>
                     </div>
                 </div>
             </div>
@@ -146,9 +149,12 @@ $featured_cards = [
                             <div class="p-6 flex-grow flex flex-col">
                                 <div class="flex justify-between items-start mb-3">
                                     <h3 class="text-card-title font-card-title text-on-surface"><?php echo esc_html( $card['title'] ); ?></h3>
-                                    <span class="text-metadata font-metadata text-muted-text"><?php echo esc_html( 'ID: ' . $card['id'] ); ?></span>
+                                    <span class="text-metadata font-metadata text-muted-text"><?php echo esc_html( 'ID: ' . \OVR\Property\PropertyNumber::get( (int) ( $card['id'] ?? 0 ) ) ); ?></span>
                                 </div>
                                 <p class="text-body-md font-body-md text-on-surface-variant mb-2"><?php echo esc_html( $card['details'] ); ?></p>
+                                <?php if ( ! empty( $card['excerpt'] ) ) : ?>
+                                    <p class="text-body-md font-body-md text-muted-text mb-3" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"><?php echo esc_html( $card['excerpt'] ); ?></p>
+                                <?php endif; ?>
                                 <div class="mt-auto bg-surface-container-low p-3 rounded border border-border-gray">
                                     <p class="text-metadata font-metadata text-secondary font-semibold"><?php echo esc_html( $card['availability'] ); ?></p>
                                     <p class="text-body-md font-body-md text-on-surface mt-1"><?php echo esc_html( $card['price'] ); ?></p>

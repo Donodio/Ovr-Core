@@ -141,9 +141,9 @@ $hero = $section(
             'card1_desc'     => 'Browse our extensive directory of seasonal and long-term homes.',
             'card1_btn_text' => 'Search All Listings',
             'card1_btn_link' => [ 'url' => $search_url, 'is_external' => '', 'nofollow' => '' ],
-            'card2_title'    => 'Advertise With Us',
+            'card2_title'    => 'Advertise Your Rental Home',
             'card2_desc'     => 'Reach thousands of renters looking for homes in our community.',
-            'card2_btn_text' => 'Advertise With Us',
+            'card2_btn_text' => 'Advertise Your Rental Home',
             'card2_btn_link' => [ 'url' => $pricing_url, 'is_external' => '', 'nofollow' => '' ],
         ] ),
     ] ) ],
@@ -183,14 +183,17 @@ $villages = $section(
     $sec_settings( '', 48 )
 );
 
-/* ── 4. Featured Rentals ───────────────────────────────────────────────── */
+/* ── 4. Featured Rentals ─────────────────────────────────────────────────
+ * Source = Homepage Slider boost (paid) → falls back to newest so the rail
+ * is never empty. Property #240 + any slider-bumped listing now appears here.
+ */
 $featured = $section(
     [ $column( [
         $heading( 'Featured Rentals', 'left' ),
         $widget( 'ovr_property_cards', [
             'posts_per_page' => 3,
             'columns'        => '3',
-            'featured_only'  => 'yes',
+            'source'         => 'slider',
             'sort'           => 'newest',
         ] ),
         $widget( 'button', [
@@ -221,8 +224,22 @@ $helpful = $section(
     $sec_settings( '', 64 )
 );
 
+/* ── 6. Disclaimer + Equal Housing (site-wide footer for Elementor canvas) ─ */
+$disclaimer_html = '<div style="text-align:center;max-width:900px;margin:0 auto">'
+    . '<p style="font-size:14px;line-height:1.5;color:#454651;margin:0 0 12px">Disclaimer: Our Village Rentals is an independent advertising platform. We are not affiliated with The Villages® developer, its affiliates, or any municipality. All listings are submitted by independent owners and are subject to availability. Equal Housing Opportunity.</p>'
+    . '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px">'
+    . '<img src="' . esc_url( get_template_directory_uri() . '/assets/images/equal-housing.svg' ) . '" alt="Equal Housing Opportunity" width="32" height="32" loading="lazy" style="width:32px;height:32px">'
+    . '<span style="font-size:14px;color:#454651">Equal Housing Opportunity</span>'
+    . '</div></div>';
+$disclaimer = $section(
+    [ $column( [
+        $widget( 'html', [ 'html' => $disclaimer_html ] ),
+    ] ) ],
+    $sec_settings( '#eae7ee', 32 )
+);
+
 /* ── Assemble + encode ─────────────────────────────────────────────────── */
-$data = [ $hero, $who, $villages, $featured, $helpful ];
+$data = [ $hero, $who, $villages, $featured, $helpful, $disclaimer ];
 $json = wp_json_encode( $data );
 
 if ( false === $json ) {

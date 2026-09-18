@@ -111,6 +111,8 @@ class Settings {
         if ( isset( $input['stripe_secret_key'] ) )      $clean['stripe_secret_key']      = sanitize_text_field( $input['stripe_secret_key'] );
         if ( isset( $input['paypal_client_id'] ) )       $clean['paypal_client_id']       = sanitize_text_field( $input['paypal_client_id'] );
         if ( isset( $input['paypal_secret'] ) )          $clean['paypal_secret']          = sanitize_text_field( $input['paypal_secret'] );
+        if ( isset( $input['paypal_sandbox_webhook_id'] ) ) $clean['paypal_sandbox_webhook_id'] = sanitize_text_field( $input['paypal_sandbox_webhook_id'] );
+        if ( isset( $input['paypal_live_webhook_id'] ) )  $clean['paypal_live_webhook_id']  = sanitize_text_field( $input['paypal_live_webhook_id'] );
         if ( isset( $input['authnet_login_id'] ) )       $clean['authnet_login_id']       = sanitize_text_field( $input['authnet_login_id'] );
         if ( isset( $input['authnet_transaction_key'] ) ) $clean['authnet_transaction_key'] = sanitize_text_field( $input['authnet_transaction_key'] );
 
@@ -173,7 +175,8 @@ class Settings {
         if ( isset( $input['session_timeout_hours'] ) ) $clean['session_timeout_hours'] = max( 0, (int) $input['session_timeout_hours'] );
         if ( isset( $input['login_attempt_limit'] ) )   $clean['login_attempt_limit']   = max( 0, (int) $input['login_attempt_limit'] );
         if ( isset( $input['login_lockout_minutes'] ) ) $clean['login_lockout_minutes'] = max( 1, (int) $input['login_lockout_minutes'] );
-        $clean['enable_2fa'] = ! empty( $input['enable_2fa'] );
+        // Section 4: password-only login — 2FA removed.
+        $clean['enable_2fa'] = false;
 
         // Storage — Backblaze B2 (Feature E).
         $clean['b2_enabled']      = ! empty( $input['b2_enabled'] );
@@ -786,8 +789,18 @@ class Settings {
         </tr>
         <tr class="ovr-env-row ovr-env-paypal ovr-env-live" <?php if ( 'live' !== $paypal_env ) echo 'style="display:none"'; ?>>
             <th><label><?php esc_html_e( 'Live Secret', 'ovr-core' ); ?></label></th>
-            <td><input name="<?php echo $opt; ?>[paypal_live_secret]" type="password" class="regular-text"
+            <td><input name="<?php echo esc_attr( $opt ); ?>[paypal_live_secret]" type="password" class="regular-text"
                        value="<?php echo esc_attr( $s['paypal_live_secret'] ?? '' ); ?>"></td>
+        </tr>
+        <tr class="ovr-env-row ovr-env-paypal ovr-env-sandbox" <?php if ( 'sandbox' !== $paypal_env ) echo 'style="display:none"'; ?>>
+            <th><label><?php esc_html_e( 'Sandbox Webhook ID', 'ovr-core' ); ?></label></th>
+            <td><input name="<?php echo esc_attr( $opt ); ?>[paypal_sandbox_webhook_id]" type="text" class="regular-text"
+                       value="<?php echo esc_attr( $s['paypal_sandbox_webhook_id'] ?? '' ); ?>"></td>
+        </tr>
+        <tr class="ovr-env-row ovr-env-paypal ovr-env-live" <?php if ( 'live' !== $paypal_env ) echo 'style="display:none"'; ?>>
+            <th><label><?php esc_html_e( 'Live Webhook ID', 'ovr-core' ); ?></label></th>
+            <td><input name="<?php echo esc_attr( $opt ); ?>[paypal_live_webhook_id]" type="text" class="regular-text"
+                       value="<?php echo esc_attr( $s['paypal_live_webhook_id'] ?? '' ); ?>"></td>
         </tr>
 
         <?php
@@ -1052,13 +1065,7 @@ class Settings {
             <td><input id="ovr-lockout" name="<?php echo $opt; ?>[login_lockout_minutes]" type="number" min="1" step="1" class="small-text"
                        value="<?php echo esc_attr( (string) ( $s['login_lockout_minutes'] ?? 15 ) ); ?>"></td>
         </tr>
-        <tr>
-            <th><?php esc_html_e( 'Two-Factor Authentication', 'ovr-core' ); ?></th>
-            <td><div class="ovr-settings-checkgroup">
-                <label><input type="checkbox" name="<?php echo $opt; ?>[enable_2fa]" value="1" <?php checked( ! empty( $s['enable_2fa'] ) ); ?>> <?php esc_html_e( 'Require an emailed one-time code for administrator logins', 'ovr-core' ); ?></label>
-            </div>
-            <p class="description"><?php esc_html_e( 'Adds an email OTP step for users who can manage the platform. Fails open if email cannot be sent. Define OVR_DISABLE_2FA in wp-config.php to bypass in an emergency.', 'ovr-core' ); ?></p></td>
-        </tr>
+        <!-- Two-Factor Authentication removed per Section 4: password-only login. -->
         <?php
     }
 
@@ -1505,7 +1512,7 @@ class Settings {
      */
     private function render_header( array $s ): void {
         $opt        = esc_attr( self::OPTION );
-        $logo_h     = (int) ( $s['logo_height'] ?? 36 );
+        $logo_h     = (int) ( $s['logo_height'] ?? 60 );
         $saved      = (array) ( $s['mega_menu'] ?? [] );
         $defaults   = \OVR\Frontend\Header::mega_menu_defaults();
         $fields     = self::header_menu_fields();
@@ -1540,7 +1547,7 @@ class Settings {
             <td>
                 <input id="ovr-logo-height" name="<?php echo $opt; ?>[logo_height]" type="number" min="12" max="200"
                        value="<?php echo esc_attr( (string) $logo_h ); ?>" class="small-text">
-                <p class="description"><?php esc_html_e( 'Height of the brand logo in the header. Applies to both the desktop bar and the mobile drawer. Default 36px.', 'ovr-core' ); ?></p>
+                <p class="description"><?php esc_html_e( 'Height of the brand logo in the header. Applies to both the desktop bar and the mobile drawer. Default 60px.', 'ovr-core' ); ?></p>
             </td>
         </tr>
         <tr>

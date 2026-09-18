@@ -195,6 +195,15 @@ class PropertyCarouselWidget extends Widget_Base {
 			'default' => 'yes',
 		] );
 
+		$this->add_control( 'show_excerpt', [
+			'label'        => esc_html__( 'Short Description', 'ovr-core' ),
+			'type'         => Controls_Manager::SWITCHER,
+			'label_on'     => esc_html__( 'Show', 'ovr-core' ),
+			'label_off'    => esc_html__( 'Hide', 'ovr-core' ),
+			'return_value' => 'yes',
+			'default'      => 'yes',
+		] );
+
 		$this->end_controls_section();
 
 		/* STYLE — Section Header */
@@ -313,6 +322,27 @@ class PropertyCarouselWidget extends Widget_Base {
 
 		$this->end_controls_section();
 
+		/* STYLE — Short Description */
+		$this->start_controls_section( 'style_excerpt', [
+			'label'     => esc_html__( 'Short Description', 'ovr-core' ),
+			'tab'       => Controls_Manager::TAB_STYLE,
+			'condition' => [ 'show_excerpt' => 'yes' ],
+		] );
+
+		$this->add_control( 'excerpt_color', [
+			'label'     => esc_html__( 'Text Color', 'ovr-core' ),
+			'type'      => Controls_Manager::COLOR,
+			'default'   => '#5F6B7A',
+			'selectors' => [ '{{WRAPPER}} .ovr-pc-excerpt' => 'color:{{VALUE}}' ],
+		] );
+
+		$this->add_group_control( Group_Control_Typography::get_type(), [
+			'name'     => 'excerpt_typography',
+			'selector' => '{{WRAPPER}} .ovr-pc-excerpt',
+		] );
+
+		$this->end_controls_section();
+
 		/* STYLE — Image */
 		$this->start_controls_section( 'style_image', [
 			'label' => esc_html__( 'Image', 'ovr-core' ),
@@ -402,12 +432,14 @@ class PropertyCarouselWidget extends Widget_Base {
 		$show_dots   = ( $s['show_dots'] ?? 'yes' ) === 'yes';
 		$interval   = max( 1500, (int) ( $s['autoplay_speed'] ?? 5000 ) );
 
-		$ids = PropertyQuery::get_carousel_ids( $count );
+		$slider_query = PropertyQuery::get_slider( $count );
+
+		$ids = array_map( 'absint', $slider_query->posts );
 
 		if ( empty( $ids ) ) {
 			if ( \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
 				echo '<div style="padding:32px;text-align:center;border:1px dashed #bec9c8;border-radius:12px;color:#6f7979;font-family:Inter,sans-serif">'
-					. esc_html__( 'No published properties yet. Add listings and set some to "Homepage Carousel" to fill this rail.', 'ovr-core' )
+					. esc_html__( 'No published properties yet. Add listings and set some to "Homepage Slider" to fill this rail.', 'ovr-core' )
 					. '</div>';
 			}
 			return;
@@ -415,8 +447,22 @@ class PropertyCarouselWidget extends Widget_Base {
 
 		$rows = [];
 		foreach ( $ids as $id ) {
+			// Hard gate: only render actual OVR rental listings.
+			if ( get_post_type( (int) $id ) !== 'ovr_property' ) {
+				continue;
+			}
 			$rows[] = PropertyCard::get_card_data( (int) $id );
 		}
+
+		if ( empty( $rows ) ) {
+			if ( \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
+				echo '<div style="padding:32px;text-align:center;border:1px dashed #bec9c8;border-radius:12px;color:#6f7979;font-family:Inter,sans-serif">'
+					. esc_html__( 'No published properties yet. Add listings and set some to "Homepage Slider" to fill this rail.', 'ovr-core' )
+					. '</div>';
+			}
+			return;
+		}
+
 		$symbol = (string) ( ( (array) get_option( 'ovr_settings', [] ) )['currency_symbol'] ?? '$' );
 
 		$this->print_structural_css();
@@ -466,6 +512,7 @@ class PropertyCarouselWidget extends Widget_Base {
 						$show_size      = 'yes' === ( $s['show_size']      ?? 'yes' );
 						$show_price     = 'yes' === ( $s['show_price']     ?? 'yes' );
 						$show_details   = 'yes' === ( $s['show_details']   ?? 'yes' );
+						$show_excerpt   = 'yes' === ( $s['show_excerpt']   ?? 'yes' );
 
 						$has_specs = ( $show_bedrooms && (int) $data['bedrooms'] > 0 )
 							|| ( $show_bathrooms && (float) $data['bathrooms'] > 0 )
@@ -486,9 +533,9 @@ class PropertyCarouselWidget extends Widget_Base {
 										<?php if ( $show_location && '' !== $loc ) : ?>
 											<span class="ovr-pc-loc"><?php echo esc_html( $loc ); ?></span>
 										<?php endif; ?>
-										<?php if ( $show_id ) : ?>
-											<span class="ovr-pc-id">#<?php echo esc_html( number_format_i18n( (int) $data['post_id'] ) ); ?></span>
-										<?php endif; ?>
+									<?php if ( $show_id ) : ?>
+										<span class="ovr-pc-id-wrap"><span class="ovr-pc-id">#<?php echo esc_html( (string) (int) $data['post_id'] ); ?></span></span>
+									<?php endif; ?>
 									</div>
 								<?php endif; ?>
 								<?php if ( $show_name ) : ?>
@@ -518,6 +565,20 @@ class PropertyCarouselWidget extends Widget_Base {
 											</span>
 										<?php endif; ?>
 									</div>
+								<?php endif; ?>
+								<?php if ( $show_excerpt && '' !== trim( (string) ( $data['excerpt'] ?? '' ) ) ) : ?>
+									<?php
+									// Short Description (a paid "spotlight" selling point) must
+									// never be cut short: the entry screen allows up to 200
+									// characters, so show the full value up to that same cap.
+									$excerpt_text = (string) $data['excerpt'];
+									if ( function_exists( 'mb_substr' ) ) {
+										$excerpt_text = mb_substr( $excerpt_text, 0, 200 );
+									} else {
+										$excerpt_text = substr( $excerpt_text, 0, 200 );
+									}
+									?>
+									<p class="ovr-pc-excerpt"><?php echo esc_html( $excerpt_text ); ?></p>
 								<?php endif; ?>
 								<?php if ( $has_meta ) : ?>
 									<div class="ovr-pc-meta">
@@ -577,12 +638,14 @@ class PropertyCarouselWidget extends Widget_Base {
 			.ovr-pc-body{display:flex;flex-direction:column;flex:0 1 auto;min-width:0;margin-top:12px;background:#f4f7f7;padding:14px;border-radius:10px}
 			.ovr-pc-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 			.ovr-pc-loc{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ovr-secondary,#1466a8);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-			.ovr-pc-id{font-size:11px;font-weight:600;color:#6f7979;letter-spacing:.8px;text-transform:uppercase;line-height:1.3;flex-shrink:0}
+			.ovr-pc-id-wrap{display:inline-flex;align-items:center;background:#101828;border-radius:6px;padding:2px 8px;line-height:1.3;flex-shrink:0}
+			.ovr-pc-id{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#fff;margin:0}
 			.ovr-pc-name{margin:0 0 3px;font-size:17px;font-weight:700;line-height:1.28}
 			.ovr-pc-name a{color:inherit;text-decoration:none;transition:color .15s ease}
 			.ovr-pc-name a:hover{color:var(--ovr-secondary,#1466a8)}
 			.ovr-pc-name a:focus-visible{outline:3px solid var(--ovr-secondary,#00a2e8);outline-offset:2px}
 			.ovr-pc-type{font-size:13px;color:#3f4944;margin:2px 0 12px;line-height:1.4}
+			.ovr-pc-excerpt{font-size:15px;line-height:1.5;color:#5F6B7A;margin:0 0 12px;overflow-wrap:break-word}
 			.ovr-pc-specs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
 			.ovr-pc-spec{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;background:#f2f5f5;font-size:12px;font-weight:600;color:#3f4944;line-height:1.2}
 			.ovr-pc-spec .material-symbols-outlined{font-size:14px;color:#6b7979}

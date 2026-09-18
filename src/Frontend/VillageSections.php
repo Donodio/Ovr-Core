@@ -27,20 +27,16 @@ class VillageSections {
 	public static function sections_data(): array {
 		$search = Pages::get_page_url( 'ovr_page_search' );
 
-		// "All Areas" tile — stone-wall banner fallback wins over the generic
-		// ovr-placeholder.jpg (get_village_image never returns ''), but a real
-		// assigned term image still takes precedence.
-		$all_img = OVR_PLUGIN_URL . 'assets/images/the-villages-banner.svg';
-		$all_term = get_term_by( 'slug', 'the-villages', 'ovr_village' );
-		if ( $all_term && ! is_wp_error( $all_term ) ) {
-			$img = SearchFilters::get_village_image( $all_term );
-			if ( '' !== $img && $img !== OVR_PLUGIN_URL . 'assets/images/ovr-placeholder.jpg' ) {
-				$all_img = $img;
-			}
-		}
+		$all_img = SearchFilters::get_all_villages_image();
 
 		$sections = [];
 		foreach ( SearchFilters::get_villages() as $term ) {
+			$slug_lc = strtolower( (string) $term->slug );
+			$name_lc = strtolower( trim( (string) $term->name ) );
+			if ( in_array( $slug_lc, [ 'all-villages', 'all-areas', 'the-villages' ], true )
+				|| in_array( $name_lc, [ 'all villages', 'all areas', 'the villages' ], true ) ) {
+				continue;
+			}
 			$link = add_query_arg( [ 'village_section' => [ $term->slug ] ], $search );
 			if ( is_wp_error( $link ) ) {
 				continue;

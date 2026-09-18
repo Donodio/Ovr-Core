@@ -18,7 +18,7 @@ class Pages {
      * Version of the page set. Bump when adding a new plugin page so the
      * one-time self-heal below creates it without requiring reactivation.
      */
-    private const PAGES_VERSION = '8';
+    private const PAGES_VERSION = '9';
 
     public function init(): void {
         add_action( 'init', [ $this, 'maybe_sync_pages' ] );
@@ -33,7 +33,44 @@ class Pages {
         }
         self::create_pages();
         self::ensure_contact_shortcode();
+        self::ensure_subscription_select_shortcode();
         update_option( 'ovr_pages_version', self::PAGES_VERSION );
+    }
+
+    /**
+     * Ensure the canonical subscription-selection page carries the
+     * [ovr_subscription_select] shortcode so the Step-2 promo flow cannot
+     * silently disappear after an admin edit or an upgrade from a build where
+     * the page was seeded differently. If the content already contains the
+     * shortcode it is normalized back to the canonical single instance.
+     */
+    private static function ensure_subscription_select_shortcode(): void {
+        $page_id = absint( get_option( 'ovr_page_subscription_select' ) );
+        if ( ! $page_id || ! get_post_status( $page_id ) ) {
+            return;
+        }
+        $post = get_post( $page_id );
+        if ( ! $post ) {
+            return;
+        }
+        $content = (string) $post->post_content;
+        if ( has_shortcode( $content, 'ovr_subscription_select' ) ) {
+            // Normalize any accidental duplicate shortcodes to exactly one.
+            $count = substr_count( $content, '[ovr_subscription_select]' );
+            if ( 1 !== $count ) {
+                wp_update_post( [
+                    'ID'           => $page_id,
+                    'post_content' => '[ovr_subscription_select]',
+                ] );
+            }
+            return;
+        }
+        $existing = trim( $content );
+        $next     = '' !== $existing ? $existing . "\n\n[ovr_subscription_select]" : '[ovr_subscription_select]';
+        wp_update_post( [
+            'ID'           => $page_id,
+            'post_content' => $next,
+        ] );
     }
 
     /**

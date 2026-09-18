@@ -73,24 +73,73 @@ class PromoCodesAdmin {
         }
         check_admin_referer( 'ovr_save_promo_action', 'ovr_promo_nonce' );
 
-        $id    = absint( $_POST['promo_id'] ?? 0 );
-        $code  = strtoupper( sanitize_text_field( $_POST['code'] ?? '' ) );
-        $type  = sanitize_key( $_POST['discount_type'] ?? 'percentage' );
+        $id   = absint( $_POST['promo_id'] ?? 0 );
+        $code = PromoCode::normalize_code( (string) ( $_POST['code'] ?? '' ) );
+
+        $type = sanitize_key( $_POST['discount_type'] ?? 'percentage' );
         if ( ! in_array( $type, [ 'percentage', 'fixed' ], true ) ) {
             $type = 'percentage';
         }
         $value = round( (float) ( $_POST['discount_value'] ?? 0 ), 2 );
+        if ( $value < 0 ) {
+            wp_safe_redirect( $this->page_url() . '&msg=error' );
+            exit;
+        }
+
+        // Explicit promotional subscription price (Mark's model). Blank = not
+        // configured (NULL); 0 is a legitimate free promotional offer.
+        $promo_price_raw = trim( (string) ( $_POST['promo_price'] ?? '' ) );
+        $promo_price     = null;
+        if ( '' !== $promo_price_raw ) {
+            if ( ! is_numeric( $promo_price_raw ) || (float) $promo_price_raw < 0 ) {
+                wp_safe_redirect( $this->page_url() . '&msg=error' );
+                exit;
+            }
+            $promo_price = round( (float) $promo_price_raw, 2 );
+        }
+
+        // Promotional subscription duration in days. Positive whole number only.
+        $duration_raw  = trim( (string) ( $_POST['duration_days'] ?? '' ) );
+        $duration_days = null;
+        if ( '' !== $duration_raw ) {
+            if ( ! ctype_digit( $duration_raw ) || (int) $duration_raw <= 0 ) {
+                wp_safe_redirect( $this->page_url() . '&msg=error' );
+                exit;
+            }
+            $duration_days = (int) $duration_raw;
+        }
+
         $max_uses = '' !== trim( (string) ( $_POST['max_uses'] ?? '' ) ) ? absint( $_POST['max_uses'] ) : null;
+
         $valid_from  = sanitize_text_field( $_POST['valid_from'] ?? '' );
         $valid_until = sanitize_text_field( $_POST['valid_until'] ?? '' );
-        $is_active = ! empty( $_POST['is_active'] ) ? 1 : 0;
+        foreach ( [ $valid_from, $valid_until ] as $d ) {
+            if ( '' !== $d && ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) ) {
+                wp_safe_redirect( $this->page_url() . '&msg=error' );
+                exit;
+            }
+        }
+        if ( '' !== $valid_from && '' !== $valid_until && $valid_until < $valid_from ) {
+            wp_safe_redirect( $this->page_url() . '&msg=error' );
+            exit;
+        }
 
+        // Applicable plans must reference real plans.
+        $known      = array_keys( Plans::get_plans() );
         $applicable = isset( $_POST['applicable_plans'] ) && is_array( $_POST['applicable_plans'] )
             ? array_map( 'sanitize_key', $_POST['applicable_plans'] )
             : [];
+        foreach ( $applicable as $slug ) {
+            if ( ! in_array( $slug, $known, true ) ) {
+                wp_safe_redirect( $this->page_url() . '&msg=error' );
+                exit;
+            }
+        }
         $applicable_json = ! empty( $applicable ) ? wp_json_encode( array_values( $applicable ) ) : null;
 
-        if ( '' === $code || 0.0 === $value ) {
+        // A promo must change something: an explicit price, a legacy discount,
+        // or a duration.
+        if ( '' === $code || ( null === $promo_price && 0.0 === $value && null === $duration_days ) ) {
             wp_safe_redirect( $this->page_url() . '&msg=error' );
             exit;
         }
@@ -99,24 +148,42 @@ class PromoCodesAdmin {
         $table = $wpdb->prefix . 'ovr_promo_codes';
 
         $data = [
-            'code'             => $code,
-            'discount_type'    => $type,
-            'discount_value'   => $value,
-            'max_uses'         => $max_uses,
-            'valid_from'       => $valid_from ?: null,
-            'valid_until'      => $valid_until ?: null,
-            'applicable_plans' => $applicable_json,
-            'is_active'        => $is_active,
+            'code'           => $code,
+            'discount_type'  => $type,
+            'discount_value' => $value,
         ];
-        $format = [ '%s', '%s', '%f', '%d', '%s', '%s', '%s', '%d' ];
-        if ( null === $max_uses ) {
-            unset( $data['max_uses'] );
-            array_splice( $format, 3, 1 );
+        $format = [ '%s', '%s', '%f' ];
+
+        // Always present so the field can be cleared back to NULL.
+        $data['promo_price'] = $promo_price;
+        $format[]            = '%s';
+
+        if ( null !== $duration_days ) {
+            $data['duration_days'] = $duration_days;
+            $format[] = '%d';
         }
+        if ( null !== $max_uses ) {
+            $data['max_uses'] = $max_uses;
+            $format[] = '%d';
+        }
+        $data['valid_from'] = $valid_from ?: null;
+        $data['valid_until'] = $valid_until ?: null;
+        $data['applicable_plans'] = $applicable_json;
+        $data['is_active'] = ! empty( $_POST['is_active'] ) ? 1 : 0;
+        $format[] = '%s';
+        $format[] = '%s';
+        $format[] = '%s';
+        $format[] = '%d';
 
         if ( $id ) {
             $wpdb->update( $table, $data, [ 'id' => $id ], $format, [ '%d' ] );
         } else {
+            // Reject duplicate codes at the storage layer (case-insensitive).
+            $exists = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE UPPER(code) = %s", $code ) );
+            if ( $exists > 0 ) {
+                wp_safe_redirect( $this->page_url() . '&msg=error' );
+                exit;
+            }
             $wpdb->insert( $table, $data, $format );
         }
 

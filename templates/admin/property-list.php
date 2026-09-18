@@ -410,8 +410,8 @@ $checked = static function ( string $key, string $value ) use ( $request ): stri
     <tr data-listing-id="<?php echo (int) $pid; ?>">
         <td><input type="checkbox" class="ovr-pls-cb ovr-pls-listing-cb" value="<?php echo (int) $pid; ?>"></td>
         <td>
-            <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-pls-pid">#<?php echo (int) $pid; ?></a>
-            <button type="button" class="ovr-pls-pid-copy" data-copy="<?php echo (int) $pid; ?>" title="<?php esc_attr_e( 'Copy ID', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Copy Property ID', 'ovr-core' ); ?>">
+            <a href="<?php echo esc_url( $edit_url ); ?>" class="ovr-pls-pid">#<?php echo \OVR\Property\PropertyNumber::get( (int) $pid ); ?></a>
+            <button type="button" class="ovr-pls-pid-copy" data-copy="<?php echo \OVR\Property\PropertyNumber::get( (int) $pid ); ?>" title="<?php esc_attr_e( 'Copy ID', 'ovr-core' ); ?>" aria-label="<?php esc_attr_e( 'Copy Property ID', 'ovr-core' ); ?>">
                 <span class="material-symbols-outlined">content_copy</span>
             </button>
         </td>

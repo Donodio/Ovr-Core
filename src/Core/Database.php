@@ -144,12 +144,14 @@ class Database {
             status varchar(30) NOT NULL DEFAULT 'pending',
             description text DEFAULT NULL,
             meta_data longtext DEFAULT NULL,
+            checkout_intent_id varchar(36) DEFAULT NULL,
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
             KEY user_id (user_id),
             KEY payment_type (payment_type),
             KEY status (status),
-            KEY created_at (created_at)
+            KEY created_at (created_at),
+            UNIQUE KEY checkout_intent_id (checkout_intent_id)
         ) {$charset_collate};" );
 
         // Audit / History Log Table.
@@ -182,6 +184,7 @@ class Database {
             code varchar(50) NOT NULL,
             discount_type varchar(20) NOT NULL DEFAULT 'percentage',
             discount_value decimal(10,2) NOT NULL DEFAULT 0.00,
+            duration_days int(11) DEFAULT NULL,
             max_uses int(11) DEFAULT NULL,
             current_uses int(11) NOT NULL DEFAULT 0,
             valid_from date DEFAULT NULL,
@@ -192,6 +195,47 @@ class Database {
             PRIMARY KEY  (id),
             UNIQUE KEY code (code),
             KEY is_active (is_active)
+        ) {$charset_collate};" );
+
+        // Section 2: explicit promotional subscription price. NULL = "not
+        // configured" (fall back to plan price or legacy discount); 0 is a
+        // legitimate free promotional offer. Idempotent add for upgrades.
+        if ( ! $wpdb->get_var( "SHOW COLUMNS FROM {$table_promos} LIKE 'promo_price'" ) ) {
+            $wpdb->query( "ALTER TABLE {$table_promos} ADD COLUMN promo_price decimal(10,2) DEFAULT NULL" ); // phpcs:ignore WordPress.DB
+        }
+
+        // Subscription Offers (Section 2) — the server-authoritative snapshot of
+        // plan + optional promo price/duration that the payment layer consumes.
+        $table_offers = $wpdb->prefix . 'ovr_subscription_offers';
+        dbDelta( "CREATE TABLE {$table_offers} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            offer_id varchar(36) NOT NULL DEFAULT '',
+            user_id bigint(20) unsigned NOT NULL,
+            plan_slug varchar(60) NOT NULL DEFAULT '',
+            plan_name varchar(150) NOT NULL DEFAULT '',
+            purchase_context varchar(20) NOT NULL DEFAULT 'new',
+            base_price decimal(10,2) NOT NULL DEFAULT 0.00,
+            base_duration_days int(11) NOT NULL DEFAULT 0,
+            promo_code varchar(50) DEFAULT NULL,
+            promo_id bigint(20) unsigned DEFAULT NULL,
+            promo_price decimal(10,2) DEFAULT NULL,
+            promo_duration_days int(11) DEFAULT NULL,
+            final_price decimal(10,2) NOT NULL DEFAULT 0.00,
+            final_duration_days int(11) NOT NULL DEFAULT 0,
+            duration_override_days int(11) DEFAULT NULL,
+            currency varchar(3) NOT NULL DEFAULT 'USD',
+            status varchar(20) NOT NULL DEFAULT 'open',
+            integrity_hash varchar(64) NOT NULL DEFAULT '',
+            payment_id bigint(20) unsigned DEFAULT NULL,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at datetime DEFAULT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY offer_id (offer_id),
+            KEY user_id (user_id),
+            KEY status (status),
+            KEY plan_slug (plan_slug),
+            KEY payment_id (payment_id)
         ) {$charset_collate};" );
 
         // Wallet Transactions Table.
@@ -209,6 +253,28 @@ class Database {
             PRIMARY KEY  (id),
             KEY user_id (user_id),
             KEY created_at (created_at)
+        ) {$charset_collate};" );
+
+        // Webhook Events Table.
+        $table_webhook_events = $wpdb->prefix . 'ovr_payment_webhook_events';
+        dbDelta( "CREATE TABLE {$table_webhook_events} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            provider varchar(50) NOT NULL DEFAULT 'paypal',
+            provider_event_id varchar(255) NOT NULL DEFAULT '',
+            event_type varchar(100) NOT NULL DEFAULT '',
+            payment_id bigint(20) unsigned DEFAULT NULL,
+            status varchar(50) NOT NULL DEFAULT 'received',
+            error_code varchar(100) DEFAULT NULL,
+            error_message varchar(255) DEFAULT NULL,
+            payload_hash varchar(40) DEFAULT NULL,
+            received_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            processed_at datetime DEFAULT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY provider_event_id (provider_event_id),
+            KEY provider (provider),
+            KEY payment_id (payment_id),
+            KEY status (status),
+            KEY received_at (received_at)
         ) {$charset_collate};" );
 
         // Reviews Table.
@@ -258,6 +324,11 @@ class Database {
         self::ensure_bump_services();
 
         self::ensure_user_bio_column();
+
+        // Immutable public OVR Property Numbers (DB 2.11.0).
+        if ( class_exists( '\OVR\Property\PropertyNumber' ) ) {
+            \OVR\Property\PropertyNumber::migrate();
+        }
 
         update_option( 'ovr_db_version', OVR_DB_VERSION );
     }

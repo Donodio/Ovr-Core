@@ -270,7 +270,7 @@ class PropertyMedia {
                 <option value="<?php echo esc_attr( (string) $pid ); ?>" <?php selected( $current, $pid ); ?>>
                     <?php
                     /* translators: %d: property id */
-                    printf( esc_html__( 'Property #%d — %s', 'ovr-core' ), (int) $pid, esc_html( $title ) );
+                    printf( esc_html__( 'Property #%d — %s', 'ovr-core' ), \OVR\Property\PropertyNumber::get( (int) $pid ), esc_html( $title ) );
                     ?>
                 </option>
             <?php endforeach; ?>
@@ -342,7 +342,8 @@ class PropertyMedia {
         ] );
         $opts = [];
         foreach ( $posts as $p ) {
-            $opts[ (int) $p->ID ] = $p->post_title ?: (string) $p->ID;
+            $public_id = \OVR\Property\PropertyNumber::get( (int) $p->ID );
+            $opts[ (int) $p->ID ] = ( $p->post_title ? $p->post_title . ' — ' : '' ) . 'Property #' . $public_id;
         }
         return $opts;
     }

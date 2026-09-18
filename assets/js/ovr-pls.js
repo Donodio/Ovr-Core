@@ -7,15 +7,15 @@
     var doc = document;
     var modalVisible = false;
 
-    /* ---- Duplicate Listing (row action) ----
-     * Duplicates the property server-side via the admin action the duplicate
-     * nonce was created for, then reloads the list so the new copy shows up.
+    /* ---- Bump Listing (row action) ----
+     * Bumps the property to the top of the default search ordering via the
+     * admin action the bump nonce was created for, then refreshes the list.
      */
     doc.addEventListener('click', function (e) {
-        var btn = e.target.closest('.ovr-pls-act--dup');
+        var btn = e.target.closest('.ovr-pls-act--bump');
         if (!btn) return;
         e.preventDefault();
-        if (!confirm('Duplicate this listing?')) return;
+        if (!confirm('Bump this listing to the top of its results?')) return;
 
         var pid = btn.getAttribute('data-pid');
         var nonce = btn.getAttribute('data-nonce');
@@ -27,7 +27,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
-                action: 'ovr_admin_duplicate_property',
+                action: 'ovr_admin_bump_property',
                 nonce: nonce,
                 listing_id: pid,
             }).toString(),
@@ -36,10 +36,10 @@
             .then(function (resp) {
                 btn.disabled = false;
                 if (resp.success) {
-                    refreshTable();
                     if (resp.data && resp.data.message) alert(resp.data.message);
+                    refreshTable();
                 } else {
-                    alert(resp.data && resp.data.message ? resp.data.message : 'Could not duplicate this listing.');
+                    alert(resp.data && resp.data.message ? resp.data.message : 'Could not bump this listing.');
                 }
             })
             .catch(function () {

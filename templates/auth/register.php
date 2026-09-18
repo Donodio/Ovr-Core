@@ -6,9 +6,14 @@
  * @var array  $errors
  * @var array  $old_data
  * @var string $login_url
+ * @var string $terms_url
+ * @var string $privacy_url
  */
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+$terms_url   = ! empty( $terms_url ) ? $terms_url : home_url( '/user-agreement/' );
+$privacy_url = ! empty( $privacy_url ) ? $privacy_url : $terms_url;
 ?>
 <div class="ovr-wrap ovr-auth-page">
 
@@ -27,14 +32,17 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
             </div>
 
             <?php if ( ! empty( $errors ) ) : ?>
-                <div class="ovr-alert ovr-alert-error">
-                    <span class="material-symbols-outlined">error</span>
+                <div class="ovr-alert ovr-alert-error" role="alert" tabindex="-1" id="ovr-register-errors" data-ovr-autofocus>
+                    <span class="material-symbols-outlined" aria-hidden="true">error</span>
                     <div>
                         <?php foreach ( $errors as $error ) : ?>
                             <p style="margin:0 0 4px"><?php echo esc_html( $error ); ?></p>
                         <?php endforeach; ?>
                     </div>
                 </div>
+                <script>
+                (function(){var e=document.getElementById('ovr-register-errors');if(e&&e.focus){e.focus({preventScroll:false});}})();
+                </script>
             <?php endif; ?>
 
             <form method="post" id="ovr-register-form">
@@ -44,12 +52,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                     <div class="ovr-form-group">
                         <label class="ovr-form-label" for="ovr-first-name"><?php esc_html_e( 'First Name', 'ovr-core' ); ?></label>
                         <input type="text" id="ovr-first-name" name="ovr_first_name" class="ovr-form-input"
-                               value="<?php echo esc_attr( $old_data['first_name'] ?? '' ); ?>" required>
+                               value="<?php echo esc_attr( $old_data['first_name'] ?? '' ); ?>" required autocomplete="given-name" maxlength="100">
                     </div>
                     <div class="ovr-form-group">
                         <label class="ovr-form-label" for="ovr-last-name"><?php esc_html_e( 'Last Name', 'ovr-core' ); ?></label>
                         <input type="text" id="ovr-last-name" name="ovr_last_name" class="ovr-form-input"
-                               value="<?php echo esc_attr( $old_data['last_name'] ?? '' ); ?>" required>
+                               value="<?php echo esc_attr( $old_data['last_name'] ?? '' ); ?>" required autocomplete="family-name" maxlength="100">
                     </div>
                 </div>
 
@@ -65,9 +73,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                     <div class="ovr-form-group">
                         <label class="ovr-form-label" for="ovr-phone"><?php esc_html_e( 'Phone Number', 'ovr-core' ); ?></label>
                         <div class="ovr-input-icon-wrap">
-                            <span class="ovr-input-icon material-symbols-outlined">phone</span>
+                            <span class="ovr-input-icon material-symbols-outlined" aria-hidden="true">phone</span>
                             <input type="tel" id="ovr-phone" name="ovr_phone" class="ovr-form-input"
-                                   value="<?php echo esc_attr( $old_data['phone'] ?? '' ); ?>">
+                                   value="<?php echo esc_attr( $old_data['phone'] ?? '' ); ?>" required autocomplete="tel" maxlength="40">
                         </div>
                     </div>
                 </div>
@@ -79,8 +87,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                             <span class="ovr-input-icon material-symbols-outlined">lock</span>
                             <input type="password" id="ovr-reg-password" name="ovr_password" class="ovr-form-input"
                                    required minlength="8" autocomplete="new-password" style="padding-right:48px">
-                            <button type="button" class="ovr-password-toggle" aria-label="<?php esc_attr_e( 'Toggle', 'ovr-core' ); ?>">
-                                <span class="material-symbols-outlined">visibility</span>
+                            <button type="button" class="ovr-password-toggle" aria-label="<?php esc_attr_e( 'Show password', 'ovr-core' ); ?>">
+                                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                             </button>
                         </div>
                     </div>
@@ -108,10 +116,10 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
                         <span><?php
                             printf(
                                 esc_html__( 'I agree to the %1$sTerms of Service%2$s and %3$sPrivacy Policy%4$s', 'ovr-core' ),
-                                '<a href="#" target="_blank">', '</a>',
-                                '<a href="#" target="_blank">', '</a>'
+                                '<a href="' . esc_url( $terms_url ) . '" target="_blank" rel="noopener">', '</a>',
+                                '<a href="' . esc_url( $privacy_url ) . '" target="_blank" rel="noopener">', '</a>'
                             );
-                        ?></span>
+                            ?></span>
                     </label>
                 </div>
 

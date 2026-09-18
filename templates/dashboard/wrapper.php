@@ -41,6 +41,9 @@ $nav_groups = [
     ],
     __( 'Communication', 'ovr-core' ) => [
         [ __( 'My Inquiries', 'ovr-core' ), 'forum', $tab_url( 'inquiries' ), 'inquiries', $nav_new_inquiries ],
+        // Canonical destinations already used by the header/account menu.
+        [ __( 'Villages ID Pass', 'ovr-core' ), 'badge',                Pages::get_page_url( 'ovr_page_id_request' ), null, 0 ],
+        [ __( 'Guest ID Pass', 'ovr-core' ),    'confirmation_number',  'https://gcs.thevillages.com/cgi-bin/gc100',  null, 0, '_blank' ],
     ],
     __( 'Account', 'ovr-core' ) => [
         [ __( 'My Information', 'ovr-core' ),          'person',                 $tab_url( 'profile' ),      'profile',      0 ],
@@ -126,9 +129,10 @@ $nav_groups = [
                         <p class="ovr-ld-grouplbl"><?php echo esc_html( $group_label ); ?></p>
                         <?php foreach ( $items as $item ) :
                             [ $label, $icon, $href, $key, $badge ] = $item;
+                            $target = (string) ( $item[5] ?? '' );
                             $active = ( null !== $key && $key === $current_tab );
                         ?>
-                            <a href="<?php echo esc_url( $href ); ?>" class="ovr-ld-link<?php echo $active ? ' is-active' : ''; ?>"<?php echo $active ? ' aria-current="page"' : ''; ?>>
+                            <a href="<?php echo esc_url( $href ); ?>" class="ovr-ld-link<?php echo $active ? ' is-active' : ''; ?>"<?php echo $active ? ' aria-current="page"' : ''; ?><?php echo '' !== $target ? ' target="' . esc_attr( $target ) . '" rel="noopener noreferrer"' : ''; ?>>
                                 <span class="material-symbols-outlined"><?php echo esc_html( $icon ); ?></span>
                                 <span><?php echo esc_html( $label ); ?></span>
                                 <?php if ( $badge > 0 ) : ?>

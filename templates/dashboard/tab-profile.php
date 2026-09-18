@@ -15,10 +15,11 @@
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-$phone   = $phone ?? '';
-$address = $address ?? '';
-$bio     = (string) $user->description;
-$saved   = ! empty( $saved );
+$phone    = $phone ?? '';
+$cc_email = $cc_email ?? '';
+$address  = $address ?? '';
+$bio      = (string) $user->description;
+$saved    = ! empty( $saved );
 
 $avatar       = get_avatar_url( $user->ID, [ 'size' => 256 ] );
 $member_year  = $user->user_registered ? gmdate( 'Y', strtotime( $user->user_registered ) ) : '';
@@ -27,10 +28,38 @@ $avatar_nonce = wp_create_nonce( 'ovr_avatar_action' );
 $bio_max      = 500;
 ?>
 
-<?php if ( $saved ) : ?>
+<?php if ( $saved && ! $profile_email_check ) : ?>
     <div class="ld-pf-alert">
         <span class="material-symbols-outlined">check_circle</span>
         <span><?php esc_html_e( 'Your information has been saved.', 'ovr-core' ); ?></span>
+    </div>
+<?php endif; ?>
+
+<?php if ( $profile_email_check ) : ?>
+    <div class="ld-pf-alert" style="background:rgba(0,108,74,.1);color:var(--sec);border-color:rgba(0,108,74,.3)">
+        <span class="material-symbols-outlined">check_circle</span>
+        <span><?php esc_html_e( 'Your profile has been updated. A verification email has been sent to your new address — click the link in that email to confirm the email change.', 'ovr-core' ); ?></span>
+    </div>
+<?php endif; ?>
+
+<?php if ( 'password' === $profile_error ) : ?>
+    <div class="ld-pf-alert" style="background:rgba(200,50,50,.08);color:#b91c1c;border-color:rgba(200,50,50,.25)">
+        <span class="material-symbols-outlined">error</span>
+        <span><?php esc_html_e( 'Please enter your current password to change your email address.', 'ovr-core' ); ?></span>
+    </div>
+<?php endif; ?>
+
+<?php if ( 'email_taken' === $profile_error ) : ?>
+    <div class="ld-pf-alert" style="background:rgba(200,50,50,.08);color:#b91c1c;border-color:rgba(200,50,50,.25)">
+        <span class="material-symbols-outlined">error</span>
+        <span><?php esc_html_e( 'That email address is already in use by another account.', 'ovr-core' ); ?></span>
+    </div>
+<?php endif; ?>
+
+<?php if ( 'save_failed' === $profile_error ) : ?>
+    <div class="ld-pf-alert" style="background:rgba(200,50,50,.08);color:#b91c1c;border-color:rgba(200,50,50,.25)">
+        <span class="material-symbols-outlined">error</span>
+        <span><?php esc_html_e( 'Unable to save your profile. Please try again.', 'ovr-core' ); ?></span>
     </div>
 <?php endif; ?>
 
@@ -98,6 +127,20 @@ $bio_max      = 500;
                     <div class="ld-pf-field">
                         <label class="ld-pf-label" for="ld-pf-email"><?php esc_html_e( 'Email Address', 'ovr-core' ); ?></label>
                         <input class="ld-pf-input" id="ld-pf-email" type="email" name="email" value="<?php echo esc_attr( $user->user_email ); ?>" required>
+                        <p class="ld-pf-hint" style="margin:6px 0 0;font-size:12px;color:var(--sv)"><?php esc_html_e( 'Used to log in. If you change it, your login changes too (same password).', 'ovr-core' ); ?></p>
+                    </div>
+
+                    <?php if ( get_user_meta( $user->ID, 'ovr_pending_email', true ) ) : ?>
+                        <div class="ld-pf-alert" style="background:rgba(255,183,0,.1);color:#b45309;border-color:rgba(255,183,0,.3)">
+                            <span class="material-symbols-outlined">mail</span>
+                            <span><?php esc_html_e( 'A verification email has been sent to your new address. Please click the link in that email to confirm the change.', 'ovr-core' ); ?></span>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="ld-pf-field">
+                        <label class="ld-pf-label" for="ld-pf-current-password"><?php esc_html_e( 'Current Password', 'ovr-core' ); ?></label>
+                        <input class="ld-pf-input" id="ld-pf-current-password" type="password" name="current_password" autocomplete="current-password">
+                        <p class="ld-pf-hint" style="margin:6px 0 0;font-size:12px;color:var(--sv)"><?php esc_html_e( 'Required only when changing your email address.', 'ovr-core' ); ?></p>
                     </div>
 
                     <div class="ld-pf-field">
@@ -106,8 +149,9 @@ $bio_max      = 500;
                     </div>
 
                     <div class="ld-pf-field ld-pf-field--full">
-                        <label class="ld-pf-label" for="ld-pf-address"><?php esc_html_e( 'Primary Address', 'ovr-core' ); ?></label>
-                        <input class="ld-pf-input" id="ld-pf-address" type="text" name="address" value="<?php echo esc_attr( $address ); ?>">
+                        <label class="ld-pf-label" for="ld-pf-cc"><?php esc_html_e( 'Additional CC Email', 'ovr-core' ); ?></label>
+                        <input class="ld-pf-input" id="ld-pf-cc" type="email" name="cc_email" value="<?php echo esc_attr( $cc_email ); ?>" placeholder="<?php esc_attr_e( 'Optional — copies of notifications will be CC\'d here', 'ovr-core' ); ?>">
+                        <p class="ld-pf-hint" style="margin:6px 0 0;font-size:12px;color:var(--sv)"><?php esc_html_e( 'Optional. Leave blank if not needed.', 'ovr-core' ); ?></p>
                     </div>
 
                     <div class="ld-pf-field ld-pf-field--full">

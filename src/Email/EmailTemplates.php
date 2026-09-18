@@ -36,10 +36,20 @@ class EmailTemplates {
         return [
             'registration_welcome' => [
                 'name'      => __( 'Registration / Welcome', 'ovr-core' ),
-                'subject'   => __( 'Welcome to {{site_name}}', 'ovr-core' ),
-                'html'      => "<h2>Welcome, {{user_name}}!</h2><p>Your account on {{site_name}} is ready. You can sign in any time from your dashboard.</p><p><a href=\"{{dashboard_url}}\" style=\"display:inline-block;background:#006666;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">Go to your dashboard</a></p>",
+                'subject'   => __( 'Welcome to {{site_name}}!', 'ovr-core' ),
+                'html'      => "<h2>Welcome, {{user_name}}!</h2><p>Thank you for registering with {{site_name}}.</p><p>Your account has been created. When you log in, you'll be guided through selecting and completing your subscription before you can create or manage rental listings.</p><p><strong>Logging in</strong><br>Log in from the homepage using the email address and password you created during registration.</p><p><a href=\"{{login_url}}\" style=\"display:inline-block;background:#006666;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">Log in</a> &nbsp; <a href=\"{{dashboard_url}}\" style=\"display:inline-block;background:#f1f4f3;color:#004c4c;padding:10px 18px;border-radius:8px;text-decoration:none;border:1px solid #bec9c8\">Go to your Dashboard</a></p><p><strong>Creating your listing</strong><br>Once your subscription is active, open your Landlord Dashboard. Choose <strong>List Your Property</strong> from the left navigation or <strong>+ List New Property</strong> in the upper-right. Follow the listing workflow to add your property information, photos, pricing, availability and other required information. Save according to the on-screen workflow — your listing will become visible online.</p><p><strong>OVR Verified</strong><br>To request OVR Verified status, send proof such as a mortgage statement or utility bill showing your name and property address to <a href=\"mailto:{{admin_email}}\">{{admin_email}}</a>.</p>",
                 'recipient' => 'user',
-                'vars'      => [ 'user_name', 'user_email', 'dashboard_url', 'login_url', 'site_name', 'site_url' ],
+                'vars'      => [ 'user_name', 'user_email', 'login_url', 'dashboard_url', 'subscription_url', 'admin_email', 'site_name', 'site_url' ],
+            ],
+            // Section 1 — admin notice for every new registration. Intentionally
+            // contains NO password and NO password token: authentication secrets
+            // must never be emailed, logged, or templated.
+            'new_user_registered' => [
+                'name'      => __( 'New User Registered (Admin)', 'ovr-core' ),
+                'subject'   => __( 'A new user has registered', 'ovr-core' ),
+                'html'      => "<h2>A new user has registered</h2><p><strong>{{user_name}}</strong> ({{user_email}}) just created an account on {{site_name}}.</p><p>Login email: {{login_email}}<br>Registered: {{registered_at}}<br>Landlord intent: {{is_landlord}}</p><p><a href=\"{{user_admin_url}}\">View user in the admin</a></p>",
+                'recipient' => 'admin',
+                'vars'      => [ 'user_name', 'user_email', 'login_email', 'registered_at', 'is_landlord', 'user_admin_url', 'site_name', 'site_url' ],
             ],
             'inquiry_landlord' => [
                 'name'      => __( 'Inquiry Received (Landlord)', 'ovr-core' ),
@@ -118,6 +128,13 @@ class EmailTemplates {
                 'recipient' => 'user',
                 'vars'      => [ 'user_name', 'payment_amount', 'payment_method', 'payment_id', 'site_name', 'site_url' ],
             ],
+            'payment_successful_admin' => [
+                'name'      => __( 'Payment Received (Admin)', 'ovr-core' ),
+                'subject'   => __( 'New payment received: {{payment_amount}} from {{user_name}}', 'ovr-core' ),
+                'html'      => "<h2>New payment received</h2><p><strong>{{user_name}}</strong> ({{user_email}}) paid <strong>{{payment_amount}}</strong> via {{payment_method}}.</p><p>Transaction reference: {{payment_id}}<br>Subscription/upgrade: {{item_name}}<br>Completed: {{completed_at}}</p>",
+                'recipient' => 'admin',
+                'vars'      => [ 'user_name', 'user_email', 'payment_amount', 'payment_method', 'payment_id', 'item_name', 'completed_at', 'site_name', 'site_url' ],
+            ],
             'payment_failed' => [
                 'name'      => __( 'Payment Failed', 'ovr-core' ),
                 'subject'   => __( 'We couldn\'t process your payment', 'ovr-core' ),
@@ -181,6 +198,13 @@ class EmailTemplates {
                 'recipient' => 'user',
                 'vars'      => [ 'user_name', 'verify_url', 'site_name', 'site_url' ],
             ],
+            'email_change_notification' => [
+                'name'      => __( 'Email Address Changed', 'ovr-core' ),
+                'subject'   => __( 'Your {{site_name}} account email has been changed', 'ovr-core' ),
+                'html'      => "<h2>Email address changed</h2><p>Hi {{user_name}}, the email address for your {{site_name}} account was recently changed to <strong>{{new_email}}</strong>.</p><p>If you did not request this change, please contact support immediately.</p>",
+                'recipient' => 'user',
+                'vars'      => [ 'user_name', 'new_email', 'site_name', 'site_url' ],
+            ],
         ];
     }
 
@@ -208,6 +232,46 @@ class EmailTemplates {
                 'created_at'   => current_time( 'mysql' ),
                 'updated_at'   => current_time( 'mysql' ),
             ] );
+        }
+
+        // Section 5: migrate known OVR-generated welcome defaults to the
+        // corrected 1.3.8 wording. Preserves administrator-customized templates.
+        // Idempotent: only updates when stored HTML matches a known generated
+        // default, never overwrites custom content.
+        $def            = self::defaults()['registration_welcome'];
+        $correct_html   = (string) $def['html'];
+        $correct_subject = (string) $def['subject'];
+        $welcome = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE template_key = %s", 'registration_welcome' ), ARRAY_A );
+        if ( $welcome ) {
+            $stored_html = trim( (string) $welcome['body_html'] );
+            $stored_subject = (string) $welcome['subject'];
+            // Already correct — nothing to do (idempotent).
+            if ( $stored_html === trim( $correct_html ) && $stored_subject === $correct_subject ) {
+                // No-op.
+            } else {
+                // Known OVR-generated defaults that should migrate to corrected wording.
+                $old_pre = "<h2>Welcome, {{user_name}}!</h2><p>Your account on {{site_name}} is ready. You can sign in any time from your dashboard.</p><p><a href=\"{{dashboard_url}}\" style=\"display:inline-block;background:#006666;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">Go to your dashboard</a></p>";
+                $old_after = "<h2>Welcome, {{user_name}}!</h2><p>Thank you for registering with {{site_name}}.</p><p>Your account has been created. When you log in, you'll be guided through selecting and completing your subscription before you can create or manage rental listings.</p><p><strong>Logging in</strong><br>Log in from the homepage using the email address and password you created during registration.</p><p><a href=\"{{login_url}}\" style=\"display:inline-block;background:#006666;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">Log in</a> &nbsp; <a href=\"{{dashboard_url}}\" style=\"display:inline-block;background:#f1f4f3;color:#004c4c;padding:10px 18px;border-radius:8px;text-decoration:none;border:1px solid #bec9c8\">Go to your Dashboard</a></p><p><strong>Creating your listing</strong><br>After your subscription is complete, open your Landlord Dashboard. Choose <strong>List Your Property</strong> from the left navigation or <strong>+ List New Property</strong> in the upper-right. Follow the listing workflow to add your property information, photos, pricing, availability and other required information. Save according to the on-screen workflow — your listing will become visible online.</p><p><strong>OVR Verified</strong><br>To request OVR Verified status, send proof such as a mortgage statement or utility bill showing your name and property address to <a href=\"mailto:{{admin_email}}\">{{admin_email}}</a>.</p>";
+                $is_known_old = false;
+                if ( $stored_html === trim( $old_pre ) ) {
+                    $is_known_old = true;
+                } elseif ( $stored_html === trim( $old_after ) ) {
+                    $is_known_old = true;
+                } elseif ( false !== strpos( $stored_html, 'Your account on {{site_name}} is ready' ) ) {
+                    // Variant of the old pre-default (e.g. subject slightly different).
+                    $is_known_old = true;
+                } elseif ( false !== strpos( $stored_html, 'After your subscription is complete' ) ) {
+                    // First 1.3.8 generated default (awkward wording) — migrate.
+                    $is_known_old = true;
+                }
+                if ( $is_known_old ) {
+                    $wpdb->update( $table, [
+                        'subject'    => $correct_subject,
+                        'body_html'  => $correct_html,
+                        'updated_at' => current_time( 'mysql' ),
+                    ], [ 'template_key' => 'registration_welcome' ], [ '%s', '%s', '%s' ], [ '%s' ] );
+                }
+            }
         }
     }
 

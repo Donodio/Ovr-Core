@@ -225,9 +225,12 @@ class Dashboard {
                 break;
 
             case 'profile':
-                $data['phone']   = (string) get_user_meta( $user->ID, 'ovr_phone', true );
-                $data['address'] = (string) get_user_meta( $user->ID, 'ovr_address', true );
-                $data['saved']   = ! empty( $_GET['profile_saved'] );
+                $data['phone']               = (string) get_user_meta( $user->ID, 'ovr_phone', true );
+                $data['cc_email']            = (string) get_user_meta( $user->ID, 'ovr_cc_email', true );
+                $data['address']             = (string) get_user_meta( $user->ID, 'ovr_address', true );
+                $data['saved']               = ! empty( $_GET['profile_saved'] );
+                $data['profile_error']       = sanitize_key( $_GET['profile_error'] ?? '' );
+                $data['profile_email_check'] = ! empty( $_GET['profile_email_check'] );
                 break;
 
             case 'payments':

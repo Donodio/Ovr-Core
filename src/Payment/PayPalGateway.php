@@ -220,4 +220,13 @@ class PayPalGateway implements PaymentGateway {
         do_action( 'ovr_paypal_webhook', $payload );
         return [ 'success' => true ];
     }
+
+    /**
+     * Resolve the configured PayPal webhook ID for the active environment.
+     */
+    public static function webhook_id(): string {
+        $s = get_option( 'ovr_settings', [] );
+        $e = 'live' === ( $s['paypal_env'] ?? 'sandbox' ) ? 'live' : 'sandbox';
+        return (string) ( $s[ "paypal_{$e}_webhook_id" ] ?? '' );
+    }
 }

@@ -113,17 +113,8 @@ if ( ! $owner_active ) {
     };
 
     // "All Villages" — the default/unfiltered state; first in the strip. Uses
-    // the "The Villages" section's image (the community-wide artwork) when one
-    // is assigned; otherwise falls back to the bundled stone-wall "The Villages"
-    // banner so it reads as a real community tile, not a plain icon box.
-    $all_img = OVR_PLUGIN_URL . 'assets/images/the-villages-banner.svg';
-    $all_term = get_term_by( 'slug', 'the-villages', 'ovr_village' );
-    if ( $all_term && ! is_wp_error( $all_term ) ) {
-        $term_img = SearchFilters::get_village_image( $all_term );
-        if ( '' !== $term_img ) {
-            $all_img = $term_img;
-        }
-    }
+    // the client-approved AllRentals artwork (Media Library attachment).
+    $all_img = \OVR\Search\SearchFilters::get_all_villages_image();
     $section_chips[] = [
         'name'   => __( 'All Villages', 'ovr-core' ),
         'image'  => $all_img,
@@ -133,6 +124,14 @@ if ( ! $owner_active ) {
     ];
 
     foreach ( $villages as $v ) {
+        // Defensive: a stray "All Villages" / "All Areas" / "The Villages"
+        // term would otherwise duplicate the hard-coded "All Villages" chip.
+        $slug_lc = strtolower( (string) $v->slug );
+        $name_lc = strtolower( trim( (string) $v->name ) );
+        if ( in_array( $slug_lc, [ 'all-villages', 'all-areas', 'the-villages' ], true )
+            || in_array( $name_lc, [ 'all villages', 'all areas', 'the villages' ], true ) ) {
+            continue;
+        }
         $active = ( '' !== $single_section && $single_section === (string) $v->slug );
         $section_chips[] = [
             'name'   => $v->name,
